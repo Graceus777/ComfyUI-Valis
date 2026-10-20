@@ -11,6 +11,7 @@ export const MODELS = {
   h3TE: "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors", h3VAE: "minimax_h3_video_vae_fp16.safetensors",
   h3AVAE: "minimax_h3_audio_vae_fp32.safetensors", pdd: "MiniMax-H3-FL2VA-Acc-8Step.safetensors",
   qwen: "qwen_image_2.1-Q6_K.gguf", qwenTE: "qwen3vl_8b_w4a8.safetensors", qwenVAE: "qwen_image_2.1_vae_bf16.safetensors",
+  qwenOutpaint: "qwen-image-2.1-outpaint-v2.safetensors",
   sam: "sam3.1_multiplex_fp16.safetensors",
   da3: "depth_anything_3_small.safetensors",
   funCN: "minimax_h3_fun_controlnet_union_pruned_int8_convrot.safetensors",
@@ -715,12 +716,32 @@ export function upscale({video, resolution = 1080, batch = 9, seed = 42, prefix 
 // ---------------------------------------------------------------- stage
 // One still -> named depth layers. SAM 3 finds each name ("the lamps:20" = up to 20 of them), Depth Anything 3 Small
 // orders them, Valis Stage completes each layer behind the ones in front and writes output/valis/stage/<name>/.
+// The world past the frame, painted: Valis Stage Surround puts the stage's still in the middle of a canvas twice as wide
+// and tall (solid gray around it), Qwen Image 2.1 + the outpaint LoRA paints the gray out as a continuation of the
+// scene (its trained instruction, ~1 min on 12 GB), and Valis Stage Dome writes the painting into the stage's dome.png.
+export const OUTPAINT = "Outpaint the image: replace the solid gray areas with a seamless continuation of the scene, keeping the existing picture unchanged.";
+export function stageDome({stage, seed = 101, steps = 25}) {
+  return {
+    "250": N("UnetLoaderGGUF", {unet_name: MODELS.qwen}),
+    "251": N("CLIPLoader", {clip_name: MODELS.qwenTE, type: "qwen_image", device: "default"}),
+    "252": N("VAELoader", {vae_name: MODELS.qwenVAE}),
+    "253": N("LoraLoaderModelOnly", {model: ["250", 0], lora_name: MODELS.qwenOutpaint, strength_model: 1.0}),
+    "sur": N("ValisStageSurround", {stage, megapixels: 1.03}),
+    "enc": N("TextEncodeQwenImage21", {clip: ["251", 0], prompt: OUTPAINT, negative_prompt: "", resolution: 0, "images.image_1": ["sur", 0], vae: ["252", 0]}),
+    "ks": N("KSampler", {model: ["253", 0], positive: ["enc", 0], negative: ["enc", 1], latent_image: ["enc", 2], seed, steps, cfg: 1, sampler_name: "euler", scheduler: "simple", denoise: 1}),
+    "dec": N("VAEDecode", {samples: ["ks", 0], vae: ["252", 0]}),
+    "dome": N("ValisStageDome", {stage, painted: ["dec", 0]}),
+  };
+}
+
 // sharpen: a still smaller than the export gets SeedVR2 (3B Q8, the same settings as Upscale) to this many px on its
 // short side first. SAM 3 and Depth Anything still look at the original (they work below 1008 px anyway); only the
 // layers' paint comes from the sharp copy, which is also saved into the stage folder as still_*.png.
-export function stage({image, names, name = "stage", far = 6, band = 0.025, threshold = 0.35, perName = 20, sharpen = 0}) {
+// prompt: no still yet, so Krea 2 turbo paints one first (16:9, `size`), in the same job: words in, a set out.
+export function stage({image, names, name = "stage", far = 6, band = 0.025, threshold = 0.35, perName = 20, sharpen = 0,
+                       prompt = null, size = [1792, 1008], seed = 7101}) {
   const g = {
-    "1": N("LoadImage", {image}),
+    "1": prompt ? N("VAEDecode", {samples: ["k5", 0], vae: ["k3", 0]}) : N("LoadImage", {image}),
     "2": N("LoadDA3Model", {model_name: MODELS.da3, weight_dtype: "default"}),
     "3": N("DA3Inference", {da3_model: ["2", 0], image: ["1", 0], resolution: 1008, resize_method: "upper_bound_resize", mode: "mono"}),
     "4": N("DA3Render", {da3_geometry: ["3", 0], output: "depth", "output.normalization": "min_max", "output.apply_sky_clip": false}),
@@ -733,6 +754,18 @@ export function stage({image, names, name = "stage", far = 6, band = 0.025, thre
     g[id(1)] = N("SAM3_Detect", {model: ["5", 0], image: ["1", 0], conditioning: [id(0), 0], threshold, refine_iterations: 2, individual_masks: true});
     st[`mask_${i + 1}`] = [id(1), 0];
   });
+  if (prompt) {
+    Object.assign(g, {
+      "k1": N("UNETLoader", {unet_name: MODELS.krea, weight_dtype: "default"}),
+      "k2": N("CLIPLoader", {clip_name: MODELS.kreaTE, type: "krea2", device: "default"}),
+      "k3": N("VAELoader", {vae_name: MODELS.kreaVAE}),
+      "k4": N("EmptySD3LatentImage", {width: size[0], height: size[1], batch_size: 1}),
+      "k6": N("CLIPTextEncode", {text: prompt, clip: ["k2", 0]}),
+      "k7": N("ConditioningZeroOut", {conditioning: ["k6", 0]}),
+      "k5": N("KSampler", {model: ["k1", 0], positive: ["k6", 0], negative: ["k7", 0], latent_image: ["k4", 0], seed, steps: 10, cfg: 1.0, sampler_name: "euler", scheduler: "simple", denoise: 1.0}),
+      "k8": N("SaveImage", {images: ["1", 0], filename_prefix: `valis/stage/${name}/krea`}),
+    });
+  }
   if (sharpen) {
     g["s1"] = N("SeedVR2LoadDiTModel", {model: "seedvr2_ema_3b-Q8_0.gguf", device: "cuda:0", offload_device: "cpu", blocks_to_swap: 16});
     g["s2"] = N("SeedVR2LoadVAEModel", {model: "ema_vae_fp16.safetensors", device: "cuda:0", offload_device: "cpu", encode_tiled: true, decode_tiled: true});

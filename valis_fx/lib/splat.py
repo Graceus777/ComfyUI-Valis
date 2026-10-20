@@ -47,7 +47,7 @@ def layer_points(folder, meta, L, stride, f0, orient=True, snap=True, feather=0.
     dp = cv2.cvtColor(cv2.imread(os.path.join(folder, L["depth"])), cv2.COLOR_BGR2RGB).astype(np.uint32)
     far = meta["far"]
     z = 1.0 + (dp[..., 0] * 256 + dp[..., 1]) / 65535.0 * (far - 1.0)
-    relief = 1.0 if L.get("backdrop") else 0.35          # the same flattening the studio's camera uses
+    relief = L.get("relief", 1.0 if L.get("backdrop") else 0.35)     # the same flattening the studio's camera uses
     z = (L["z_med"] + (z - L["z_med"]) * relief).astype(np.float64)
     H, W = z.shape
     if snap:

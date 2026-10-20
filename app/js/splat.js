@@ -106,7 +106,8 @@ async function layerSplats(stage, L, stride, orient, snap, cx, feather = 0) {
 async function domeSplats(stage, cx) {
   const m = stage.meta, d = m.dome;
   if (!d) return null;
-  const im = await loadImage(stage._url(d.image)).catch(() => null);
+  const du = stage._url(d.image), dv = d.rev ? `${du}${du.includes("?") ? "&" : "?"}v=${d.rev}` : du;
+  const im = await loadImage(dv).catch(() => null);
   if (!im) return null;
   const nx = im.naturalWidth, ny = im.naturalHeight;
   cx.canvas.width = Math.max(cx.canvas.width, nx); cx.canvas.height = Math.max(cx.canvas.height, ny);

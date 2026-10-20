@@ -34,6 +34,8 @@
     <aside class="panel">
       <h2>Still</h2>
       <div class="drop" id="s-still">Drop a still: a keyframe, a painting, a photo</div>
+      <textarea id="s-prompt" rows="3" spellcheck="true" style="margin-top:8px" placeholder="…or describe one: a vampire lord at a stone table, two braziers burning, a brick arch behind him"></textarea>
+      <button class="btn" id="s-make" style="margin-top:6px;width:100%">Make the set from words<span class="sub">Krea 2 paints the still, then sharpen and split · one GPU job · ~1–2 min</span></button>
       <select id="s-open" style="margin-top:8px"></select>
       <h2>What's in it</h2>
       <textarea id="s-names" rows="6" spellcheck="false" placeholder="one per line: the sky, the woman, the lamps…"></textarea>
@@ -53,6 +55,7 @@
         <input type="range" id="s-sec" min="1" max="12" step="0.5" value="4" style="width:100%">
         <div class="seg" id="s-ease" style="margin-top:10px"></div>
         <div class="seg" id="s-edge" style="margin-top:8px"></div>
+        <button class="btn" id="s-paintdome" style="margin-top:8px;width:100%">Paint the world past the frame<span class="sub">Qwen Image 2.1 outpaint · about a minute · the dome and the 3D set use it</span></button>
         <div class="row" style="margin-top:10px"><label class="hint" style="margin:0;flex:0 0 auto">move starts at</label><input type="number" id="s-camstart" value="0" min="0" step="0.05"><select id="s-punch"><option value="none">no punch</option></select></div>
         <div class="map" id="s-then" style="margin-top:8px"></div>
         <button class="btn" id="s-addthen" style="margin-top:8px;width:100%">+ then another move</button>

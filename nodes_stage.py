@@ -136,6 +136,80 @@ class ValisStageFill:
         return {"ui": {"valis_stage_fill": [{"stage": stage, "painted": done}]}, "result": (stage,)}
 
 
-NODE_CLASS_MAPPINGS = {"ValisStage": ValisStage, "ValisStageFill": ValisStageFill}
+def _stage_folder(stage):
+    import folder_paths
+    folder = os.path.join(folder_paths.get_output_directory(), stage)
+    with open(os.path.join(folder, "stage.json")) as f:
+        return folder, json.load(f)
+
+
+class ValisStageSurround:
+    """A stage's still, smaller, in the middle of a canvas twice as wide and tall with solid gray around it: what
+    Qwen Image 2.1 + the outpaint LoRA paints out into the world past the frame. Valis Stage Dome takes the painting."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"stage": ("STRING", {"default": "valis/stage/stage", "tooltip": "the stage's subfolder under output"}),
+                             "megapixels": ("FLOAT", {"default": 1.03, "min": 0.5, "max": 2.0, "step": 0.01})}}
+
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("canvas",)
+    FUNCTION = "canvas"
+    CATEGORY = "Valis/stage"
+
+    def canvas(self, stage, megapixels):
+        import importlib
+        import torch
+        from .valis_fx.lib import stage as S
+        S = importlib.reload(S)
+        folder, meta = _stage_folder(stage)
+        still = S.composite([{"rgba": x} for x in S.load_layers(folder, meta)])
+        canvas, rect = S.surround_canvas(still, megapixels)
+        meta["surround"] = {"rect": [int(v) for v in rect], "size": [int(canvas.shape[1]), int(canvas.shape[0])], "megapixels": megapixels}
+        with open(os.path.join(folder, "stage.json"), "w") as f:
+            json.dump(meta, f, indent=1)
+        return (torch.from_numpy(canvas[None]),)
+
+
+class ValisStageDome:
+    """Puts a painted surround (Valis Stage Surround's canvas, painted out by an outpainting model) into the stage's far
+    dome: the studio and the 3D set then show the painted world past the frame edge instead of a blur."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"stage": ("STRING", {"default": "valis/stage/stage"}), "painted": ("IMAGE",)}}
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("stage",)
+    FUNCTION = "dome"
+    OUTPUT_NODE = True
+    CATEGORY = "Valis/stage"
+
+    def dome(self, stage, painted):
+        import importlib
+        import cv2
+        from .valis_fx.lib import stage as S
+        S = importlib.reload(S)
+        folder, meta = _stage_folder(stage)
+        rgba = S.load_layers(folder, meta)
+        still = S.composite([{"rgba": x} for x in rgba])
+        sur = meta.get("surround") or {}
+        canvas, rect = S.surround_canvas(still, sur.get("megapixels", 1.03))
+        img = np.clip(_np(painted)[0, ..., :3], 0, 1).astype(np.float32)
+        if img.shape[:2] != canvas.shape[:2]:
+            img = cv2.resize(img, (canvas.shape[1], canvas.shape[0]), interpolation=cv2.INTER_AREA)
+        img = S.match_colour(img, canvas, rect)
+        cv2.imwrite(os.path.join(folder, "surround.png"), cv2.cvtColor((img * 255 + .5).clip(0, 255).astype(np.uint8), cv2.COLOR_RGB2BGR))
+        S.write_dome(folder, meta, rgba, surround=img, rect=rect)
+        meta["surround"] = {"rect": [int(v) for v in rect], "size": [int(canvas.shape[1]), int(canvas.shape[0])], "image": "surround.png",
+                            "megapixels": sur.get("megapixels", 1.03)}
+        with open(os.path.join(folder, "stage.json"), "w") as f:
+            json.dump(meta, f, indent=1)
+        return {"ui": {"valis_stage_dome": [{"stage": stage, "painted": True}]}, "result": (stage,)}
+
+
+NODE_CLASS_MAPPINGS = {"ValisStage": ValisStage, "ValisStageFill": ValisStageFill, "ValisStageSurround": ValisStageSurround, "ValisStageDome": ValisStageDome}
 NODE_DISPLAY_NAME_MAPPINGS = {"ValisStage": "Valis Stage (a still, split by words into depth layers)",
-                              "ValisStageFill": "Valis Stage Fill (paint behind the layers)"}
+                              "ValisStageFill": "Valis Stage Fill (paint behind the layers)",
+                              "ValisStageSurround": "Valis Stage Surround (the still on a canvas to paint out)",
+                              "ValisStageDome": "Valis Stage Dome (the painted world past the frame)"}

@@ -5,6 +5,7 @@
 import {Stage, MOVES, fitSeq, camSeq} from "./stage3d.js";
 import {EFFECTS, directAt, punchAt} from "./direct.js";
 import {stageToSplat} from "./splat.js";
+import {suggestNames} from "./names.js";
 
 const EASES = [{id: "inout", name: "Smooth"}, {id: "out", name: "Ease out"}, {id: "in", name: "Ease in"}, {id: "linear", name: "Linear"}];
 const SIZES = [{id: "720", name: "720p", h: 720}, {id: "1080", name: "1080p", h: 1080}];
@@ -37,6 +38,11 @@ export class StageView {
       $("#s-split").disabled = false;
     });
     $("#s-split").addEventListener("click", () => this.split().catch(e => this.toast(e.message, true)));
+    $("#s-names").addEventListener("input", () => { this.S.namesTouched = true; });
+    $("#s-prompt").addEventListener("input", (e) => {          // names follow the description until they're edited by hand
+      if (!this.S.namesTouched) { const n = suggestNames(e.target.value); if (n.length) $("#s-names").value = n.join("\n"); }
+    });
+    $("#s-make").addEventListener("click", () => this.make().catch(e => this.toast(e.message, true)));
     $("#s-open").addEventListener("change", (e) => e.target.value && this.open(e.target.value).catch(er => this.toast(er.message, true)));
     $("#s-moves").replaceChildren(...Object.entries(MOVES).map(([id, name]) => h("button", {class: "chip" + (id === this.S.move ? " on" : ""), "data-id": id,
       onclick: () => { this.S.move = id; [...$("#s-moves").children].forEach(c => c.classList.toggle("on", c.dataset.id === id)); this.refit(); this.play(); }}, name)));
@@ -54,6 +60,7 @@ export class StageView {
     $("#st-play").addEventListener("click", () => this.S.playing ? (this.S.playing = false, this.playBtn()) : this.play());
     $("#st-export").addEventListener("click", () => this.export().catch(e => this.toast(e.message, true)));
     $("#st-splat").addEventListener("click", () => this.saveSplat().catch(e => this.toast(e.message, true)));
+    $("#s-paintdome").addEventListener("click", () => this.paintDome().catch(e => this.toast(e.message, true)));
     $("#s-akind").replaceChildren(...[["music", "Music"], ["voice", "Voice"], ["both", "Both"]].map(([id, n]) => h("button", {class: id === this.S.akind ? "on" : "", "data-id": id,
       onclick: () => { this.S.akind = id; [...$("#s-akind").children].forEach(b => b.classList.toggle("on", b.dataset.id === id)); this.S.audio && this.loadCues().catch(e => this.toast(e.message, true)); }}, n)));
     this.dropzone($("#st-audio"), "audio/*,video/*", async (f) => {
@@ -175,16 +182,65 @@ export class StageView {
       const job = await this.api.submit(this.G.stage({image: this.S.image, names, name, far: +this.$("#s-far").value, sharpen}), `Stage: ${names.join(", ")}`, "stage");
       this.toast(sharpen ? `Splitting the still: SeedVR2 sharpens it to ${SHARP_TO}p (~1 min), SAM 3 finds each name, Depth Anything 3 orders them`
         : short && short < 1000 ? `This still is only ${short} px on its short side: 1080p exports will be soft` : "Splitting the still: SAM 3 finds each name, Depth Anything 3 orders them");
-      await new Promise((res, rej) => {
-        const off = this.api.on((ev) => {
-          if (ev.job?.id !== job.id) return;
-          if (ev.job.status === "done") { off(); res(); } else if (ev.job.status === "error") { off(); rej(new Error(ev.job.error)); }
-        });
-      });
+      await this.until(job);
       const sub = `valis/stage/${name}`;
       await this.listStages(sub);
       await this.open(sub);
     } finally { btn.disabled = false; }
+  }
+
+  // words in, a set out: Krea 2 paints the still, SeedVR2 sharpens it, SAM 3 + Depth Anything split it, in one job
+  async make() {
+    const prompt = this.$("#s-prompt").value.trim();
+    if (!prompt) throw new Error("Describe the scene first");
+    if (!this.S.namesTouched) this.$("#s-names").value = suggestNames(prompt).join("\n");
+    const names = this.names();
+    if (!names.length) throw new Error("Name at least one thing in the picture");
+    const name = `stage_${new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14)}`;
+    const sharpen = this.$("#s-sharp")?.checked !== false ? SHARP_TO : 0;
+    const btn = this.$("#s-make"), label = btn.innerHTML;
+    btn.disabled = true; btn.textContent = "Making the set…";
+    try {
+      this.S.makeSeed = (this.S.makeSeed ?? 7100) + 1;            // each press paints a new still
+      const job = await this.api.submit(this.G.stage({prompt, names, name, far: +this.$("#s-far").value, sharpen, seed: this.S.makeSeed}),
+        `Stage from words: ${names.join(", ")}`, "stage");
+      this.toast(`Krea 2 paints the still${sharpen ? ", SeedVR2 sharpens it" : ""}, then SAM 3 finds ${names.length} things in it (about ${sharpen ? 2 : 1} min)`);
+      await this.until(job);
+      const sub = `valis/stage/${name}`;
+      await this.listStages(sub);
+      await this.open(sub);
+    } finally { btn.disabled = false; btn.innerHTML = label; }
+  }
+
+  until(job) {
+    return new Promise((res, rej) => {
+      const off = this.api.on((ev) => {
+        if (ev.job?.id !== job.id) return;
+        if (ev.job.status === "done") { off(); res(); } else if (ev.job.status === "error") { off(); rej(new Error(ev.job.error)); }
+      });
+    });
+  }
+
+  // the world past the frame, painted (Qwen Image 2.1 + the outpaint LoRA) into the stage's dome: the studio's wide
+  // moves and the 3D set then show the room, the street, the sky going on instead of a blur
+  async paintDome() {
+    if (!this.S.sub) throw new Error("Split a still (or open a stage) first");
+    const have = await fetch("/object_info/ValisStageDome").then(r => r.json()).catch(() => ({}));
+    if (!have.ValisStageDome) throw new Error("Restart ComfyUI once to load the Valis Stage Dome nodes, then paint again");
+    const btn = this.$("#s-paintdome"), label = btn.innerHTML;
+    btn.disabled = true; btn.textContent = "Painting the world past the frame…";
+    try {
+      this.S.domeSeed = (this.S.domeSeed ?? 100) + 1;          // each press paints a new take
+      const job = await this.api.submit(this.G.stageDome({stage: this.S.sub, seed: this.S.domeSeed}), `Dome: ${this.S.sub.split("/").pop()}`, "stage");
+      this.toast("Qwen Image 2.1 is painting the world past the frame (about a minute)");
+      await this.until(job);
+      // only the dome changes: the camera, the sequence, the layer settings stay as they are
+      const meta = await fetch(this.file(this.S.sub, "stage.json") + `&t=${Date.now()}`).then(r => r.json());
+      this.S.meta.dome = meta.dome; this.S.meta.surround = meta.surround;
+      await this.stage.loadDome(meta.dome);
+      this.refit();
+      this.toast(`Painted. ${this.S.wide ? "" : "Pick Show the dome to see past the edge. "}Save the 3D set again to take it along.`);
+    } finally { btn.disabled = false; btn.innerHTML = label; }
   }
 
   file(sub, f) { return `/view?filename=${encodeURIComponent(f)}&subfolder=${encodeURIComponent(sub)}&type=output`; }

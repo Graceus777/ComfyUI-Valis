@@ -141,6 +141,60 @@ def _fill_behind(z, zk, covered, zocc, w, zmed, reach=0.03, margin=1.08):
     return np.where(zk, z, zf).astype(np.float32)
 
 
+def _part_depths(zl, own, support, li, owner, z, zmed, is_bd, lum, core=None, relief=0.35, spread=0.12, min_px=64, gap=0.03, ring=0.008):
+    """Depth per part of one object layer, so each part moves right when the camera does. Two naive rules:
+    - One name can find several things at clearly different depths ("the lanterns": one in a hand, one on a tower).
+      Each part is flattened toward its own median instead of the layer's.
+    - A light (a part whose brightest tenth is near white) touching a bigger, nearer object is attached to it (a
+      lantern in a hand, a torch on a wall bracket): monocular depth reads glowing things as far away, and they
+      would float off what holds them on a move. Such a part takes the holder's depth (as drawn) where they touch. Only lights:
+      an arch behind a man touches him too, and must stay behind.
+    Returns (z, 1.0) with the flattening already done (draw with relief 1), or None when one median is fine."""
+    h, w = own.shape
+    r = max(1, int(round(gap * w / 2)))
+    near = cv2.dilate(own.astype(np.uint8), cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * r + 1, 2 * r + 1))) > 0
+    lab, n = ndi.label(near)                       # parts closer than `gap` are one thing cut by something in front
+    lab = np.where(own, lab, 0)
+    sizes = ndi.sum(np.ones_like(zl), lab, index=np.arange(1, n + 1)) if n else []
+    parts = [i + 1 for i in range(n) if sizes[i] >= min_px]
+    if not parts:
+        return None
+    area = np.bincount(owner.ravel(), minlength=len(zmed))
+    rr = max(2, int(round(ring * w)))
+    kern = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * rr + 1, 2 * rr + 1))
+    med, target = {}, {}
+    for k in parts:
+        pk = lab == k
+        med[k] = target[k] = float(np.median(zl[pk]))
+        pc = pk & core if core is not None and (pk & core).sum() >= 16 else pk
+        if np.percentile(lum[pc], 90) < 0.9:      # judged on SAM's own pixels, not the grown halo
+            continue
+        rim = (cv2.dilate(pk.astype(np.uint8), kern) > 0) & ~own
+        if rim.sum() < 8:
+            continue
+        o = owner[rim]
+        best, cnt = None, 0
+        for j in np.unique(o):
+            if j == li or j < 0 or area[j] < 2 * pk.sum() or zmed[j] >= med[k] * 0.9:     # a wall holds its lamps too
+                continue
+            c = int((o == j).sum())
+            if c > cnt:
+                best, cnt = int(j), c
+        if best is not None and cnt >= 0.15 * rim.sum():
+            target[k] = float(np.median(z[rim & (owner == best)]))
+    moved = any(abs(target[k] - med[k]) / med[k] > 0.05 for k in parts)
+    split = len(parts) >= 2 and (max(med.values()) - min(med.values())) / min(med.values()) >= spread
+    if not (moved or split):
+        return None
+    seeds = np.isin(lab, parts)
+    idx = ndi.distance_transform_edt(~seeds, return_distances=False, return_indices=True)
+    part = lab[idx[0], idx[1]]                     # every pixel of the layer joins its nearest part
+    lut_m, lut_t = np.zeros(n + 1, np.float32), np.zeros(n + 1, np.float32)
+    for k in parts:
+        lut_m[k], lut_t[k] = med[k], target[k]
+    return np.where(support, lut_t[part] + (zl - lut_m[part]) * relief, zl).astype(np.float32), 1.0
+
+
 def build(image, nearness, masks, names, far=6.0, threshold=0.5, edge=1.5, min_area=0.0003, band=0.025, backdrop_area=0.35, paint_band=0.09, grow=0.003):
     """image HxWx3 float [0,1]; nearness HxW float [0,1] (bright = near); masks: list of HxW float (one per name).
 
@@ -153,7 +207,8 @@ def build(image, nearness, masks, names, far=6.0, threshold=0.5, edge=1.5, min_a
 
     # one binary mask per name. Naive checks, so a bad name costs nothing but a note:
     #   nothing found / the whole picture ("the city" over a city) / the same thing as an earlier name
-    cand, dropped, cores = [], [], []
+    cand, dropped, cores, grows = [], [], [], []
+    lum = image[..., :3].astype(np.float32) @ np.array([0.3, 0.59, 0.11], np.float32)
     for name, m in zip(names, masks):
         m = cv2.resize(m.astype(np.float32), (w, h), interpolation=cv2.INTER_LINEAR) > threshold
         if m.mean() < min_area:
@@ -167,20 +222,24 @@ def build(image, nearness, masks, names, far=6.0, threshold=0.5, edge=1.5, min_a
             dropped.append({"name": name, "why": f"found the same thing as {dup}"})
             continue
         m0 = m
-        if grow > 0:      # SAM's edge stops short of a soft fringe (a cloud's wisp, a flame's glow): take it along,
-            g = max(1, int(round(grow * w)))     # but feathered (see the alpha below), so it never reads as a cut-out ring
+        # a light (its brightest tenth near white: a moon, a lantern, a fire) carries a halo well past SAM's edge; left
+        # behind in the backdrop it shows as a second, ghost glow once the light moves. Lights take 4x the fringe.
+        gk = grow * (4 if np.percentile(lum[m], 90) > 0.9 else 1)
+        grows.append(gk)
+        if gk > 0:        # SAM's edge stops short of a soft fringe (a cloud's wisp, a flame's glow): take it along,
+            g = max(1, int(round(gk * w)))       # but feathered (see the alpha below), so it never reads as a cut-out ring
             m = cv2.dilate(m.astype(np.uint8), cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * g + 1, 2 * g + 1))) > 0
         cand.append((name, m))
         cores.append(m0)
     # draw order far -> near by each mask's median depth, then a mask that sits mostly inside a bigger one (the moon
     # in the sky, a lamp on the path) goes just in front of it: depth maps barely separate them
-    meds = [float(np.median(z[m])) for _, m in cand]
+    meds = [float(np.median(z[c])) for c in cores]       # SAM's own mask: the grown fringe is the background's depth
     # monocular depth is unreliable on sky (Depth Anything often puts it mid-scene): a sky is the farthest thing
     for i, (name, m) in enumerate(cand):
         if SKY.search(name):
             z[m] = far
             meds[i] = far
-    areas = [float(m.sum()) for _, m in cand]
+    areas = [float(c.sum()) for c in cores]
     seq = sorted(range(len(cand)), key=lambda i: -meds[i])
     for _ in range(len(cand) ** 2):
         moved = False
@@ -188,7 +247,7 @@ def build(image, nearness, masks, names, far=6.0, threshold=0.5, edge=1.5, min_a
             for b in range(len(cand)):
                 if a == b or areas[a] >= areas[b]:
                     continue
-                inside = float((cand[a][1] & cand[b][1]).sum()) / max(1.0, areas[a])
+                inside = float((cores[a] & cand[b][1]).sum()) / max(1.0, areas[a])
                 if inside >= .6 and seq.index(a) < seq.index(b):
                     seq.remove(a)
                     seq.insert(seq.index(b) + 1, a)
@@ -240,7 +299,7 @@ def build(image, nearness, masks, names, far=6.0, threshold=0.5, edge=1.5, min_a
             continue
         # colour: own pixels (eroded a hair, edge pixels are mixed with the neighbour's paint) + completion
         # a backdrop's paint next to a covering object carries that object's glow and edge: take it from a little farther out
-        k = 7 if backdrop else 3
+        k = int(round((0.008 if backdrop else 0.0023) * w)) | 1     # ~11 / 3 px at 1344 wide: the bleed scales with resolution
         known = cv2.erode(own.astype(np.uint8), np.ones((k, k), np.uint8)).astype(bool)
         if known.sum() < 16:
             known = own
@@ -252,22 +311,31 @@ def build(image, nearness, masks, names, far=6.0, threshold=0.5, edge=1.5, min_a
             zk = cv2.erode(cores[li].astype(np.uint8), np.ones((5, 5), np.uint8)).astype(bool) & known
             if zk.sum() < 16:
                 zk = known
+        relief = None
         if backdrop:
             zl = _fill_behind(z, zk, holes, z_drawn, w, zmed[li])
         else:
             zl = _fill_nearest(np.where(zk, z, 0), zk)
             zl = cv2.GaussianBlur(zl, (0, 0), 2.0) * (~zk) + zl * zk
+            parts = _part_depths(zl, own, own | ext, li, owner, z_drawn, zmed, is_bd, lum, cores[li] if li < len(cores) else None)
+            if parts is not None:
+                zl, relief = parts
         # alpha: soft at the outer edge of the support only
         a = support.astype(np.float32)
         if edge > 0:
             a = cv2.GaussianBlur(a, (0, 0), edge)
             a = np.where(support, np.maximum(a, (cv2.erode(support.astype(np.uint8), np.ones((3, 3), np.uint8)) > 0)), a)
+        if not backdrop and ext.any():
+            # an object's completion behind what covers it is a guess (a smear of its own paint): it fades out over the
+            # band instead of ending solid, so a big move reveals the backdrop behind it, not a pale blob
+            dd = ndi.distance_transform_edt(~own)
+            a[ext] *= np.clip(1.0 - dd[ext] / band_px, 0, 1) ** 1.5
         if li < len(cores) and grow > 0 and not backdrop:
             # the grown fringe fades out from SAM's own edge, where it isn't covered by something nearer
             ring = own & ~cores[li] & ~ext
             if ring.any():
                 d0 = ndi.distance_transform_edt(~cores[li])
-                a[ring] = np.minimum(a[ring], np.clip(1.0 - d0[ring] / (grow * w + 1), 0, 1))
+                a[ring] = np.minimum(a[ring], np.clip(1.0 - d0[ring] / (grows[li] * w + 1), 0, 1))
         ys, xs = np.nonzero(own)
         # what an image model should paint properly: the completion near the layer's own pixels (deep inside a big
         # hole, e.g. the sky far below the horizon, nothing is ever revealed)
@@ -275,7 +343,7 @@ def build(image, nearness, masks, names, far=6.0, threshold=0.5, edge=1.5, min_a
         if backdrop and hole.any():
             hole &= ndi.distance_transform_edt(~own) <= paint_band * w
         layers.append({"name": allnames[li], "rgba": np.dstack([rgb, a]).astype(np.float32), "z": zl.astype(np.float32),
-                       "z_med": zmed[li], "area": float(own.mean()), "backdrop": bool(backdrop), "hole": hole,
+                       "z_med": zmed[li], "area": float(own.mean()), "backdrop": bool(backdrop), "hole": hole, "relief": relief,
                        "bbox": [int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())]})
     # depth along the still's border (nearest in each of 32 segments): the studio frames every camera move with it
     def seg_min(a, n=32):
@@ -290,35 +358,94 @@ def build(image, nearness, masks, names, far=6.0, threshold=0.5, edge=1.5, min_a
 DOME = {"yaw": 80.0, "pitch": 60.0, "step": 0.4, "fov": 50.0}
 
 
-def dome_map(still, back, fov=50.0, step=0.3, yaw=80.0, pitch=60.0):
+def dome_map(still, back, fov=50.0, step=0.3, yaw=80.0, pitch=60.0, surround=None, rect=None):
     """The world past the frame, as an angular map around the original camera (yaw x pitch, `step` degrees a texel;
-    row 0 is the top). Inside the frame: the farthest backdrop (complete, nothing standing in it). Outside: the
-    still mirrored across its own edge, blurred more and more with distance and fading to the rim's average colour,
-    so a camera that moves past the edge sees the set's air and light go on instead of a void. A splat export puts it
-    on a sphere far behind the set; naive on purpose, like a blurred letterbox fill."""
+    row 0 is the top). Inside the frame: the still. Outside: by default
+    the still mirrored across its own edge, blurred more and more with distance and fading to the rim's average
+    colour, so a camera that moves past the edge sees the set's air and light go on instead of a void (naive, like a
+    blurred letterbox fill). With `surround` (the still painted out past its edges, e.g. by an outpainting model, with
+    the still sitting at `rect` = x, y, w, h inside it), the painted world is used out to the canvas edge, and only
+    past that does the blur take over."""
     H, W = still.shape[:2]
     f0 = (W / 2) / np.tan(np.radians(fov / 2))
     nx, ny = int(round(2 * yaw / step)), int(round(2 * pitch / step))
     ya = np.radians(np.linspace(-yaw, yaw, nx))[None, :].repeat(ny, 0)
     pa = np.radians(np.linspace(pitch, -pitch, ny))[:, None].repeat(nx, 1)
-    u = (W / 2 + f0 * np.tan(ya) - 0.5).astype(np.float32)
-    v = (H / 2 - f0 * np.tan(pa) / np.cos(ya) - 0.5).astype(np.float32)
+    tx, ty = np.tan(ya), np.tan(pa) / np.cos(ya)          # pinhole coordinates of each texel's ray
+    u = (W / 2 + f0 * tx - 0.5).astype(np.float32)
+    v = (H / 2 - f0 * ty - 0.5).astype(np.float32)
     inside = (u >= 0) & (u <= W - 1) & (v >= 0) & (v <= H - 1)
+    # inside the frame the dome is the still itself (blurred to the texel size): a set fading out at its edge then
+    # fades into the same colours, and the dome runs on seamlessly past the edge. (The farthest backdrop alone, e.g.
+    # the sky, put a band of sky colour along the bottom of a shot when its rocks faded into it.)
     px = f0 * np.radians(step)                    # still pixels a texel spans: pre-blur so nothing aliases
-    if back.shape[-1] == 4:                        # where the farthest layer has no paint, the still stands in
-        back = back[..., :3] * back[..., 3:] + still * (1 - back[..., 3:])
-    ins = cv2.remap(cv2.GaussianBlur(back.astype(np.float32), (0, 0), px / 2), u, v, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
-    ext = cv2.remap(cv2.GaussianBlur(still.astype(np.float32), (0, 0), px / 2), u, v, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT_101)
-    dist = ndi.distance_transform_edt(~inside) if (~inside).any() else np.zeros(inside.shape)
+    ins = cv2.remap(cv2.GaussianBlur(still.astype(np.float32), (0, 0), px / 2), u, v, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+    if surround is not None:
+        Hc, Wc = surround.shape[:2]
+        x0, y0, rw, rh = rect
+        sc = rw / W                                # canvas px per still px
+        src = surround.astype(np.float32)
+        su = (x0 + rw / 2 + f0 * sc * tx - 0.5).astype(np.float32)
+        sv = (y0 + rh / 2 - f0 * sc * ty - 0.5).astype(np.float32)
+        region = (su >= 0) & (su <= Wc - 1) & (sv >= 0) & (sv <= Hc - 1) & (np.abs(ya) < np.radians(85))
+        spx = px * sc
+    else:
+        src, su, sv, region, spx = still.astype(np.float32), u, v, inside, px
+    ext = cv2.remap(cv2.GaussianBlur(src, (0, 0), max(0.5, spx / 2)), su, sv, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT_101)
+    dist = ndi.distance_transform_edt(~region) if (~region).any() else np.zeros(region.shape)
     levels = np.stack([ext] + [cv2.GaussianBlur(ext, (0, 0), sg) for sg in (2, 4, 8, 16, 32)])
     lv = np.clip(np.log2(np.maximum(dist, 1) / 1.5), 0, len(levels) - 1)
+    lv[dist == 0] = 0
     i0 = np.floor(lv).astype(int); fr = (lv - i0)[..., None]; i1 = np.minimum(i0 + 1, len(levels) - 1)
     yy, xx = np.mgrid[0:ny, 0:nx]
     blurred = levels[i0, yy, xx] * (1 - fr) + levels[i1, yy, xx] * fr
-    rim = np.concatenate([still[0], still[-1], still[:, 0], still[:, -1]])
+    rim = np.concatenate([src[0], src[-1], src[:, 0], src[:, -1]])
     ambient = rim.mean(0) * 0.6
     fade = np.clip(dist / (0.35 * nx), 0, 1)[..., None] ** 1.5
     return np.clip(np.where(inside[..., None], ins, blurred * (1 - fade) + ambient * fade), 0, 1).astype(np.float32)
+
+
+def surround_canvas(still, megapixels=1.03, k=2.0, gray=0.5):
+    """The still, smaller, in the middle of a canvas k times as wide and tall, the rest solid gray: what an outpainting
+    model (Qwen Image 2.1 + the outpaint LoRA) paints out. Returns the canvas and the still's rect (x, y, w, h)."""
+    H, W = still.shape[:2]
+    a = W / H
+    Wc = int(round(np.sqrt(megapixels * 1e6 * a) / 32)) * 32
+    Hc = int(round(Wc / a / 32)) * 32
+    rw = int(round(Wc / k / 2)) * 2
+    rh = int(round(rw / a / 2)) * 2
+    if rh > Hc / k:
+        rh = int(round(Hc / k / 2)) * 2; rw = int(round(rh * a / 2)) * 2
+    x0, y0 = (Wc - rw) // 2, (Hc - rh) // 2
+    canvas = np.full((Hc, Wc, 3), gray, np.float32)
+    canvas[y0:y0 + rh, x0:x0 + rw] = cv2.resize(still.astype(np.float32), (rw, rh), interpolation=cv2.INTER_AREA)
+    return canvas, (x0, y0, rw, rh)
+
+
+def match_colour(painted, ref, rect):
+    """an edit model drifts the colours a little: match the painted canvas to the still where both show the still"""
+    x0, y0, rw, rh = rect
+    m = 4
+    a = painted[y0 + m:y0 + rh - m, x0 + m:x0 + rw - m].reshape(-1, 3)
+    b = ref[y0 + m:y0 + rh - m, x0 + m:x0 + rw - m].reshape(-1, 3)
+    out = (painted - a.mean(0)) / np.maximum(a.std(0), 1e-3) * b.std(0) + b.mean(0)
+    return np.clip(out, 0, 1).astype(np.float32)
+
+
+def load_layers(folder, meta):
+    """a saved stage's layers as float RGBA, far to near"""
+    return [cv2.cvtColor(cv2.imread(os.path.join(folder, L["image"]), cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2RGBA).astype(np.float32) / 255
+            for L in meta["layers"]]
+
+
+def write_dome(folder, meta, rgba, surround=None, rect=None):
+    """(re)write a stage's dome.png from its layers, with an optional painted surround; updates meta (not saved)"""
+    still = composite([{"rgba": x} for x in rgba])
+    tex = dome_map(still, rgba[0], **{k: DOME[k] for k in ("fov", "step", "yaw", "pitch")}, surround=surround, rect=rect)
+    cv2.imwrite(os.path.join(folder, "dome.png"), cv2.cvtColor(np.clip(tex * 255 + .5, 0, 255).astype(np.uint8), cv2.COLOR_RGB2BGR))
+    import time
+    meta["dome"] = dict(DOME, image="dome.png", painted=surround is not None, rev=int(time.time()))   # rev: a cache-buster for viewers
+    return tex
 
 
 def composite(layers):
@@ -353,6 +480,8 @@ def save(folder, layers, info, source=None):
         cv2.imwrite(os.path.join(folder, df), cv2.cvtColor(_pack16(L["z"], info["far"]), cv2.COLOR_RGB2BGR))
         entry = {"name": L["name"], "image": lf, "depth": df, "z_med": round(L["z_med"], 4),
                  "area": round(L["area"], 5), "bbox": L["bbox"], "backdrop": L.get("backdrop", False)}
+        if L.get("relief") is not None:
+            entry["relief"] = L["relief"]                 # already flattened part by part (see _flatten_parts)
         if L.get("hole") is not None and L["hole"].any():
             hf = f"hole_{i:02d}.png"
             cv2.imwrite(os.path.join(folder, hf), (L["hole"] * 255).astype(np.uint8))
@@ -360,9 +489,7 @@ def save(folder, layers, info, source=None):
             entry["hole_area"] = round(float(L["hole"].mean()), 5)
         meta["layers"].append(entry)
     if layers:
-        tex = dome_map(composite(layers), layers[0]["rgba"], **{k: DOME[k] for k in ("fov", "step", "yaw", "pitch")})
-        cv2.imwrite(os.path.join(folder, "dome.png"), cv2.cvtColor(np.clip(tex * 255 + .5, 0, 255).astype(np.uint8), cv2.COLOR_RGB2BGR))
-        meta["dome"] = dict(DOME, image="dome.png")
+        write_dome(folder, meta, [L["rgba"] for L in layers])
     with open(os.path.join(folder, "stage.json"), "w") as f:
         json.dump(meta, f, indent=1)
     return meta

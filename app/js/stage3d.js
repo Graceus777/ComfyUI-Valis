@@ -54,7 +54,7 @@ uniform float u_opacity, u_tear;
 uniform vec4 u_tint;      // rgb multiply, a = add glow
 uniform float u_glow;     // glow pass: how much of this layer's light blooms (0 = it only occludes)
 uniform int u_pass;       // 0 = picture, 1 = glow
-uniform float u_feather;  // > 0: the set fades out over this fraction of the width at the frame edge, into the dome
+uniform float u_feather;  // > 0: past the frame edge a layer's stretched edge fades out over this fraction of the width, into the dome
 uniform float u_aspect;   // H / W of the source
 out vec4 o;
 void main() {
@@ -62,8 +62,9 @@ void main() {
   if (fwidth(v_z) / v_z > u_tear) discard;
   if (u_clip > 0.5 && (v_raw.x < 0.0 || v_raw.y < 0.0 || v_raw.x > 1.0 || v_raw.y > 1.0)) discard;
   vec4 c = texture(u_color, v_uv);
-  if (u_feather > 0.0) {
-    float e = clamp(min(min(v_raw.x, 1.0 - v_raw.x), min(v_raw.y, 1.0 - v_raw.y) * u_aspect) / u_feather, 0.0, 1.0);
+  if (u_feather > 0.0) {      // inside the frame nothing changes: at rest the picture is exactly the still
+    float ox = max(max(-v_raw.x, v_raw.x - 1.0), 0.0), oy = max(max(-v_raw.y, v_raw.y - 1.0), 0.0) * u_aspect;
+    float e = 1.0 - clamp(max(ox, oy) / u_feather, 0.0, 1.0);
     c.a *= e * e * (3.0 - 2.0 * e);
   }
   c.rgb = c.rgb * u_tint.rgb + u_tint.a * c.rgb;
@@ -281,17 +282,7 @@ export class Stage {
     const url = typeof base === "function" ? base : (f => base + (base.endsWith("/") ? "" : "/") + f);
     this._url = url;                                       // splat.js reads the layers again to write the 3D set
     this.layers = [];
-    this.dome = null;
-    if (meta.dome) {
-      const im = await loadImage(url(meta.dome.image)).catch(() => null);
-      if (im) {
-        const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
-        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, im);
-        for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
-        this.dome = {t, yaw: meta.dome.yaw * Math.PI / 180, pitch: meta.dome.pitch * Math.PI / 180};
-      }
-    }
+    await this.loadDome(meta.dome);
     for (const L of meta.layers) {
       const [ci, di] = await Promise.all([loadImage(url(L.image)), loadImage(url(L.depth))]);
       const ct = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, ct);
@@ -310,9 +301,28 @@ export class Stage {
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, W, H, 0, gl.RED, gl.FLOAT, zf);
       for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
       const backdrop = L.backdrop ?? (L.area >= 0.12 || L === meta.layers[0]);
-      const grid = this._grid(W, H, backdrop ? 0.12 : 0);
+      // a layer cut by the frame (a cliff, a table) reaches past the edge too, so a wide move sees it go on and fade
+      const b = L.bbox || [0, 0, W - 1, H - 1], cut = b[0] <= 2 || b[1] <= 2 || b[2] >= W - 3 || b[3] >= H - 3;
+      const grid = this._grid(W, H, backdrop || cut ? 0.12 : 0);
       this.layers.push({ ...L, ct, dt, grid, backdrop, visible: true, relief: L.relief ?? (backdrop ? 1 : 0.35), zoff: 1, opacity: 1, tint: [1, 1, 1, 0], _img: ci });
     }
+  }
+
+  // the far dome (dome.png); called again after the world past the frame is repainted
+  async loadDome(d) {
+    const gl = this.gl;
+    if (this.dome) gl.deleteTexture(this.dome.t);
+    this.dome = null;
+    if (this.meta) this.meta.dome = d;
+    if (!d) return;
+    const du = this._url(d.image), dv = d.rev ? `${du}${du.includes("?") ? "&" : "?"}v=${d.rev}` : du;   // repainted: skip the cache
+    const im = await loadImage(dv).catch(() => null);
+    if (!im) return;
+    const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, im);
+    for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+    this.dome = {t, yaw: d.yaw * Math.PI / 180, pitch: d.pitch * Math.PI / 180, painted: !!d.painted};
   }
 
   layer(name) { return this.layers.find(l => l.name === name); }
@@ -381,7 +391,7 @@ export class Stage {
     gl.uniform2f(L.u_size, m.width, m.height); gl.uniform1f(L.u_f0, this.f0); gl.uniform1f(L.u_f, f);
     gl.uniform2f(L.u_out, c.width, c.height); gl.uniform3fv(L.u_cam, cam.pos); gl.uniformMatrix3fv(L.u_rot, false, cam.rot);
     gl.uniform1f(L.u_far, m.far); gl.uniform1f(L.u_tear, fx.tear ?? 0.08);
-    gl.uniform1f(L.u_feather, fx.wide && this.dome && !(cam.explode > 0.02) ? 0.03 : 0); gl.uniform1f(L.u_aspect, m.height / m.width);
+    gl.uniform1f(L.u_feather, fx.wide && this.dome && !(cam.explode > 0.02) ? 0.06 : 0); gl.uniform1f(L.u_aspect, m.height / m.width);
     this._layers(0, fx, cam.explode || 0);
     const parts = fx.particles && fx.particles.length ? fx.particles : null;
     if (parts) this._points(cam, f, parts);
