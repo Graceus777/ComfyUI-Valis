@@ -1,0 +1,152 @@
+{
+  "16": {
+    "class_type": "LoadVideo",
+    "inputs": {
+      "file": "valis/shot.mp4"
+    }
+  },
+  "17": {
+    "class_type": "GetVideoComponents",
+    "inputs": {
+      "video": [
+        "16",
+        0
+      ]
+    }
+  },
+  "19": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "sam3.1_multiplex_fp16.safetensors"
+    }
+  },
+  "20": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "the man",
+      "clip": [
+        "19",
+        1
+      ]
+    }
+  },
+  "21": {
+    "class_type": "SAM3_VideoTrack",
+    "inputs": {
+      "images": [
+        "17",
+        0
+      ],
+      "model": [
+        "19",
+        0
+      ],
+      "conditioning": [
+        "20",
+        0
+      ],
+      "detection_threshold": 0.45,
+      "max_objects": 1,
+      "detect_interval": 5
+    }
+  },
+  "22": {
+    "class_type": "SAM3_TrackToMask",
+    "inputs": {
+      "track_data": [
+        "21",
+        0
+      ],
+      "object_indices": ""
+    }
+  },
+  "23": {
+    "class_type": "MVEx_MaskCleanup",
+    "inputs": {
+      "masks": [
+        "22",
+        0
+      ],
+      "threshold": 0.3,
+      "method": "shrink_grow",
+      "method.shrink": 2,
+      "method.min_frames": 4,
+      "edge_grow": 8
+    }
+  },
+  "40": {
+    "class_type": "LoadVideo",
+    "inputs": {
+      "file": "valis/shot_transformed.mp4"
+    }
+  },
+  "41": {
+    "class_type": "GetVideoComponents",
+    "inputs": {
+      "video": [
+        "40",
+        0
+      ]
+    }
+  },
+  "70": {
+    "class_type": "ValisScoreLoad",
+    "inputs": {
+      "score": "valis/danse_v3_score.json"
+    }
+  },
+  "80": {
+    "class_type": "ValisFX",
+    "inputs": {
+      "images": [
+        "17",
+        0
+      ],
+      "score": [
+        "70",
+        0
+      ],
+      "start_bar": 52,
+      "mode": "auto",
+      "reveal": "ignite",
+      "candles": false,
+      "glint": false,
+      "mist": 1,
+      "rays": 1,
+      "halo": 1,
+      "wave": 1,
+      "seeds": "default",
+      "remap": "{}",
+      "mask_a": [
+        "23",
+        0
+      ],
+      "fx_images": [
+        "41",
+        0
+      ]
+    }
+  },
+  "81": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "80",
+        0
+      ],
+      "fps": 24
+    }
+  },
+  "82": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "81",
+        0
+      ],
+      "filename_prefix": "valis/valis",
+      "format": "auto",
+      "codec": "auto"
+    }
+  }
+}

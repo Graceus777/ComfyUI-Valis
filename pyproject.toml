@@ -1,0 +1,16 @@
+[project]
+name = "comfyui-valis"
+description = "Music-driven VFX for ComfyUI: a score's events (kicks, strokes, syllables) drive SAM 3-tracked reveals, shockwaves and light, in an open Higgsfield-style studio that runs every job through the Comfy SDK."
+version = "0.9.0"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = ["numpy", "opencv-python", "scipy", "comfy-api-proxy>=0.1.6"]
+
+[project.urls]
+Repository = "https://github.com/Graceus777/ComfyUI-Valis"
+
+[tool.comfy]
+PublisherId = ""
+DisplayName = "Valis"
+Icon = ""
+includes = ["app", "workflows", "cli"]

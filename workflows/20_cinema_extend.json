@@ -1,0 +1,351 @@
+{
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "minimax_h3_fl2va_pruned_w4a8_mixed.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "2": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "type": "minimax",
+      "device": "default"
+    }
+  },
+  "3": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+    }
+  },
+  "7": {
+    "class_type": "BasicGuider",
+    "inputs": {
+      "model": [
+        "acc",
+        0
+      ],
+      "conditioning": [
+        "gd",
+        0
+      ]
+    }
+  },
+  "8": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 51101
+    }
+  },
+  "9": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "euler"
+    }
+  },
+  "10": {
+    "class_type": "BasicScheduler",
+    "inputs": {
+      "model": [
+        "16",
+        0
+      ],
+      "scheduler": "simple",
+      "steps": 8,
+      "denoise": 1
+    }
+  },
+  "11": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "8",
+        0
+      ],
+      "guider": [
+        "7",
+        0
+      ],
+      "sampler": [
+        "9",
+        0
+      ],
+      "sigmas": [
+        "acc",
+        1
+      ],
+      "latent_image": [
+        "i2v",
+        1
+      ]
+    }
+  },
+  "12": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "11",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    }
+  },
+  "16": {
+    "class_type": "MiniMaxH3SigmaShift",
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "shift_video": 12,
+      "shift_audio": 3
+    }
+  },
+  "v": {
+    "class_type": "LoadVideo",
+    "inputs": {
+      "file": "valis/shot.mp4"
+    }
+  },
+  "vc": {
+    "class_type": "GetVideoComponents",
+    "inputs": {
+      "video": [
+        "v",
+        0
+      ]
+    }
+  },
+  "vsc": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "vc",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 768,
+      "height": 1344,
+      "crop": "center"
+    }
+  },
+  "edge": {
+    "class_type": "Video Slice",
+    "inputs": {
+      "video": [
+        "v",
+        0
+      ],
+      "start_time": 4.461666666666667,
+      "duration": 0.7083333333333334,
+      "strict_duration": false
+    }
+  },
+  "ec": {
+    "class_type": "GetVideoComponents",
+    "inputs": {
+      "video": [
+        "edge",
+        0
+      ]
+    }
+  },
+  "es": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "ec",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 768,
+      "height": 1344,
+      "crop": "center"
+    }
+  },
+  "i2v": {
+    "class_type": "MiniMaxH3ImageToVideo",
+    "inputs": {
+      "clip": [
+        "2",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ],
+      "width": 768,
+      "height": 1344,
+      "length": 124,
+      "prompt": "integrated_multimodal_description:\n[Shot 1] The video continues seamlessly from its opening frames: she turns toward the river Same people, same place, same light, same camera style. One continuous shot, no cuts, no text.\n\noverall_soundscape:\nThe same sounds carry on without a break.\n\nnon_diegetic_music:\nN/A"
+    }
+  },
+  "gd": {
+    "class_type": "MiniMaxH3AddGuide",
+    "inputs": {
+      "positive": [
+        "i2v",
+        0
+      ],
+      "latent": [
+        "i2v",
+        1
+      ],
+      "frame_idx": 0,
+      "vae": [
+        "3",
+        0
+      ],
+      "image": [
+        "es",
+        0
+      ]
+    }
+  },
+  "acc": {
+    "class_type": "MiniMaxH3PDDAccApply",
+    "inputs": {
+      "model": [
+        "16",
+        0
+      ],
+      "pdd_file": "MiniMax-H3-FL2VA-Acc-8Step.safetensors",
+      "nfe": "8",
+      "lora_strength": 1,
+      "head_strength": 1,
+      "on_off_grid": "error",
+      "enabled": true,
+      "partition": "",
+      "partition_check": "error",
+      "bypass_sigmas": [
+        "10",
+        0
+      ]
+    }
+  },
+  "avae": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+    }
+  },
+  "adec": {
+    "class_type": "VAEDecodeAudio",
+    "inputs": {
+      "samples": [
+        "11",
+        0
+      ],
+      "vae": [
+        "avae",
+        0
+      ]
+    }
+  },
+  "ext": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "12",
+        0
+      ],
+      "fps": 24,
+      "audio": [
+        "adec",
+        0
+      ]
+    }
+  },
+  "extsave": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "ext",
+        0
+      ],
+      "filename_prefix": "valis/extend_part",
+      "format": "auto",
+      "codec": "auto"
+    }
+  },
+  "new": {
+    "class_type": "ImageFromBatch",
+    "inputs": {
+      "image": [
+        "12",
+        0
+      ],
+      "batch_index": 17,
+      "length": 4096
+    }
+  },
+  "join": {
+    "class_type": "ImageBatch",
+    "inputs": {
+      "image1": [
+        "vsc",
+        0
+      ],
+      "image2": [
+        "new",
+        0
+      ]
+    }
+  },
+  "anew": {
+    "class_type": "TrimAudioDuration",
+    "inputs": {
+      "audio": [
+        "adec",
+        0
+      ],
+      "start_index": 0.7083333333333334,
+      "duration": 60
+    }
+  },
+  "aj": {
+    "class_type": "AudioConcat",
+    "inputs": {
+      "audio1": [
+        "vc",
+        1
+      ],
+      "audio2": [
+        "anew",
+        0
+      ],
+      "direction": "after"
+    }
+  },
+  "out": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "join",
+        0
+      ],
+      "fps": 24,
+      "audio": [
+        "aj",
+        0
+      ]
+    }
+  },
+  "save": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "out",
+        0
+      ],
+      "filename_prefix": "valis/extend",
+      "format": "auto",
+      "codec": "auto"
+    }
+  }
+}

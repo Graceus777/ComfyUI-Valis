@@ -1,0 +1,169 @@
+{
+  "v": {
+    "class_type": "LoadVideo",
+    "inputs": {
+      "file": "valis/performance.mp4"
+    }
+  },
+  "vs": {
+    "class_type": "Video Slice",
+    "inputs": {
+      "video": [
+        "v",
+        0
+      ],
+      "start_time": 0,
+      "duration": 15,
+      "strict_duration": false
+    }
+  },
+  "vc": {
+    "class_type": "GetVideoComponents",
+    "inputs": {
+      "video": [
+        "vs",
+        0
+      ]
+    }
+  },
+  "pr": {
+    "class_type": "ResizeImageMaskNode",
+    "inputs": {
+      "input": [
+        "vc",
+        0
+      ],
+      "resize_type": "scale longer dimension",
+      "resize_type.longer_size": 1024,
+      "scale_method": "lanczos"
+    }
+  },
+  "pm": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "sdpose_wholebody_fp16.safetensors"
+    }
+  },
+  "dm": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "rt_detr_v4-x-hgnet_fp16.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "det": {
+    "class_type": "RTDETR_detect",
+    "inputs": {
+      "model": [
+        "dm",
+        0
+      ],
+      "image": [
+        "pr",
+        0
+      ],
+      "threshold": 0.5,
+      "class_name": "person",
+      "max_detections": 2
+    }
+  },
+  "kp": {
+    "class_type": "SDPoseKeypointExtractor",
+    "inputs": {
+      "model": [
+        "pm",
+        0
+      ],
+      "vae": [
+        "pm",
+        2
+      ],
+      "image": [
+        "pr",
+        0
+      ],
+      "bboxes": [
+        "det",
+        0
+      ],
+      "batch_size": 16
+    }
+  },
+  "ctl": {
+    "class_type": "SDPoseDrawKeypoints",
+    "inputs": {
+      "keypoints": [
+        "kp",
+        0
+      ],
+      "draw_body": true,
+      "draw_hands": true,
+      "draw_face": true,
+      "draw_feet": true,
+      "stick_width": 4,
+      "face_point_size": 2,
+      "score_threshold": 0.5,
+      "draw_head": true
+    }
+  },
+  "chk": {
+    "class_type": "ValisPoseCheck",
+    "inputs": {
+      "keypoints": [
+        "kp",
+        0
+      ],
+      "fps": [
+        "vc",
+        2
+      ],
+      "score_threshold": 0.5
+    }
+  },
+  "rep": {
+    "class_type": "SaveText",
+    "inputs": {
+      "text": [
+        "chk",
+        0
+      ],
+      "filename_prefix": "valis/posecheck_report",
+      "format": "json"
+    }
+  },
+  "tl": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "chk",
+        1
+      ],
+      "filename_prefix": "valis/posecheck_timeline"
+    }
+  },
+  "cv": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "ctl",
+        0
+      ],
+      "fps": [
+        "vc",
+        2
+      ]
+    }
+  },
+  "save": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "cv",
+        0
+      ],
+      "filename_prefix": "valis/posecheck_skeleton",
+      "format": "auto",
+      "codec": "auto"
+    }
+  }
+}

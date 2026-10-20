@@ -1,0 +1,462 @@
+{
+  "1": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "type": "minimax",
+      "device": "default"
+    }
+  },
+  "2": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "3": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+    }
+  },
+  "4": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+    }
+  },
+  "5": {
+    "class_type": "MiniMaxH3SigmaShift",
+    "inputs": {
+      "model": [
+        "2t",
+        0
+      ],
+      "shift_video": 8,
+      "shift_audio": 3
+    }
+  },
+  "6": {
+    "class_type": "MiniMaxH3ReferenceToVideo",
+    "inputs": {
+      "clip": [
+        "1",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ],
+      "audio_vae": [
+        "4",
+        0
+      ],
+      "prompt": "Replace only the man in <Video 1> with the character in <Picture 1>. Keep the replacement character's identity, face, hair, outfit and art style from <Picture 1>. Preserve the source video's camera, background, lighting, objects and framing. Match the man's position, scale, pose and movement: facing the camera and talking straight into the lens, his lips moving in sync with his voice. Do not show the reference sheet or its background.",
+      "width": [
+        "25",
+        0
+      ],
+      "height": [
+        "25",
+        1
+      ],
+      "length": [
+        "18",
+        4
+      ],
+      "ref_image_size": "max",
+      "ref_images.ref_image_0": [
+        "90",
+        0
+      ],
+      "ref_videos.ref_video_0": [
+        "18",
+        0
+      ],
+      "ref_video_audios.ref_video_audio_0": [
+        "18",
+        1
+      ]
+    }
+  },
+  "7": {
+    "class_type": "BasicGuider",
+    "inputs": {
+      "model": [
+        "5",
+        0
+      ],
+      "conditioning": [
+        "61",
+        0
+      ]
+    }
+  },
+  "8": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 31
+    }
+  },
+  "9": {
+    "class_type": "BasicScheduler",
+    "inputs": {
+      "model": [
+        "5",
+        0
+      ],
+      "scheduler": "beta",
+      "steps": 8,
+      "denoise": 1
+    }
+  },
+  "10": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "er_sde"
+    }
+  },
+  "11": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "8",
+        0
+      ],
+      "guider": [
+        "7",
+        0
+      ],
+      "sampler": [
+        "10",
+        0
+      ],
+      "sigmas": [
+        "9",
+        0
+      ],
+      "latent_image": [
+        "6",
+        1
+      ]
+    }
+  },
+  "12": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "11",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    }
+  },
+  "14": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "92",
+        0
+      ],
+      "fps": 24,
+      "audio": [
+        "18",
+        2
+      ]
+    }
+  },
+  "15": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "14",
+        0
+      ],
+      "filename_prefix": "valis/swap",
+      "format": "auto",
+      "codec": "auto"
+    }
+  },
+  "16": {
+    "class_type": "LoadVideo",
+    "inputs": {
+      "file": "valis/take.mp4"
+    }
+  },
+  "17": {
+    "class_type": "GetVideoComponents",
+    "inputs": {
+      "video": [
+        "16",
+        0
+      ]
+    }
+  },
+  "18": {
+    "class_type": "H3MaskVideoPrepare",
+    "inputs": {
+      "images": [
+        "17s",
+        0
+      ],
+      "audio": [
+        "17",
+        1
+      ],
+      "source_fps": [
+        "17",
+        2
+      ],
+      "max_seconds": 15,
+      "target_fps": 24
+    }
+  },
+  "19": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "sam3.1_multiplex_fp16.safetensors"
+    }
+  },
+  "20": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "person",
+      "clip": [
+        "19",
+        1
+      ]
+    }
+  },
+  "21": {
+    "class_type": "SAM3_VideoTrack",
+    "inputs": {
+      "images": [
+        "18",
+        0
+      ],
+      "model": [
+        "19",
+        0
+      ],
+      "conditioning": [
+        "20",
+        0
+      ],
+      "detection_threshold": 0.45,
+      "max_objects": 1,
+      "detect_interval": 5
+    }
+  },
+  "22": {
+    "class_type": "SAM3_TrackToMask",
+    "inputs": {
+      "track_data": [
+        "21",
+        0
+      ],
+      "object_indices": ""
+    }
+  },
+  "23": {
+    "class_type": "MVEx_MaskCleanup",
+    "inputs": {
+      "masks": [
+        "22",
+        0
+      ],
+      "threshold": 0.3,
+      "method": "shrink_grow",
+      "method.shrink": 1,
+      "method.min_frames": 4,
+      "edge_grow": 2
+    }
+  },
+  "25": {
+    "class_type": "GetImageSize",
+    "inputs": {
+      "image": [
+        "18",
+        0
+      ]
+    }
+  },
+  "60": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "valis/character_sheet.png"
+    }
+  },
+  "61": {
+    "class_type": "MiniMaxH3AddGuide",
+    "inputs": {
+      "positive": [
+        "6",
+        0
+      ],
+      "latent": [
+        "6",
+        1
+      ],
+      "frame_idx": 0,
+      "vae": [
+        "3",
+        0
+      ],
+      "audio_vae": [
+        "4",
+        0
+      ],
+      "audio": [
+        "18",
+        1
+      ]
+    }
+  },
+  "90": {
+    "class_type": "ValisSwapCheck",
+    "inputs": {
+      "take": [
+        "18",
+        0
+      ],
+      "mask": [
+        "23",
+        0
+      ],
+      "reference": [
+        "60",
+        0
+      ],
+      "pregrade": true,
+      "auto_flip": false
+    }
+  },
+  "91": {
+    "class_type": "SaveText",
+    "inputs": {
+      "text": [
+        "90",
+        1
+      ],
+      "filename_prefix": "valis/swap_check",
+      "format": "txt"
+    }
+  },
+  "92": {
+    "class_type": "ValisSwapMatch",
+    "inputs": {
+      "plate": [
+        "18",
+        0
+      ],
+      "swapped": [
+        "12",
+        0
+      ],
+      "mask": [
+        "23",
+        0
+      ],
+      "swapped_mask": [
+        "97",
+        0
+      ],
+      "color": 0.85,
+      "grain": true,
+      "soften": true,
+      "light_wrap": 0.25
+    }
+  },
+  "94": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "person",
+      "clip": [
+        "19",
+        1
+      ]
+    }
+  },
+  "95": {
+    "class_type": "SAM3_VideoTrack",
+    "inputs": {
+      "images": [
+        "12",
+        0
+      ],
+      "model": [
+        "19",
+        0
+      ],
+      "conditioning": [
+        "94",
+        0
+      ],
+      "detection_threshold": 0.45,
+      "max_objects": 1,
+      "detect_interval": 5
+    }
+  },
+  "96": {
+    "class_type": "SAM3_TrackToMask",
+    "inputs": {
+      "track_data": [
+        "95",
+        0
+      ],
+      "object_indices": ""
+    }
+  },
+  "97": {
+    "class_type": "MVEx_MaskCleanup",
+    "inputs": {
+      "masks": [
+        "96",
+        0
+      ],
+      "threshold": 0.3,
+      "method": "shrink_grow",
+      "method.shrink": 1,
+      "method.min_frames": 4,
+      "edge_grow": 2
+    }
+  },
+  "17s": {
+    "class_type": "ImageScaleToTotalPixels",
+    "inputs": {
+      "image": [
+        "17",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "megapixels": 0.5625,
+      "resolution_steps": 32
+    }
+  },
+  "2l": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "2",
+        0
+      ],
+      "lora_name": "h3_character_swap_v1.5.safetensors",
+      "strength_model": 1
+    }
+  },
+  "2t": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "2l",
+        0
+      ],
+      "lora_name": "minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors",
+      "strength_model": 1
+    }
+  }
+}

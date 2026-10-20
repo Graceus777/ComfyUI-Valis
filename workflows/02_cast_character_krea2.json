@@ -1,0 +1,208 @@
+{
+  "10": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "valis/keyframe.png"
+    }
+  },
+  "11": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "valis/character.png"
+    }
+  },
+  "200": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "krea2_turbo_fp8_scaled.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "201": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_4b_fp8_scaled.safetensors",
+      "type": "krea2",
+      "device": "default"
+    }
+  },
+  "202": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    }
+  },
+  "203": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "model": [
+        "200",
+        0
+      ],
+      "lora_name": "Krea2\\krea2_identity_edit_v1_2_r64.safetensors",
+      "strength_model": 1
+    }
+  },
+  "304": {
+    "class_type": "ImageScaleToTotalPixels",
+    "inputs": {
+      "image": [
+        "10",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "megapixels": 1,
+      "resolution_steps": 16
+    }
+  },
+  "305": {
+    "class_type": "VAEEncode",
+    "inputs": {
+      "pixels": [
+        "304",
+        0
+      ],
+      "vae": [
+        "202",
+        0
+      ]
+    }
+  },
+  "306": {
+    "class_type": "GetImageSize",
+    "inputs": {
+      "image": [
+        "304",
+        0
+      ]
+    }
+  },
+  "307": {
+    "class_type": "EmptySD3LatentImage",
+    "inputs": {
+      "width": [
+        "306",
+        0
+      ],
+      "height": [
+        "306",
+        1
+      ],
+      "batch_size": 1
+    }
+  },
+  "308": {
+    "class_type": "Krea2EditModelPatch",
+    "inputs": {
+      "model": [
+        "203",
+        0
+      ],
+      "source_latent": [
+        "305",
+        0
+      ],
+      "vae": [
+        "202",
+        0
+      ],
+      "source_image": [
+        "304",
+        0
+      ],
+      "target_latent": [
+        "307",
+        0
+      ],
+      "ref_boost": 1,
+      "ref_boost_a": 1,
+      "fit_mode": "fit",
+      "source_image_b": [
+        "11",
+        0
+      ]
+    }
+  },
+  "309": {
+    "class_type": "Krea2EditGroundedEncode",
+    "inputs": {
+      "clip": [
+        "201",
+        0
+      ],
+      "prompt": "Put the character from the second image into the first image in place of the man, same pose, same light.",
+      "image": [
+        "304",
+        0
+      ],
+      "grounding_px": 768,
+      "system_prompt": ""
+    }
+  },
+  "310": {
+    "class_type": "Krea2EditGroundedEncode",
+    "inputs": {
+      "clip": [
+        "201",
+        0
+      ],
+      "prompt": "",
+      "image": [
+        "304",
+        0
+      ],
+      "grounding_px": 768,
+      "system_prompt": ""
+    }
+  },
+  "311": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "308",
+        0
+      ],
+      "positive": [
+        "309",
+        0
+      ],
+      "negative": [
+        "310",
+        0
+      ],
+      "latent_image": [
+        "307",
+        0
+      ],
+      "seed": 31,
+      "steps": 10,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1
+    }
+  },
+  "312": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "311",
+        0
+      ],
+      "vae": [
+        "202",
+        0
+      ]
+    }
+  },
+  "313": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "312",
+        0
+      ],
+      "filename_prefix": "valis/cast"
+    }
+  }
+}

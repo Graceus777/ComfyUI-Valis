@@ -1,0 +1,192 @@
+{
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "minimax_h3_fl2va_pruned_w4a8_mixed.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "2": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+      "type": "minimax",
+      "device": "default"
+    }
+  },
+  "3": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_video_vae_fp16.safetensors"
+    }
+  },
+  "6": {
+    "class_type": "MiniMaxH3ImageToVideo",
+    "inputs": {
+      "clip": [
+        "2",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ],
+      "prompt": "For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\n\nintegrated_multimodal_description:\n[Shot 1] Cinematic live-action film still. The scene begins exactly as shown in the first frame and comes alive: they turn slowly in the waltz hold. The camera holds perfectly still. One continuous shot, no cuts, no text.\n\noverall_soundscape:\nQuiet room tone, soft natural ambience.\n\nnon_diegetic_music:\nN/A",
+      "width": 768,
+      "height": 1344,
+      "length": 107,
+      "first_frame": [
+        "fs",
+        0
+      ]
+    }
+  },
+  "7": {
+    "class_type": "BasicGuider",
+    "inputs": {
+      "model": [
+        "acc",
+        0
+      ],
+      "conditioning": [
+        "6",
+        0
+      ]
+    }
+  },
+  "8": {
+    "class_type": "RandomNoise",
+    "inputs": {
+      "noise_seed": 51101
+    }
+  },
+  "9": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "euler"
+    }
+  },
+  "10": {
+    "class_type": "BasicScheduler",
+    "inputs": {
+      "model": [
+        "16",
+        0
+      ],
+      "scheduler": "simple",
+      "steps": 8,
+      "denoise": 1
+    }
+  },
+  "11": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": [
+        "8",
+        0
+      ],
+      "guider": [
+        "7",
+        0
+      ],
+      "sampler": [
+        "9",
+        0
+      ],
+      "sigmas": [
+        "acc",
+        1
+      ],
+      "latent_image": [
+        "6",
+        1
+      ]
+    }
+  },
+  "12": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "11",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    }
+  },
+  "13": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "12",
+        0
+      ],
+      "fps": 24
+    }
+  },
+  "14": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "13",
+        0
+      ],
+      "filename_prefix": "valis/shot",
+      "format": "auto",
+      "codec": "auto"
+    }
+  },
+  "16": {
+    "class_type": "MiniMaxH3SigmaShift",
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "shift_video": 12,
+      "shift_audio": 3
+    }
+  },
+  "fa": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "valis/keyframe.png"
+    }
+  },
+  "fs": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "fa",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 768,
+      "height": 1344,
+      "crop": "center"
+    }
+  },
+  "acc": {
+    "class_type": "MiniMaxH3PDDAccApply",
+    "inputs": {
+      "model": [
+        "16",
+        0
+      ],
+      "pdd_file": "MiniMax-H3-FL2VA-Acc-8Step.safetensors",
+      "nfe": "8",
+      "lora_strength": 1,
+      "head_strength": 1,
+      "on_off_grid": "error",
+      "enabled": true,
+      "partition": "",
+      "partition_check": "error",
+      "bypass_sigmas": [
+        "10",
+        0
+      ]
+    }
+  }
+}

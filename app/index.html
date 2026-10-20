@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Valis Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/valis/app/app.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="mark">VALIS</span><span class="sub">studio</span></div>
+  <nav class="tabs">
+    <button class="tab on" data-view="stage">Stage<span class="k">0</span></button>
+    <button class="tab" data-view="create">Create<span class="k">1</span></button>
+    <button class="tab" data-view="edit">Edit<span class="k">2</span></button>
+    <button class="tab" data-view="genjutsu">Genjutsu<span class="k">6</span></button>
+    <button class="tab" data-view="score">Score<span class="k">3</span></button>
+    <button class="tab" data-view="fx">FX<span class="k">4</span></button>
+    <button class="tab" data-view="renders">Renders<span class="k">5</span></button>
+  </nav>
+  <div class="status">
+    <span><i class="dot" id="conn"></i><span id="connText">connecting</span></span>
+    <span class="pill" id="queuePill">queue 0</span>
+    <span class="pill" id="vramPill">VRAM –</span>
+    <span class="pill link" id="setupPill" title="Checks every workflow against this ComfyUI">setup –</span>
+  </div>
+</header>
+
+<main>
+  <!-- ======================= CREATE ======================= -->
+  <section class="view" id="view-stage">
+    <aside class="panel">
+      <h2>Still</h2>
+      <div class="drop" id="s-still">Drop a still: a keyframe, a painting, a photo</div>
+      <select id="s-open" style="margin-top:8px"></select>
+      <h2>What's in it</h2>
+      <textarea id="s-names" rows="6" spellcheck="false" placeholder="one per line: the sky, the woman, the lamps…"></textarea>
+      <p class="hint">Name the things that should move on their own. SAM 3 finds every one of each ("the lamps" finds all the lamps); everything else becomes <i>the rest</i>.</p>
+      <div class="row" style="margin-top:10px"><label class="hint" style="margin:0">depth</label><input type="number" id="s-far" value="6" min="1.5" max="30" step="0.5" title="how deep the scene is: the farthest point is this many times farther than the nearest"></div>
+      <div class="row" style="margin-top:12px"><button class="btn primary" id="s-split" disabled>Split it<span class="sub">SAM 3 + Depth Anything 3 · one short GPU job</span></button></div>
+      <div id="s-controls" style="display:none">
+        <h2>Camera</h2>
+        <div class="chips" id="s-moves"></div>
+        <h2>Around</h2>
+        <select id="s-focus"></select>
+        <p class="hint">The subject the move is built around: a dolly zoom holds it at one size, an arc circles it.</p>
+        <h2>Amount <span class="badge" id="s-amount-v">1.00</span></h2>
+        <input type="range" id="s-amount" min="0.2" max="2.5" step="0.05" value="1" style="width:100%">
+        <h2>Length <span class="badge" id="s-sec-v">4.0 s</span></h2>
+        <input type="range" id="s-sec" min="1" max="12" step="0.5" value="4" style="width:100%">
+        <div class="seg" id="s-ease" style="margin-top:10px"></div>
+        <div class="row" style="margin-top:10px"><label class="hint" style="margin:0;flex:0 0 auto">move starts at</label><input type="number" id="s-camstart" value="0" min="0" step="0.05"><select id="s-punch"><option value="none">no punch</option></select></div>
+        <div class="map" id="s-then" style="margin-top:8px"></div>
+        <button class="btn" id="s-addthen" style="margin-top:8px;width:100%">+ then another move</button>
+        <p class="hint">Click the sound strip to start the selected move on a word or a hit: push in, then dolly-zoom on "morning".</p>
+        <h2>Sound <span class="badge">optional</span></h2>
+        <div class="drop" id="s-audio">Drop music or a voice line: its kicks, beats and syllables become cues</div>
+        <div class="seg" id="s-akind" style="margin-top:8px"></div>
+        <textarea id="s-sheet" rows="3" spellcheck="false" class="mono" style="margin-top:8px" placeholder="or a cue sheet, no sound needed:&#10;1.5  flash&#10;every 0.5s from 2 to 6  flicker"></textarea>
+        <h2>Direction</h2>
+        <div class="map" id="s-rules"></div>
+        <button class="btn" id="s-addrule" style="margin-top:8px;width:100%">+ Give a layer something to do</button>
+        <p class="hint">Pick a layer by name, what it does, and when: always, or on a cue (every kick, every syllable).</p>
+        <h2>Layers</h2>
+        <div class="map" id="s-layers"></div>
+        <p class="hint">Hide a layer to see what's behind it; the slider pushes it nearer or farther.</p>
+        <h2>Export</h2>
+        <div class="seg" id="s-size"></div>
+        <div class="cta"><button class="btn ember" id="s-export" style="flex:1">Export MP4<span class="sub">same frames as the preview · no GPU job</span></button></div>
+      </div>
+    </aside>
+    <div class="stage">
+      <div>
+        <h1>Direct a still like a set</h1>
+        <p class="lede">Name what's in the picture. Valis cuts it into real depth layers and paints in what each one hides, so a camera can move through it: push in, arc, crane, dolly zoom. Every move plays live, at the still's own resolution, with no new render.</p>
+      </div>
+      <div class="viewer" id="s-viewer">
+        <div class="empty" id="s-empty"><b>No stage yet</b>Drop a still, name what's in it, split it.</div>
+        <canvas id="s-canvas" style="display:none;max-width:100%;max-height:68vh;border-radius:8px"></canvas>
+      </div>
+      <div class="row" style="flex:0 0 auto"><button class="btn" id="s-play" style="flex:0 0 90px">Play</button><input type="range" id="s-scrub" min="0" max="1" step="0.001" value="0"><span class="hint" id="s-time" style="flex:0 0 60px;margin:0">0.00 s</span></div>
+      <canvas id="s-wave" style="width:100%;height:64px;flex:0 0 auto;background:#0d0d12;border:1px solid var(--line);border-radius:8px;cursor:pointer"></canvas>
+      <p class="hint" id="s-crop"></p>
+      <div id="s-last"></div>
+    </div>
+  </section>
+
+  <section class="view" id="view-create">
+    <aside class="panel">
+      <h2>The shot</h2>
+      <textarea id="c-subject" rows="3" placeholder="Who, what, where. e.g. a pale woman in a white silk ballgown waltzing with a man in a black tailcoat in an abandoned gothic ballroom"></textarea>
+      <textarea id="c-action" rows="2" placeholder="What happens. e.g. they turn slowly in the waltz hold, her gown swirling" style="margin-top:8px"></textarea>
+      <h2>Genre</h2>
+      <div class="cards" id="c-genre"></div>
+      <h2>Framing</h2>
+      <div class="chips" id="c-framing"></div>
+      <h2>Lens</h2>
+      <div class="chips" id="c-lens"></div>
+      <h2>Light</h2>
+      <div class="chips" id="c-light"></div>
+      <h2>Grade</h2>
+      <div class="chips" id="c-grade"></div>
+      <h2>Camera move</h2>
+      <div class="chips" id="c-move"></div>
+      <label class="check" style="margin-top:8px"><input type="checkbox" id="c-trained" checked> trained moves: use a camera LoRA when one is installed for this move (orbit, bullet time, crash zoom, dolly zoom, arc…); it does the real move with no extra pass</label>
+      <label class="check"><input type="checkbox" id="c-anchor"> end on the subject: pin the last frame so the move finishes on them (a full orbit comes back round; a crane or drone ends where it should)</label>
+      <label class="check"><input type="checkbox" id="c-trim" checked> trim the hold: the model often reaches the pinned frame early and freezes on it; keep a quarter second of that and cut the rest</label>
+      <h2>Camera body</h2>
+      <div class="chips" id="c-body"></div>
+      <h2>Lens kit</h2>
+      <div class="chips" id="c-kit"></div>
+      <h2>Era</h2>
+      <div class="chips" id="c-era"></div>
+      <h2>Lighting setup</h2>
+      <div class="chips" id="c-setup"></div>
+      <h2>Emotion</h2>
+      <div class="chips" id="c-emotion"></div>
+      <h2>Tempo</h2>
+      <div class="chips" id="c-tempo"></div>
+      <h2>Colour palette</h2>
+      <div class="chips" id="c-palette"></div>
+      <label class="check"><input type="checkbox" id="c-grade-shot"> grade the shot in this palette too (Valis Color Palette)</label>
+      <h2>Format</h2>
+      <div class="row">
+        <div class="seg" id="c-aspect"></div>
+        <div class="seg" id="c-length"></div>
+      </div>
+      <p class="hint" id="c-length-hint"></p>
+      <h2>Character <span class="badge">optional</span></h2>
+      <div class="drop" id="c-char">Drop a character sheet or face<br><span class="hint">pulled into the keyframe with the Krea 2 identity edit</span></div>
+      <input type="text" id="c-who" placeholder="who becomes them: the man, the woman, the person on the left" style="margin-top:8px">
+      <h2>Relight <span class="badge">optional</span></h2>
+      <select id="c-relight"></select>
+      <button class="btn" id="c-relight-go" disabled style="margin-top:8px;width:100%">Relight the keyframe<span class="sub">Qwen Image edit · ~1 min · same scene, new light</span></button>
+      <label class="check"><input type="checkbox" id="c-lightchange"> light change: the shot starts in the keyframe's light and ends in the relit one (the light shifts during the shot)</label>
+      <div class="cta">
+        <button class="btn" id="c-frame">Frame it<span class="sub">2 keyframes · ~40 s</span></button>
+        <button class="btn primary" id="c-shoot" disabled>Shoot it<span class="sub">H3 · ~7 min</span></button>
+      </div>
+    </aside>
+    <div class="stage">
+      <div>
+        <h1>Direct a shot</h1>
+        <p class="lede">Pick a look, frame it, then shoot it. Keyframes come from Krea 2, the shot from MiniMax H3. Everything runs on this machine's ComfyUI.</p>
+      </div>
+      <div class="viewer" id="c-viewer"><div class="empty"><b>Nothing framed yet</b>Describe the shot and press Frame it.</div></div>
+      <div class="finish" id="c-finish"></div>
+      <div class="strip" id="c-strip"></div>
+      <details class="prompt"><summary>Prompts</summary><pre id="c-prompts"></pre></details>
+    </div>
+  </section>
+
+  <!-- ======================= GENJUTSU ======================= -->
+  <section class="view" id="view-genjutsu">
+    <aside class="panel">
+      <h2>Source video</h2>
+      <div class="drop" id="g-clip">Drop the performance: 4–15 s<br><span class="hint">its motion, camera, timing and sound are kept</span></div>
+      <h2>Mode</h2>
+      <div class="seg" id="g-mode"></div>
+      <div id="g-refs-wrap">
+        <h2>References <span class="badge">up to 8</span></h2>
+        <div class="refs" id="g-refs"></div>
+        <p class="hint">Each image becomes &lt;Picture N&gt; in the prompt. Give it a role: who, where, what style.</p>
+      </div>
+      <div id="g-styles-wrap" style="display:none">
+        <h2>Style</h2>
+        <div class="chips" id="g-styles"></div>
+      </div>
+      <div id="g-target-wrap" style="display:none">
+        <h2>What to swap</h2>
+        <input type="text" id="g-target" placeholder="name it: her dress · the car · the man on the left">
+        <label class="check" style="margin-top:8px"><input type="checkbox" id="g-keep" checked> keep everything else exactly: paste the new object back onto the original frames</label>
+        <label class="check"><input type="checkbox" id="g-edges" checked> follow the object's own shape (edges); off = follow the body (pose)</label>
+      </div>
+      <h2>Prompt</h2>
+      <textarea id="g-prompt" rows="5" placeholder="Built from your choices; edit freely"></textarea>
+      <h2>Length and size</h2>
+      <div class="row"><div class="seg" id="g-len"></div><div class="seg" id="g-size"></div></div>
+      <div class="seg" id="g-aspect" style="margin-top:8px"></div>
+      <label class="check" style="margin-top:10px"><input type="checkbox" id="g-audio" checked> keep the source's sound</label>
+      <label class="check"><input type="checkbox" id="g-turbo"> turbo (8 steps, faster, a little rougher)</label>
+      <div class="cta">
+        <button class="btn" id="g-check" disabled>Check source<span class="sub">pose only · ~1 min</span></button>
+        <button class="btn primary" id="g-run" disabled>Cast it<span class="sub">H3 + Fun ControlNet · ~6–8 min</span></button>
+      </div>
+    </aside>
+    <div class="stage">
+      <div>
+        <h1>Genjutsu</h1>
+        <p class="lede">Keep a video's motion, camera and timing; change who is in it, where they are, or the whole look. The motion is read as skeletons (SDPose) or edges and drives MiniMax H3 through its Fun ControlNet; your images set the cast and the place.</p>
+      </div>
+      <div class="viewer" id="g-viewer"><div class="empty"><b>No video yet</b>Drop a clip to start.</div></div>
+      <div class="gj-report" id="g-report"></div>
+      <div class="finish" id="g-finish"></div>
+      <div class="strip" id="g-strip"></div>
+      <details class="prompt"><summary>Graph</summary><pre id="g-graph"></pre></details>
+    </div>
+  </section>
+
+  <!-- ======================= EDIT ======================= -->
+  <section class="view" id="view-edit">
+    <aside class="panel">
+      <h2>Clip</h2>
+      <div class="drop" id="e-clip">Drop a video, or pick one from Renders<br><span class="hint">vertical or horizontal, up to 15 s</span></div>
+      <h2>What to change</h2>
+      <input type="text" id="e-target" placeholder="name it: the man · his head · her dress · man in the mirror">
+      <div class="chips" id="e-target-ex" style="margin-top:8px"></div>
+      <h2>How</h2>
+      <div class="seg" id="e-mode"></div>
+      <div id="e-looks-wrap">
+        <h2>Look</h2>
+        <div class="cards" id="e-looks"></div>
+      </div>
+      <div id="e-swap-wrap" style="display:none">
+        <h2>Becomes</h2>
+        <div class="drop" id="e-char">Drop the character: an upper-body or full-body sheet works best</div>
+        <p class="hint">The whole person is replaced (H3 character swap), and keeps the clip's voice.</p>
+        <input type="text" id="e-look" placeholder="what they look like: hair, face, clothes (helps the swap)" style="margin-top:8px">
+        <h2>New background <span class="badge">optional</span></h2>
+        <div class="drop" id="e-bg">Drop a background plate<br><span class="hint">you're keyed onto it first, then swapped, so the new scene and the new character are lit together</span></div>
+        <label class="check" style="margin-top:10px"><input type="checkbox" id="e-match" checked> match the plate: check the take against the sheet, grade the sheet to the take's light, then match the swap's tone, colour and grain to the plate (no AI)</label>
+      </div>
+      <div id="e-turn-wrap" style="display:none">
+        <h2>Turns into</h2>
+        <select id="e-clipb"><option value="">pick a render…</option></select>
+        <div class="drop" id="e-clipb-drop" style="margin-top:8px">…or drop the second take</div>
+        <h2>On the word</h2>
+        <canvas id="e-wave" height="90"></canvas>
+        <p class="hint" id="e-wave-hint">Click the word where it turns. Auto: the first syllable after the longest pause.</p>
+        <label class="check" style="margin-top:10px"><input type="checkbox" id="e-voice" checked> the voice turns too: deeper, a bigger throat, a growl, on the same word</label>
+      </div>
+      <h2>Prompt</h2>
+      <textarea id="e-prompt" rows="4" placeholder="Pick a look or write your own"></textarea>
+      <div id="e-controls">
+      <h2>Controls</h2>
+      <div class="slider"><label for="e-rb">Faithfulness to the original</label><output id="e-rb-o"></output><input type="range" id="e-rb" min="0.3" max="5" step="0.1" value="0.5"></div>
+      <p class="hint">Low lets the look take over (a whole new face). High keeps the shape and changes the material.</p>
+      <div class="slider" style="margin-top:10px"><label for="e-grow">Mask margin</label><output id="e-grow-o"></output><input type="range" id="e-grow" min="0" max="40" step="2" value="12"></div>
+      </div>
+      <label class="row" style="margin-top:12px; gap:8px"><input type="checkbox" id="e-audio" checked style="flex:0"> <span style="flex:1">Keep the clip's own sound</span></label>
+      <div class="cta">
+        <button class="btn" id="e-find">Find it<span class="sub">SAM 3 · ~30 s</span></button>
+        <button class="btn primary" id="e-render" disabled>Render<span class="sub">H3 masked · ~12 min</span></button>
+      </div>
+    </aside>
+    <div class="stage">
+      <div>
+        <h1>Point at it. Change it.</h1>
+        <p class="lede">Name anything in the clip and SAM 3 follows it through every frame. Transform it into a new look or remove it (only the masked region is re-rendered), swap in a whole new character, or turn one take into another on a word.</p>
+      </div>
+      <div class="viewer" id="e-viewer"><div class="empty"><b>No clip yet</b>Drop a video on the left.</div></div>
+      <div class="strip" id="e-strip"></div>
+    </div>
+  </section>
+
+  <!-- ======================= SCORE ======================= -->
+  <section class="view" id="view-score">
+    <aside class="panel">
+      <h2>Score</h2>
+      <div class="seg" id="s-source"></div>
+      <div class="drop" id="s-drop" style="margin-top:10px; display:none">Drop a Valis score (.json) and its audio</div>
+      <p class="hint" id="s-info"></p>
+      <h2>Music drives the picture</h2>
+      <div class="map" id="s-map"></div>
+      <button class="btn" id="s-add" style="margin-top:10px; width:100%">+ Add a rule</button>
+      <h2>Subjects</h2>
+      <div class="row"><input type="text" id="s-a" value="the woman" title="subject A"><input type="text" id="s-b" value="the man" title="subject B"></div>
+      <p class="hint">SAM 3 finds these in every shot: particles, flares and reveals follow them.</p>
+      <h2>Shots</h2>
+      <p class="hint">Each shot is 4 bars: one H3 clip of 107 frames at this tempo. Give a shot its clip (and a layer from Edit) and render it with Valis.</p>
+      <div class="map" id="s-shots"></div>
+      <div class="cta">
+        <button class="btn" id="s-export">Export rules</button>
+        <button class="btn ember" id="s-render" style="flex:1">Render all with Valis<span class="sub">shots that have a clip</span></button>
+      </div>
+    </aside>
+    <div class="stage">
+      <div>
+        <h1>The score is the director</h1>
+        <p class="lede">Every kick, bell, violin call and pah of the waltz is an event. Map events to effects and the picture moves with the music: reveals ignite on the impact, flares answer the harpsichord, candles light one note at a time.</p>
+      </div>
+      <div class="timeline">
+        <div class="tl-bar">
+          <button class="btn" id="s-play" style="padding:7px 14px">▶ Play</button>
+          <span class="time" id="s-time">0:00.0</span>
+          <span class="time" id="s-section"></span>
+          <span style="margin-left:auto" class="badge" id="s-tempo"></span>
+        </div>
+        <canvas id="s-canvas" height="380"></canvas>
+      </div>
+      <div class="viewer" id="s-viewer" style="min-height:360px"><div class="empty"><b>Preview</b>Play the score to follow the shots.</div></div>
+      <audio id="s-audio" preload="auto"></audio>
+    </div>
+  </section>
+
+  <!-- ======================= FX LIBRARY ======================= -->
+  <section class="view" id="view-fx">
+    <aside class="panel">
+      <h2>Clip</h2>
+      <div class="drop" id="f-clip">Drop a video, or pick a render below</div>
+      <select id="f-clip-sel" style="margin-top:8px"></select>
+      <h2>Another clip <span class="badge">optional</span></h2>
+      <select id="f-other-sel"></select>
+      <p class="hint">The scene behind a tear or a shatter, the other era of a time slip, the landscape inside a double exposure.</p>
+      <h2>Subject <span class="badge">optional</span></h2>
+      <input type="text" id="f-subject" placeholder="name it: the man · her face · the car">
+      <p class="hint">SAM 3 follows it: double exposures, echoes, lenses and vertigo use it.</p>
+      <h2>On cue from</h2>
+      <div class="seg" id="f-source"></div>
+      <div id="f-src-song" style="margin-top:10px"><div class="drop" id="f-song">Drop music: Valis hears its beats, its kick, snare and hats, and how loud and bright it is</div></div>
+      <div id="f-src-write" style="margin-top:10px; display:none">
+        <textarea id="f-style" rows="2" placeholder="style: southern gothic, slow slide guitar, 54 BPM…"></textarea>
+        <textarea id="f-lyrics" rows="4" placeholder="[verse] lyrics, or [Instrumental]" style="margin-top:6px"></textarea>
+        <div class="row" style="margin-top:6px"><label class="hint" style="margin:0">seconds</label><input type="number" id="f-secs" value="20" min="4" max="240"></div>
+        <p class="hint">YuE2 writes the sheet music first, then plays it. Valis fires on the notes it wrote.</p>
+      </div>
+      <div id="f-src-sheet" style="margin-top:10px; display:none">
+        <textarea id="f-cues" rows="8" spellcheck="false" class="mono"></textarea>
+        <p class="hint">No song needed: seconds or bar:beat, single cues, <code>every</code> grids and <code>ramp</code> curves.</p>
+      </div>
+      <h2>Layers</h2>
+      <div class="map" id="f-layers"></div>
+      <p class="hint" id="f-layers-hint">Add effects from the library on the right. Each listens to a lane: a hit lane fires it, a curve holds it.</p>
+      <h2>Sound</h2>
+      <label class="check"><input type="checkbox" id="f-sound" checked> every effect makes its own sound, on the same cue</label>
+      <div class="chips" id="f-beds" style="margin-top:8px"></div>
+      <div class="cta">
+        <button class="btn ember" id="f-render" style="flex:1" disabled>Render<span class="sub">Valis · CPU · ~1 min per 4 s</span></button>
+      </div>
+    </aside>
+    <div class="stage">
+      <div>
+        <h1>Bend the picture, on cue</h1>
+        <p class="lede">A library of effects that each listen to a lane: a kick, a note in the sheet music, a syllable, or a line in a soundless cue sheet. Stack them on any clip. Every effect brings its own synthesised sound, placed on the same sample as the picture.</p>
+      </div>
+      <div class="fxlib" id="f-lib"></div>
+      <div class="viewer" id="f-viewer" style="min-height:360px"><div class="empty"><b>No render yet</b>Pick a clip, add layers, render.</div></div>
+    </div>
+  </section>
+
+  <!-- ======================= RENDERS ======================= -->
+  <section class="view" id="view-renders">
+    <aside class="panel">
+      <h2>Queue</h2>
+      <div class="map" id="r-queue"></div>
+      <p class="hint" id="r-queue-empty">Nothing running.</p>
+      <h2>Setup</h2>
+      <p class="hint">Every workflow the studio sends, checked against this ComfyUI: node packs, model files, inputs.</p>
+      <div class="map" id="r-setup"></div>
+      <button class="btn" id="r-check" style="margin-top:10px; width:100%">Check again</button>
+      <h2>Machine</h2>
+      <div id="r-machine" class="hint"></div>
+      <div class="cta">
+        <button class="btn" id="r-free">Free memory</button>
+        <button class="btn" id="r-stop">Stop current</button>
+      </div>
+    </aside>
+    <div class="stage">
+      <div>
+        <h1>Renders</h1>
+        <p class="lede">Everything the studio has made. Click a clip to edit it or to use it as the next shot's first frame.</p>
+      </div>
+      <div class="strip" id="r-grid"></div>
+    </div>
+  </section>
+</main>
+<div id="toasts"></div>
+<script type="module" src="/valis/app/js/app.js"></script>
+</body>
+</html>

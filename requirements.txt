@@ -1,0 +1,4 @@
+numpy
+opencv-python
+scipy
+comfy-api-proxy>=0.1.6
