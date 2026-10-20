@@ -54,12 +54,18 @@ uniform float u_opacity, u_tear;
 uniform vec4 u_tint;      // rgb multiply, a = add glow
 uniform float u_glow;     // glow pass: how much of this layer's light blooms (0 = it only occludes)
 uniform int u_pass;       // 0 = picture, 1 = glow
+uniform float u_feather;  // > 0: the set fades out over this fraction of the width at the frame edge, into the dome
+uniform float u_aspect;   // H / W of the source
 out vec4 o;
 void main() {
   // a triangle stretched across a depth jump inside one layer is a rubber sheet: drop it
   if (fwidth(v_z) / v_z > u_tear) discard;
   if (u_clip > 0.5 && (v_raw.x < 0.0 || v_raw.y < 0.0 || v_raw.x > 1.0 || v_raw.y > 1.0)) discard;
   vec4 c = texture(u_color, v_uv);
+  if (u_feather > 0.0) {
+    float e = clamp(min(min(v_raw.x, 1.0 - v_raw.x), min(v_raw.y, 1.0 - v_raw.y) * u_aspect) / u_feather, 0.0, 1.0);
+    c.a *= e * e * (3.0 - 2.0 * e);
+  }
   c.rgb = c.rgb * u_tint.rgb + u_tint.a * c.rgb;
   if (u_pass == 1) {
     // only the light blooms: the layer's bright paint, scaled by its glow; everything else occludes in black
@@ -95,6 +101,28 @@ uniform sampler2D u_a, u_b;
 uniform float u_ka, u_kb;
 out vec4 o;
 void main() { o = vec4(texture(u_a, v_uv).rgb * u_ka + texture(u_b, v_uv).rgb * u_kb, 0.0); }`;
+
+// ---- the dome: the world past the frame (dome.png, an angular map around the original camera), on a sphere three
+// times as far as the set's farthest point. Drawn first, so it shows wherever the set doesn't: past the frame edge
+// when the camera goes wide, and through any tear.
+const DFS = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+uniform sampler2D u_dome;
+uniform vec2 u_out;
+uniform float u_f, u_R;
+uniform vec3 u_cam;
+uniform mat3 u_rot;
+uniform vec2 u_ang;       // yaw, pitch half-ranges (radians)
+out vec4 o;
+void main() {
+  vec2 px = vec2(v_uv.x, 1.0 - v_uv.y) * u_out - 0.5 * u_out;
+  vec3 dw = transpose(u_rot) * normalize(vec3(px / u_f, 1.0));
+  float b = dot(dw, u_cam), c = dot(u_cam, u_cam) - u_R * u_R;
+  vec3 p = (u_cam + dw * (-b + sqrt(max(b * b - c, 0.0)))) / u_R;
+  float yaw = atan(p.x, p.z), pitch = asin(clamp(-p.y, -1.0, 1.0));
+  o = vec4(texture(u_dome, vec2((yaw + u_ang.x) / (2.0 * u_ang.x), (u_ang.y - pitch) / (2.0 * u_ang.y))).rgb, 1.0);
+}`;
 
 // ---- particles: points in the world, drawn through the same camera, additive
 const PVS = `#version 300 es
@@ -163,8 +191,9 @@ export class Stage {
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
     this.prog = p;
     this.loc = {};
-    for (const n of ["u_depth", "u_color", "u_size", "u_f0", "u_f", "u_out", "u_cam", "u_rot", "u_far", "u_relief", "u_zmed", "u_zoff", "u_opacity", "u_tear", "u_tint", "u_off", "u_scale", "u_sway", "u_swayh", "u_glow", "u_pass", "u_clip"]) this.loc[n] = gl.getUniformLocation(p, n);
-    this.blur = prog(gl, QVS, BLUR); this.add = prog(gl, QVS, ADD); this.pts = prog(gl, PVS, PFS);
+    for (const n of ["u_depth", "u_color", "u_size", "u_f0", "u_f", "u_out", "u_cam", "u_rot", "u_far", "u_relief", "u_zmed", "u_zoff", "u_opacity", "u_tear", "u_tint", "u_off", "u_scale", "u_sway", "u_swayh", "u_glow", "u_pass", "u_clip", "u_feather", "u_aspect"]) this.loc[n] = gl.getUniformLocation(p, n);
+    this.blur = prog(gl, QVS, BLUR); this.add = prog(gl, QVS, ADD); this.pts = prog(gl, PVS, PFS); this.domeProg = prog(gl, QVS, DFS);
+    this.dome = null;
     this.pbuf = gl.createBuffer(); this.pvao = gl.createVertexArray();
     gl.bindVertexArray(this.pvao); gl.bindBuffer(gl.ARRAY_BUFFER, this.pbuf);
     const ap = gl.getAttribLocation(this.pts, "a_p"), ac = gl.getAttribLocation(this.pts, "a_c");
@@ -250,7 +279,19 @@ export class Stage {
     const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
     const cx = cv.getContext("2d", { willReadFrequently: true });
     const url = typeof base === "function" ? base : (f => base + (base.endsWith("/") ? "" : "/") + f);
+    this._url = url;                                       // splat.js reads the layers again to write the 3D set
     this.layers = [];
+    this.dome = null;
+    if (meta.dome) {
+      const im = await loadImage(url(meta.dome.image)).catch(() => null);
+      if (im) {
+        const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, im);
+        for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+        this.dome = {t, yaw: meta.dome.yaw * Math.PI / 180, pitch: meta.dome.pitch * Math.PI / 180};
+      }
+    }
     for (const L of meta.layers) {
       const [ci, di] = await Promise.all([loadImage(url(L.image)), loadImage(url(L.depth))]);
       const ct = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, ct);
@@ -323,14 +364,24 @@ export class Stage {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, c.width, c.height);
     gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    gl.useProgram(this.prog);
-    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE);
     // output focal: the source focal scaled to the output size, times zoom
     const f = this.f0 * (c.width / m.width) * (cam.zoom ?? 1);
+    if (this.dome && fx.dome !== false) {
+      gl.disable(gl.BLEND);
+      const D = this.domeProg, u = n => gl.getUniformLocation(D, n);
+      gl.useProgram(D);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.dome.t); gl.uniform1i(u("u_dome"), 0);
+      gl.uniform2f(u("u_out"), c.width, c.height); gl.uniform1f(u("u_f"), f); gl.uniform1f(u("u_R"), 3 * m.far);
+      gl.uniform3fv(u("u_cam"), cam.pos); gl.uniformMatrix3fv(u("u_rot"), false, cam.rot); gl.uniform2f(u("u_ang"), this.dome.yaw, this.dome.pitch);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+    gl.useProgram(this.prog);
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.uniform2f(L.u_size, m.width, m.height); gl.uniform1f(L.u_f0, this.f0); gl.uniform1f(L.u_f, f);
     gl.uniform2f(L.u_out, c.width, c.height); gl.uniform3fv(L.u_cam, cam.pos); gl.uniformMatrix3fv(L.u_rot, false, cam.rot);
     gl.uniform1f(L.u_far, m.far); gl.uniform1f(L.u_tear, fx.tear ?? 0.08);
+    gl.uniform1f(L.u_feather, fx.wide && this.dome && !(cam.explode > 0.02) ? 0.03 : 0); gl.uniform1f(L.u_aspect, m.height / m.width);
     this._layers(0, fx, cam.explode || 0);
     const parts = fx.particles && fx.particles.length ? fx.particles : null;
     if (parts) this._points(cam, f, parts);
@@ -463,24 +514,26 @@ function borderPoints(meta, fov = 50) {
   return { pts, W, H, f0 };
 }
 
-function need(m, P) {
+// slack: how far inside the frame an edge may come (a fraction of the half-frame), when the dome shows past it
+function need(m, P, slack = 0) {
   let n = 1;
+  const hw = (P.W / 2) * (1 - slack), hh = (P.H / 2) * (1 - slack);
   for (const p of P.pts) {
     const [sx, sy] = project(m, p.X).map(v => v * P.f0);
-    if (p.side === "top" && sy < 0) n = Math.max(n, (P.H / 2) / -sy);
-    if (p.side === "bottom" && sy > 0) n = Math.max(n, (P.H / 2) / sy);
-    if (p.side === "left" && sx < 0) n = Math.max(n, (P.W / 2) / -sx);
-    if (p.side === "right" && sx > 0) n = Math.max(n, (P.W / 2) / sx);
+    if (p.side === "top" && sy < 0) n = Math.max(n, hh / -sy);
+    if (p.side === "bottom" && sy > 0) n = Math.max(n, hh / sy);
+    if (p.side === "left" && sx < 0) n = Math.max(n, hw / -sx);
+    if (p.side === "right" && sx > 0) n = Math.max(n, hw / sx);
     if ((p.side === "top" && sy >= 0) || (p.side === "bottom" && sy <= 0) || (p.side === "left" && sx >= 0) || (p.side === "right" && sx <= 0)) n = 4;
   }
   return n;
 }
 
 // the smallest zoom that keeps the still's own edges out of frame for a whole path (a function sample -> move state)
-function fitPath(meta, at, samples, frame, fov) {
+function fitPath(meta, at, samples, frame, fov, slack = 0) {
   const P = borderPoints(meta, fov);
   let z0 = frame, crop = frame;
-  for (let k = 0; k <= samples; k++) { const m = at(k / samples); if (!m.explode) z0 = Math.max(z0, need(m, P) * frame / m.shape); }
+  for (let k = 0; k <= samples; k++) { const m = at(k / samples); if (!m.explode) z0 = Math.max(z0, need(m, P, slack) * frame / m.shape); }
   for (let k = 0; k <= samples; k++) { const m = at(k / samples); if (!m.explode) crop = Math.max(crop, z0 * m.shape); }
   return { zoom0: Math.min(z0, 3), crop: Math.min(crop, 3) };
 }
@@ -516,8 +569,9 @@ export function seqAt(shots, T, end) {
   return { pos, rot, shape, explode };
 }
 
-export function fitSeq(meta, shots, end, { frame = 1.02, steps = 48, fov = 50 } = {}) {
-  return fitPath(meta, u => seqAt(shots, u * end, end), steps, frame, fov);
+// wide: the dome shows past the frame edge, so an edge may come a fifth of the way in (less crop, wider moves)
+export function fitSeq(meta, shots, end, { frame = 1.02, steps = 48, fov = 50, wide = false } = {}) {
+  return fitPath(meta, u => seqAt(shots, u * end, end), steps, wide ? 1.0 : frame, fov, wide ? 0.2 : 0);
 }
 
 export function camSeq(shots, T, end, fit) {

@@ -39,6 +39,7 @@
       <textarea id="s-names" rows="6" spellcheck="false" placeholder="one per line: the sky, the woman, the lamps…"></textarea>
       <p class="hint">Name the things that should move on their own. SAM 3 finds every one of each ("the lamps" finds all the lamps); everything else becomes <i>the rest</i>.</p>
       <div class="row" style="margin-top:10px"><label class="hint" style="margin:0">depth</label><input type="number" id="s-far" value="6" min="1.5" max="30" step="0.5" title="how deep the scene is: the farthest point is this many times farther than the nearest"></div>
+      <label class="check" style="margin-top:8px" title="A still under 1300 px on its short side is sharpened to 1440p with SeedVR2 before it is split, so 1080p exports and push-ins stay crisp"><input type="checkbox" id="s-sharp" checked> Sharpen small stills to 1440p <span class="hint" style="margin:0">SeedVR2 · about a minute</span></label>
       <div class="row" style="margin-top:12px"><button class="btn primary" id="s-split" disabled>Split it<span class="sub">SAM 3 + Depth Anything 3 · one short GPU job</span></button></div>
       <div id="s-controls" style="display:none">
         <h2>Camera</h2>
@@ -51,12 +52,13 @@
         <h2>Length <span class="badge" id="s-sec-v">4.0 s</span></h2>
         <input type="range" id="s-sec" min="1" max="12" step="0.5" value="4" style="width:100%">
         <div class="seg" id="s-ease" style="margin-top:10px"></div>
+        <div class="seg" id="s-edge" style="margin-top:8px"></div>
         <div class="row" style="margin-top:10px"><label class="hint" style="margin:0;flex:0 0 auto">move starts at</label><input type="number" id="s-camstart" value="0" min="0" step="0.05"><select id="s-punch"><option value="none">no punch</option></select></div>
         <div class="map" id="s-then" style="margin-top:8px"></div>
         <button class="btn" id="s-addthen" style="margin-top:8px;width:100%">+ then another move</button>
         <p class="hint">Click the sound strip to start the selected move on a word or a hit: push in, then dolly-zoom on "morning".</p>
         <h2>Sound <span class="badge">optional</span></h2>
-        <div class="drop" id="s-audio">Drop music or a voice line: its kicks, beats and syllables become cues</div>
+        <div class="drop" id="st-audio">Drop music or a voice line: its kicks, beats and syllables become cues</div>
         <div class="seg" id="s-akind" style="margin-top:8px"></div>
         <textarea id="s-sheet" rows="3" spellcheck="false" class="mono" style="margin-top:8px" placeholder="or a cue sheet, no sound needed:&#10;1.5  flash&#10;every 0.5s from 2 to 6  flicker"></textarea>
         <h2>Direction</h2>
@@ -68,7 +70,9 @@
         <p class="hint">Hide a layer to see what's behind it; the slider pushes it nearer or farther.</p>
         <h2>Export</h2>
         <div class="seg" id="s-size"></div>
-        <div class="cta"><button class="btn ember" id="s-export" style="flex:1">Export MP4<span class="sub">same frames as the preview · no GPU job</span></button></div>
+        <div class="cta"><button class="btn ember" id="st-export" style="flex:1">Export MP4<span class="sub">same frames as the preview · no GPU job</span></button></div>
+        <div class="cta"><button class="btn" id="st-splat" style="flex:1">Save the 3D set<span class="sub">Gaussian splats (.ply) · SuperSplat, Blender, game engines</span></button></div>
+        <p class="hint">Every layer becomes splats where the camera saw it, including what Valis painted behind, and the far dome goes around it so moving past the frame edge shows the set's light, not a void. Hidden layers are left out. One view: the far side of things stays empty.</p>
       </div>
     </aside>
     <div class="stage">
@@ -76,11 +80,11 @@
         <h1>Direct a still like a set</h1>
         <p class="lede">Name what's in the picture. Valis cuts it into real depth layers and paints in what each one hides, so a camera can move through it: push in, arc, crane, dolly zoom. Every move plays live, at the still's own resolution, with no new render.</p>
       </div>
-      <div class="viewer" id="s-viewer">
+      <div class="viewer" id="st-viewer">
         <div class="empty" id="s-empty"><b>No stage yet</b>Drop a still, name what's in it, split it.</div>
-        <canvas id="s-canvas" style="display:none;max-width:100%;max-height:68vh;border-radius:8px"></canvas>
+        <canvas id="st-canvas" style="display:none;max-width:100%;max-height:68vh;border-radius:8px"></canvas>
       </div>
-      <div class="row" style="flex:0 0 auto"><button class="btn" id="s-play" style="flex:0 0 90px">Play</button><input type="range" id="s-scrub" min="0" max="1" step="0.001" value="0"><span class="hint" id="s-time" style="flex:0 0 60px;margin:0">0.00 s</span></div>
+      <div class="row" style="flex:0 0 auto"><button class="btn" id="st-play" style="flex:0 0 90px">Play</button><input type="range" id="s-scrub" min="0" max="1" step="0.001" value="0"><span class="hint" id="st-time" style="flex:0 0 60px;margin:0">0.00 s</span></div>
       <canvas id="s-wave" style="width:100%;height:64px;flex:0 0 auto;background:#0d0d12;border:1px solid var(--line);border-radius:8px;cursor:pointer"></canvas>
       <p class="hint" id="s-crop"></p>
       <div id="s-last"></div>

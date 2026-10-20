@@ -4,9 +4,13 @@
 // the same frames the preview draws and ComfyUI's own encoder writes the MP4.
 import {Stage, MOVES, fitSeq, camSeq} from "./stage3d.js";
 import {EFFECTS, directAt, punchAt} from "./direct.js";
+import {stageToSplat} from "./splat.js";
 
 const EASES = [{id: "inout", name: "Smooth"}, {id: "out", name: "Ease out"}, {id: "in", name: "Ease in"}, {id: "linear", name: "Linear"}];
 const SIZES = [{id: "720", name: "720p", h: 720}, {id: "1080", name: "1080p", h: 1080}];
+// a still whose short side is under this is sharpened (SeedVR2) to SHARP_TO before it is split: a 1080p export of a
+// push-in reads ~1.4x past the still's own pixels, so a 768 px keyframe turns to mush and a 1440 px one stays crisp
+const SHARP_BELOW = 1300, SHARP_TO = 1440;
 
 export class StageView {
   constructor({$, h, toast, api, G}) {
@@ -14,7 +18,7 @@ export class StageView {
     this.S = {image: null, imageUrl: null, meta: null, sub: null, move: "push_in", amount: 1, sec: 4, easing: "inout", focus: null,
               t: 0, playing: false, size: "1080", fit: null,
               audio: null, audioUrl: null, akind: "music", cues: null, wave: null, camStart: 0, punch: "none", rules: [],
-              then: [], active: 0};      // then: later camera moves [{move, amount, focus, start}]; active: which move the strip sets
+              then: [], active: 0, wide: true};   // then: later camera moves [{move, amount, focus, start}]; active: which move the strip sets; wide: the camera may see past the frame edge, into the dome (when the stage has one)
     this.stage = null;
     this.init();
   }
@@ -25,7 +29,11 @@ export class StageView {
     this.dropzone($("#s-still"), "image/*", async (f) => {
       const u = await this.api.upload(f);
       this.S.image = this.api.inputRef(u); this.S.imageUrl = URL.createObjectURL(f);
-      $("#s-still").replaceChildren(h("img", {src: this.S.imageUrl, style: "width:100%;border-radius:8px;display:block"}), h("span", {class: "hint"}, f.name));
+      const im = new Image(); im.src = this.S.imageUrl; await im.decode().catch(() => {});
+      this.S.imgW = im.naturalWidth; this.S.imgH = im.naturalHeight;
+      const small = Math.min(this.S.imgW, this.S.imgH) < SHARP_BELOW;
+      $("#s-still").replaceChildren(h("img", {src: this.S.imageUrl, style: "width:100%;border-radius:8px;display:block"}),
+        h("span", {class: "hint"}, `${f.name} · ${this.S.imgW}×${this.S.imgH}${small ? " · small: sharpened to 1440p when split" : ""}`));
       $("#s-split").disabled = false;
     });
     $("#s-split").addEventListener("click", () => this.split().catch(e => this.toast(e.message, true)));
@@ -36,21 +44,25 @@ export class StageView {
       onclick: () => { this.S.easing = e.id; [...$("#s-ease").children].forEach(b => b.classList.toggle("on", b.dataset.id === e.id)); this.refit(); }}, e.name)));
     $("#s-size").replaceChildren(...SIZES.map(e => h("button", {class: e.id === this.S.size ? "on" : "", "data-id": e.id,
       onclick: () => { this.S.size = e.id; [...$("#s-size").children].forEach(b => b.classList.toggle("on", b.dataset.id === e.id)); this.refit(); }}, e.name)));
+    $("#s-edge").replaceChildren(...[[false, "Crop in"], [true, "Show the dome"]].map(([id, n]) => h("button", {class: id === this.S.wide ? "on" : "", "data-id": String(id),
+      title: id ? "the camera may see past the still's edge: the set fades into the far dome (less crop, wider moves)" : "zoom in just enough that the still's edge never shows",
+      onclick: () => { this.S.wide = id; [...$("#s-edge").children].forEach(b => b.classList.toggle("on", b.dataset.id === String(id))); this.refit(); }}, n)));
     $("#s-amount").addEventListener("input", (e) => { this.S.amount = +e.target.value; $("#s-amount-v").textContent = (+e.target.value).toFixed(2); this.refit(); });
     $("#s-sec").addEventListener("input", (e) => { this.S.sec = +e.target.value; $("#s-sec-v").textContent = `${(+e.target.value).toFixed(1)} s`; this.refit(); });
     $("#s-focus").addEventListener("change", (e) => { this.S.focus = e.target.value; this.refit(); this.play(); });
     $("#s-scrub").addEventListener("input", (e) => { this.S.playing = false; this.player?.pause(); this.S.T = +e.target.value * this.S.sec; this.draw(); this.playBtn(); });
-    $("#s-play").addEventListener("click", () => this.S.playing ? (this.S.playing = false, this.playBtn()) : this.play());
-    $("#s-export").addEventListener("click", () => this.export().catch(e => this.toast(e.message, true)));
+    $("#st-play").addEventListener("click", () => this.S.playing ? (this.S.playing = false, this.playBtn()) : this.play());
+    $("#st-export").addEventListener("click", () => this.export().catch(e => this.toast(e.message, true)));
+    $("#st-splat").addEventListener("click", () => this.saveSplat().catch(e => this.toast(e.message, true)));
     $("#s-akind").replaceChildren(...[["music", "Music"], ["voice", "Voice"], ["both", "Both"]].map(([id, n]) => h("button", {class: id === this.S.akind ? "on" : "", "data-id": id,
       onclick: () => { this.S.akind = id; [...$("#s-akind").children].forEach(b => b.classList.toggle("on", b.dataset.id === id)); this.S.audio && this.loadCues().catch(e => this.toast(e.message, true)); }}, n)));
-    this.dropzone($("#s-audio"), "audio/*,video/*", async (f) => {
+    this.dropzone($("#st-audio"), "audio/*,video/*", async (f) => {
       // straight into ComfyUI's input folder: the cue engine and the encoder read it there
       const fd = new FormData(); fd.append("image", f, f.name); fd.append("subfolder", "valis/stage"); fd.append("type", "input");
       const up = await fetch("/upload/image", {method: "POST", body: fd}).then(r => r.json());
       if (!up.name) throw new Error("upload failed");
       this.S.audio = true; this.S.audioName = `${up.subfolder ? up.subfolder + "/" : ""}${up.name}`; this.S.audioUrl = URL.createObjectURL(f);
-      $("#s-audio").replaceChildren(h("span", {}, f.name));
+      $("#st-audio").replaceChildren(h("span", {}, f.name));
       this.player = new Audio(this.S.audioUrl);
       await this.loadCues();
     });
@@ -156,10 +168,13 @@ export class StageView {
     const stamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
     const name = `stage_${stamp}`;
     const btn = this.$("#s-split");
+    const short = Math.min(this.S.imgW || 0, this.S.imgH || 0);
+    const sharpen = short && short < SHARP_BELOW && this.$("#s-sharp")?.checked !== false ? SHARP_TO : 0;
     btn.disabled = true;
     try {
-      const job = await this.api.submit(this.G.stage({image: this.S.image, names, name, far: +this.$("#s-far").value}), `Stage: ${names.join(", ")}`, "stage");
-      this.toast("Splitting the still: SAM 3 finds each name, Depth Anything 3 orders them");
+      const job = await this.api.submit(this.G.stage({image: this.S.image, names, name, far: +this.$("#s-far").value, sharpen}), `Stage: ${names.join(", ")}`, "stage");
+      this.toast(sharpen ? `Splitting the still: SeedVR2 sharpens it to ${SHARP_TO}p (~1 min), SAM 3 finds each name, Depth Anything 3 orders them`
+        : short && short < 1000 ? `This still is only ${short} px on its short side: 1080p exports will be soft` : "Splitting the still: SAM 3 finds each name, Depth Anything 3 orders them");
       await new Promise((res, rej) => {
         const off = this.api.on((ev) => {
           if (ev.job?.id !== job.id) return;
@@ -177,7 +192,7 @@ export class StageView {
   async open(sub) {
     const meta = await fetch(this.file(sub, "stage.json") + `&t=${Date.now()}`).then(r => { if (!r.ok) throw new Error("stage not found"); return r.json(); });
     this.S.meta = meta; this.S.sub = sub;
-    const cv = this.$("#s-canvas");
+    const cv = this.$("#st-canvas");
     const H = 720, W = Math.round(H * meta.width / meta.height / 2) * 2;
     cv.width = W; cv.height = H;
     this.stage = this.stage || new Stage(cv);
@@ -235,10 +250,11 @@ export class StageView {
 
   refit() {
     if (!this.stage) return;
-    this.S.fit = fitSeq(this.S.meta, this.shots(), this.S.sec);
+    const wide = this.S.wide && !!this.stage.dome;
+    this.S.fit = fitSeq(this.S.meta, this.shots(), this.S.sec, {wide});
     const crop = this.S.fit.crop, srcH = this.S.meta.height / crop, outH = SIZES.find(s => s.id === this.S.size).h;
     const ok = srcH >= outH * 0.85;
-    this.$("#s-crop").innerHTML = `framed ${crop.toFixed(2)}× so no edge ever shows · ${Math.round(srcH)} px of the still's ${this.S.meta.height} fill the ${outH}p frame` +
+    this.$("#s-crop").innerHTML = `framed ${crop.toFixed(2)}× ${wide ? "· the edge may show, fading into the dome" : this.S.wide ? "so no edge ever shows (this stage has no dome: split it again to get one)" : "so no edge ever shows"} · ${Math.round(srcH)} px of the still's ${this.S.meta.height} fill the ${outH}p frame` +
       (ok ? "" : ` <b style="color:var(--ember)">· will look soft at ${outH}p: lower the amount, pick 720p, or upscale the still first</b>`);
     this.draw();
   }
@@ -246,7 +262,9 @@ export class StageView {
   frameAt(T) {
     const cam = camSeq(this.shots(), T, this.S.sec, this.S.fit);
     cam.zoom *= punchAt(this.S.cues, this.S.punch, T);
-    return [cam, directAt(this.S.rules, this.S.cues, T, this.stage)];
+    const fx = directAt(this.S.rules, this.S.cues, T, this.stage);
+    fx.wide = this.S.wide && !!this.stage.dome;
+    return [cam, fx];
   }
 
   draw() {
@@ -255,11 +273,11 @@ export class StageView {
     const [cam, fx] = this.frameAt(T);
     this.stage.draw(cam, fx);
     this.$("#s-scrub").value = T / this.S.sec;
-    this.$("#s-time").textContent = `${T.toFixed(2)} s`;
+    this.$("#st-time").textContent = `${T.toFixed(2)} s`;
     this.drawWave();
   }
 
-  playBtn() { this.$("#s-play").textContent = this.S.playing ? "Pause" : "Play"; }
+  playBtn() { this.$("#st-play").textContent = this.S.playing ? "Pause" : "Play"; }
 
   play() {
     if (!this.stage) return;
@@ -277,7 +295,7 @@ export class StageView {
   }
 
   async exportJpeg(job, fps, n, outW, outH, name, btn) {
-    const cv = this.$("#s-canvas");
+    const cv = this.$("#st-canvas");
     for (let i = 0; i < n; i++) {
       const [cam, fx] = this.frameAt(i / fps);
       this.stage.draw(cam, fx);
@@ -296,14 +314,30 @@ export class StageView {
   }
 
   // ---- export: the same frames as the preview, encoded by ComfyUI (PyAV) --------------------------------------------
+  // the stage as a 3D Gaussian splat file, written here in the browser from the layers already on screen
+  async saveSplat() {
+    if (!this.stage?.layers?.length) throw new Error("Split a still (or open a stage) first");
+    const btn = this.$("#st-splat"), label = btn.innerHTML;
+    btn.disabled = true; btn.textContent = "Writing the splats…";
+    try {
+      const {blob, count, dome, domeCount} = await stageToSplat(this.stage, {format: "ply"});
+      const name = `${(this.S.sub || "stage").split("/").pop()}_set.ply`;
+      const a = this.h("a", {href: URL.createObjectURL(blob), download: name});
+      document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+      this.toast(`${name}: ${count.toLocaleString()} splats, ${(blob.size / 1e6).toFixed(1)} MB` +
+        (dome ? ` · with the far dome (${domeCount.toLocaleString()} of them)` : " · no dome: split the still again to get one") + " · hidden layers left out");
+    } finally { btn.disabled = false; btn.innerHTML = label; }
+  }
+
   async export() {
     if (!this.stage) throw new Error("Open a stage first");
     this.S.playing = false; this.playBtn();
     const outH = SIZES.find(s => s.id === this.S.size).h, outW = Math.round(outH * this.S.meta.width / this.S.meta.height / 2) * 2;
-    const cv = this.$("#s-canvas"), prev = [cv.width, cv.height];
+    const cv = this.$("#st-canvas"), prev = [cv.width, cv.height];
     cv.width = outW; cv.height = outH;
     const fps = 24, n = Math.max(2, Math.round(this.S.sec * fps)), job = `x${Date.now()}`;
-    const btn = this.$("#s-export"); btn.disabled = true;
+    const btn = this.$("#st-export"); btn.disabled = true;
     try {
       const name = [this.S.move, ...this.S.then.map(t => t.move)].join("_then_") + `_${this.S.focus.replace(/[^a-z0-9]+/gi, "_")}`;
       const rb = await fetch("/valis/stage/begin", {method: "POST", headers: {"Content-Type": "application/json"},

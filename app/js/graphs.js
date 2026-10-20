@@ -715,7 +715,10 @@ export function upscale({video, resolution = 1080, batch = 9, seed = 42, prefix 
 // ---------------------------------------------------------------- stage
 // One still -> named depth layers. SAM 3 finds each name ("the lamps:20" = up to 20 of them), Depth Anything 3 Small
 // orders them, Valis Stage completes each layer behind the ones in front and writes output/valis/stage/<name>/.
-export function stage({image, names, name = "stage", far = 6, band = 0.025, threshold = 0.35, perName = 20}) {
+// sharpen: a still smaller than the export gets SeedVR2 (3B Q8, the same settings as Upscale) to this many px on its
+// short side first. SAM 3 and Depth Anything still look at the original (they work below 1008 px anyway); only the
+// layers' paint comes from the sharp copy, which is also saved into the stage folder as still_*.png.
+export function stage({image, names, name = "stage", far = 6, band = 0.025, threshold = 0.35, perName = 20, sharpen = 0}) {
   const g = {
     "1": N("LoadImage", {image}),
     "2": N("LoadDA3Model", {model_name: MODELS.da3, weight_dtype: "default"}),
@@ -730,6 +733,14 @@ export function stage({image, names, name = "stage", far = 6, band = 0.025, thre
     g[id(1)] = N("SAM3_Detect", {model: ["5", 0], image: ["1", 0], conditioning: [id(0), 0], threshold, refine_iterations: 2, individual_masks: true});
     st[`mask_${i + 1}`] = [id(1), 0];
   });
+  if (sharpen) {
+    g["s1"] = N("SeedVR2LoadDiTModel", {model: "seedvr2_ema_3b-Q8_0.gguf", device: "cuda:0", offload_device: "cpu", blocks_to_swap: 16});
+    g["s2"] = N("SeedVR2LoadVAEModel", {model: "ema_vae_fp16.safetensors", device: "cuda:0", offload_device: "cpu", encode_tiled: true, decode_tiled: true});
+    g["s3"] = N("SeedVR2VideoUpscaler", {image: ["1", 0], dit: ["s1", 0], vae: ["s2", 0], seed: 42, resolution: sharpen, max_resolution: 0, batch_size: 1,
+      uniform_batch_size: false, color_correction: "lab", offload_device: "cpu"});
+    g["s4"] = N("SaveImage", {images: ["s3", 0], filename_prefix: `valis/stage/${name}/still`});
+    st.image = ["s3", 0];
+  }
   g["900"] = N("ValisStage", st);
   return g;
 }

@@ -88,6 +88,59 @@ def _fill_nearest(values, known):
     return values[idx[0], idx[1]]
 
 
+def _pushpull(val, w, smooth=0.01):
+    """Fill val where w == 0 from where w > 0: a masked image pyramid (push: weighted averages down to a few px; pull:
+    each level blended over the upsampled coarser one), then a soft relaxation of the filled pixels only. Smooth and
+    seam-free (unlike nearest-pixel, which leaves Voronoi facets that tear when the camera moves)."""
+    w = w.astype(np.float32)
+    v = (val * w).astype(np.float32)
+    levels = []
+    while min(v.shape) > 6:
+        levels.append((v, w))
+        sz = (max(1, v.shape[1] // 2), max(1, v.shape[0] // 2))
+        v, w = cv2.resize(v, sz, interpolation=cv2.INTER_AREA), cv2.resize(w, sz, interpolation=cv2.INTER_AREA)
+    est = v / np.maximum(w, 1e-6)
+    if (w <= 1e-6).any():
+        est[w <= 1e-6] = float(v.sum() / max(w.sum(), 1e-6))
+    for v, w in reversed(levels):
+        up = cv2.resize(est, (v.shape[1], v.shape[0]), interpolation=cv2.INTER_LINEAR)
+        a = np.clip(w * 2.0, 0, 1)
+        est = a * (v / np.maximum(w, 1e-6)) + (1 - a) * up
+    free = levels[0][1] < 0.5 if levels else np.zeros(est.shape, bool)
+    fixed = est.copy()
+    s = max(1.0, smooth * est.shape[1])
+    for _ in range(3):
+        est = np.where(free, cv2.GaussianBlur(est, (0, 0), s), fixed)
+    return est
+
+
+def _fill_behind(z, zk, covered, zocc, w, zmed, reach=0.03, margin=1.08):
+    """Depth of a backdrop where something nearer covers it. What is behind an object is farther than the object, so
+    the fill (1) ignores the backdrop's own pixels right at the object that are no farther than the object itself
+    (the floor at a man's feet, the ground under a table: interpolating from those stands a slab of near floor up
+    behind him, which tears open when the camera moves), (2) interpolates smoothly in inverse depth (planes stay
+    planes) from the rest, and (3) never comes nearer than the object in front."""
+    hole = ~zk
+    if not hole.any():
+        return z.copy()
+    # the occluder depth at the nearest covered pixel, for every known pixel near the covered region
+    # only for objects really in front of this layer: a lantern on a wall that depth puts behind the wall (and that
+    # is drawn in front only because its mask sits inside the wall's) must not dent the wall behind it
+    front = covered & (zocc < zmed)
+    if not front.any():
+        front = np.zeros_like(covered)
+    d, idx = ndi.distance_transform_edt(~front, return_indices=True)
+    near_occ = zocc[idx[0], idx[1]]
+    unreliable = zk & front.any() & (d <= reach * w) & (z <= near_occ * margin)
+    src = zk & ~unreliable
+    if src.sum() < 64:
+        src = zk
+    disp = _pushpull(np.where(src, 1.0 / z, 0.0), src)
+    zf = 1.0 / np.maximum(disp, 1e-6)
+    zf = np.where(front, np.maximum(zf, zocc * 1.05), zf)
+    return np.where(zk, z, zf).astype(np.float32)
+
+
 def build(image, nearness, masks, names, far=6.0, threshold=0.5, edge=1.5, min_area=0.0003, band=0.025, backdrop_area=0.35, paint_band=0.09, grow=0.003):
     """image HxWx3 float [0,1]; nearness HxW float [0,1] (bright = near); masks: list of HxW float (one per name).
 
@@ -163,11 +216,16 @@ def build(image, nearness, masks, names, far=6.0, threshold=0.5, edge=1.5, min_a
     # behind: it must never show a hole. An object (the temple, a lamp) only gets a band as wide as the camera can
     # reveal: we don't know its hidden shape, and a lamp must not grow into a blob behind the ground.
     band_px = band * w
+    # a backdrop: the farthest layer, the rest, a sky, or something filling much of the frame (not a big person)
+    is_bd = {li: r == 0 or li == plate_i or bool(SKY.search(allnames[li])) or (owner == li).mean() >= backdrop_area for r, li in enumerate(seq)}
+    # the depth each pixel's owner is drawn at (objects are flattened toward their median, as the studio draws them)
+    zmed_a = np.array(zmed, np.float32)[owner]
+    relief_a = np.array([1.0 if is_bd[i] else 0.35 for i in range(len(allnames))], np.float32)[owner]
+    z_drawn = zmed_a + (z - zmed_a) * relief_a
     layers = []
     for r, li in enumerate(seq):
         own = owner == li
-        # a backdrop: the farthest layer, the rest, a sky, or something filling much of the frame (not a big person)
-        backdrop = r == 0 or li == plate_i or bool(SKY.search(allnames[li])) or own.mean() >= backdrop_area
+        backdrop = is_bd[li]
         holes = rank_map > r                     # covered by something nearer
         if holes.any():
             idx = ndi.distance_transform_edt(holes, return_distances=False, return_indices=True)
@@ -194,8 +252,11 @@ def build(image, nearness, masks, names, far=6.0, threshold=0.5, edge=1.5, min_a
             zk = cv2.erode(cores[li].astype(np.uint8), np.ones((5, 5), np.uint8)).astype(bool) & known
             if zk.sum() < 16:
                 zk = known
-        zl = _fill_nearest(np.where(zk, z, 0), zk)
-        zl = cv2.GaussianBlur(zl, (0, 0), 2.0) * (~zk) + zl * zk
+        if backdrop:
+            zl = _fill_behind(z, zk, holes, z_drawn, w, zmed[li])
+        else:
+            zl = _fill_nearest(np.where(zk, z, 0), zk)
+            zl = cv2.GaussianBlur(zl, (0, 0), 2.0) * (~zk) + zl * zk
         # alpha: soft at the outer edge of the support only
         a = support.astype(np.float32)
         if edge > 0:
@@ -224,6 +285,49 @@ def build(image, nearness, masks, names, far=6.0, threshold=0.5, edge=1.5, min_a
               "left": seg_min(z[:, :edge_px].min(1)), "right": seg_min(z[:, -edge_px:].min(1))}
     info = {"width": w, "height": h, "far": far, "border": border, "dropped": dropped}
     return layers, info
+
+
+DOME = {"yaw": 80.0, "pitch": 60.0, "step": 0.4, "fov": 50.0}
+
+
+def dome_map(still, back, fov=50.0, step=0.3, yaw=80.0, pitch=60.0):
+    """The world past the frame, as an angular map around the original camera (yaw x pitch, `step` degrees a texel;
+    row 0 is the top). Inside the frame: the farthest backdrop (complete, nothing standing in it). Outside: the
+    still mirrored across its own edge, blurred more and more with distance and fading to the rim's average colour,
+    so a camera that moves past the edge sees the set's air and light go on instead of a void. A splat export puts it
+    on a sphere far behind the set; naive on purpose, like a blurred letterbox fill."""
+    H, W = still.shape[:2]
+    f0 = (W / 2) / np.tan(np.radians(fov / 2))
+    nx, ny = int(round(2 * yaw / step)), int(round(2 * pitch / step))
+    ya = np.radians(np.linspace(-yaw, yaw, nx))[None, :].repeat(ny, 0)
+    pa = np.radians(np.linspace(pitch, -pitch, ny))[:, None].repeat(nx, 1)
+    u = (W / 2 + f0 * np.tan(ya) - 0.5).astype(np.float32)
+    v = (H / 2 - f0 * np.tan(pa) / np.cos(ya) - 0.5).astype(np.float32)
+    inside = (u >= 0) & (u <= W - 1) & (v >= 0) & (v <= H - 1)
+    px = f0 * np.radians(step)                    # still pixels a texel spans: pre-blur so nothing aliases
+    if back.shape[-1] == 4:                        # where the farthest layer has no paint, the still stands in
+        back = back[..., :3] * back[..., 3:] + still * (1 - back[..., 3:])
+    ins = cv2.remap(cv2.GaussianBlur(back.astype(np.float32), (0, 0), px / 2), u, v, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+    ext = cv2.remap(cv2.GaussianBlur(still.astype(np.float32), (0, 0), px / 2), u, v, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT_101)
+    dist = ndi.distance_transform_edt(~inside) if (~inside).any() else np.zeros(inside.shape)
+    levels = np.stack([ext] + [cv2.GaussianBlur(ext, (0, 0), sg) for sg in (2, 4, 8, 16, 32)])
+    lv = np.clip(np.log2(np.maximum(dist, 1) / 1.5), 0, len(levels) - 1)
+    i0 = np.floor(lv).astype(int); fr = (lv - i0)[..., None]; i1 = np.minimum(i0 + 1, len(levels) - 1)
+    yy, xx = np.mgrid[0:ny, 0:nx]
+    blurred = levels[i0, yy, xx] * (1 - fr) + levels[i1, yy, xx] * fr
+    rim = np.concatenate([still[0], still[-1], still[:, 0], still[:, -1]])
+    ambient = rim.mean(0) * 0.6
+    fade = np.clip(dist / (0.35 * nx), 0, 1)[..., None] ** 1.5
+    return np.clip(np.where(inside[..., None], ins, blurred * (1 - fade) + ambient * fade), 0, 1).astype(np.float32)
+
+
+def composite(layers):
+    """the still as the original camera saw it: every layer over the farthest"""
+    out = layers[0]["rgba"][..., :3].copy()
+    for L in layers[1:]:
+        a = L["rgba"][..., 3:]
+        out = out * (1 - a) + L["rgba"][..., :3] * a
+    return out
 
 
 def _pack16(z, far):
@@ -255,6 +359,10 @@ def save(folder, layers, info, source=None):
             entry["hole"] = hf
             entry["hole_area"] = round(float(L["hole"].mean()), 5)
         meta["layers"].append(entry)
+    if layers:
+        tex = dome_map(composite(layers), layers[0]["rgba"], **{k: DOME[k] for k in ("fov", "step", "yaw", "pitch")})
+        cv2.imwrite(os.path.join(folder, "dome.png"), cv2.cvtColor(np.clip(tex * 255 + .5, 0, 255).astype(np.uint8), cv2.COLOR_RGB2BGR))
+        meta["dome"] = dict(DOME, image="dome.png")
     with open(os.path.join(folder, "stage.json"), "w") as f:
         json.dump(meta, f, indent=1)
     return meta
