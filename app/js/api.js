@@ -161,6 +161,10 @@ export async function hasModelPatch(name) {
   if (!PATCHES) { try { PATCHES = new Set((await objectInfo("ModelPatchLoader"))?.ModelPatchLoader?.input?.required?.name?.[0] || []); } catch { PATCHES = new Set(); } }
   return PATCHES.has(name);
 }
+// is this file in models/diffusion_models (or unet)? (asked fresh each time: a download can add it mid-session)
+export async function hasUnet(name) {
+  try { return ((await objectInfo("UNETLoader"))?.UNETLoader?.input?.required?.unet_name?.[0] || []).includes(name); } catch { return false; }
+}
 // is this node installed and loaded? (a new Valis node needs a ComfyUI restart before it shows up)
 export async function hasNode(node) {
   if (!(node in HAVE)) { try { HAVE[node] = !!(await objectInfo(node))?.[node]; } catch { return false; } }

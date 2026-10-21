@@ -6,6 +6,7 @@ import {ScoreView} from "./score.js";
 import {FxView} from "./fx.js";
 import {StageView} from "./stageview.js";
 import {checkSetup} from "./check.js";
+import * as R from "./refengine.js";
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -593,6 +594,52 @@ async function setup() {
 }
 $("#setupPill").addEventListener("click", () => { show("renders"); $("#r-setup").scrollIntoView({block: "start", behavior: "smooth"}); });
 $("#r-check").addEventListener("click", setup);
+
+// ---------------------------------------------------------------- ref2va engine (Renders -> Engine)
+// Remembered per browser; H3 ref2va unless FastH3 is chosen. Switching back is the same select: nothing else changes.
+const ENGINE_KEY = "valis.refEngine";
+try { R.setRefEngine(localStorage.getItem(ENGINE_KEY) || "base"); } catch { /* storage off: default engine */ }
+const GB = (b) => (b / 1e9).toFixed(1);
+async function engineUI() {
+  const sel = $("#r-engine"), note = $("#r-engine-note"), get = $("#r-engine-get");
+  const have = await api.hasUnet(R.FAST_REF);
+  if (!have && R.refEngine() === "fast") R.setRefEngine("base");
+  sel.replaceChildren(...Object.entries(R.REF_ENGINES).map(([k, v]) => {
+    const o = h("option", {value: k}, k === "fast" && !have ? `${v} (not downloaded)` : v);
+    o.disabled = k === "fast" && !have;
+    return o;
+  }));
+  sel.value = R.refEngine();
+  get.hidden = have;
+  note.textContent = R.refEngine() === "fast"
+    ? "FastH3: 8 steps on the trained PDD grid, guidance 1, shift 12/3; the turbo LoRA is skipped. A preview release: compare against H3 ref2va if a render looks off."
+    : have ? "" : "FastH3 isn't on this machine yet.";
+}
+$("#r-engine").addEventListener("change", (e) => {
+  R.setRefEngine(e.target.value);
+  try { localStorage.setItem(ENGINE_KEY, R.refEngine()); } catch { /* not remembered */ }
+  toast(`Ref engine: ${R.REF_ENGINES[R.refEngine()]}`);
+  engineUI(); setup();
+});
+$("#r-engine-get").addEventListener("click", async () => {
+  const src = R.MODEL_SOURCES[R.FAST_REF], get = $("#r-engine-get"), note = $("#r-engine-note");
+  get.disabled = true;
+  const r = await fetch("/valis/models/fetch", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(src)});
+  if (!r.ok) { toast(`Download refused: ${await r.text()}`, true); get.disabled = false; return; }
+  const name = R.FAST_REF;
+  const poll = setInterval(async () => {
+    const j = (await fetch("/valis/models/fetch").then(x => x.json()).catch(() => ({})))[name];
+    if (!j) return;
+    if (j.state === "downloading") note.textContent = `Downloading ${GB(j.done)} of ${GB(j.size || src.size)} GB` + (j.rate ? ` at ${(j.rate / 1e6).toFixed(0)} MB/s` : "");
+    else if (j.state === "verifying") note.textContent = `Checking the file (sha256): ${GB(j.verified)} of ${GB(j.size)} GB`;
+    else {
+      clearInterval(poll); get.disabled = false;
+      if (j.state === "done") { toast("FastH3 OmniRef downloaded and verified"); engineUI(); }
+      else { note.textContent = `Download ${j.state}: ${j.error || ""}`; toast(`FastH3 download ${j.state}`, true); }
+    }
+  }, 3000);
+});
+engineUI();
 
 api.connect();
 machine(); setInterval(machine, 8000);

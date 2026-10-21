@@ -61,6 +61,7 @@ export class StageView {
     $("#st-export").addEventListener("click", () => this.export().catch(e => this.toast(e.message, true)));
     $("#st-splat").addEventListener("click", () => this.saveSplat().catch(e => this.toast(e.message, true)));
     $("#s-paintdome").addEventListener("click", () => this.paintDome().catch(e => this.toast(e.message, true)));
+    $("#st-cams").addEventListener("click", () => this.saveCameras().catch(e => this.toast(e.message, true)));
     $("#s-akind").replaceChildren(...[["music", "Music"], ["voice", "Voice"], ["both", "Both"]].map(([id, n]) => h("button", {class: id === this.S.akind ? "on" : "", "data-id": id,
       onclick: () => { this.S.akind = id; [...$("#s-akind").children].forEach(b => b.classList.toggle("on", b.dataset.id === id)); this.S.audio && this.loadCues().catch(e => this.toast(e.message, true)); }}, n)));
     this.dropzone($("#st-audio"), "audio/*,video/*", async (f) => {
@@ -168,6 +169,16 @@ export class StageView {
   }
 
   // ---- the one GPU step -------------------------------------------------------------------------------------------
+  // erase first (the things erased by Krea 2 edit, the scenery split from the erased picture, the things back on top
+  // as cutouts) whenever ComfyUI has loaded the nodes for it; else the split as before
+  async canErase() {
+    if (this.S.canErase == null) {
+      const r = await fetch("/object_info/ValisStageErased").then(r => r.json()).catch(() => ({}));
+      this.S.canErase = !!r.ValisStageErased;
+    }
+    return this.S.canErase;
+  }
+
   async split() {
     if (!this.S.image) throw new Error("Drop a still first");
     const names = this.names();
@@ -179,9 +190,10 @@ export class StageView {
     const sharpen = short && short < SHARP_BELOW && this.$("#s-sharp")?.checked !== false ? SHARP_TO : 0;
     btn.disabled = true;
     try {
-      const job = await this.api.submit(this.G.stage({image: this.S.image, names, name, far: +this.$("#s-far").value, sharpen}), `Stage: ${names.join(", ")}`, "stage");
-      this.toast(sharpen ? `Splitting the still: SeedVR2 sharpens it to ${SHARP_TO}p (~1 min), SAM 3 finds each name, Depth Anything 3 orders them`
-        : short && short < 1000 ? `This still is only ${short} px on its short side: 1080p exports will be soft` : "Splitting the still: SAM 3 finds each name, Depth Anything 3 orders them");
+      const erase = await this.canErase();
+      const job = await this.api.submit(this.G.stage({image: this.S.image, names, name, far: +this.$("#s-far").value, sharpen, erase}), `Stage: ${names.join(", ")}`, "stage");
+      this.toast(sharpen ? `Splitting the still: SeedVR2 sharpens it to ${SHARP_TO}p (~1 min), SAM 3 finds each name${erase ? ", Krea 2 erases the things standing in it (~2 min)" : ""}, Depth Anything 3 orders them`
+        : short && short < 1000 ? `This still is only ${short} px on its short side: 1080p exports will be soft` : `Splitting the still: SAM 3 finds each name${erase ? ", Krea 2 erases the things standing in it (~2 min)" : ""}, Depth Anything 3 orders them`);
       await this.until(job);
       const sub = `valis/stage/${name}`;
       await this.listStages(sub);
@@ -202,9 +214,10 @@ export class StageView {
     btn.disabled = true; btn.textContent = "Making the set…";
     try {
       this.S.makeSeed = (this.S.makeSeed ?? 7100) + 1;            // each press paints a new still
-      const job = await this.api.submit(this.G.stage({prompt, names, name, far: +this.$("#s-far").value, sharpen, seed: this.S.makeSeed}),
+      const erase = await this.canErase();
+      const job = await this.api.submit(this.G.stage({prompt, names, name, far: +this.$("#s-far").value, sharpen, seed: this.S.makeSeed, erase}),
         `Stage from words: ${names.join(", ")}`, "stage");
-      this.toast(`Krea 2 paints the still${sharpen ? ", SeedVR2 sharpens it" : ""}, then SAM 3 finds ${names.length} things in it (about ${sharpen ? 2 : 1} min)`);
+      this.toast(`Krea 2 paints the still${sharpen ? ", SeedVR2 sharpens it" : ""}, then SAM 3 finds ${names.length} things in it${erase ? " and Krea 2 erases the ones standing in it, so a move uncovers real paint" : ""} (about ${sharpen ? 2 : 1}${erase ? " + 2" : ""} min)`);
       await this.until(job);
       const sub = `valis/stage/${name}`;
       await this.listStages(sub);
@@ -225,21 +238,29 @@ export class StageView {
   // moves and the 3D set then show the room, the street, the sky going on instead of a blur
   async paintDome() {
     if (!this.S.sub) throw new Error("Split a still (or open a stage) first");
-    const have = await fetch("/object_info/ValisStageDome").then(r => r.json()).catch(() => ({}));
-    if (!have.ValisStageDome) throw new Error("Restart ComfyUI once to load the Valis Stage Dome nodes, then paint again");
+    const have = await fetch("/object_info/ValisStagePlate").then(r => r.json()).catch(() => ({}));
+    if (!have.ValisStagePlate) throw new Error("Restart ComfyUI once to load the new Valis Stage nodes, then paint again");
     const btn = this.$("#s-paintdome"), label = btn.innerHTML;
-    btn.disabled = true; btn.textContent = "Painting the world past the frame…";
+    btn.disabled = true; btn.textContent = "Painting what the camera uncovers…";
     try {
       this.S.domeSeed = (this.S.domeSeed ?? 100) + 1;          // each press paints a new take
-      const job = await this.api.submit(this.G.stageDome({stage: this.S.sub, seed: this.S.domeSeed}), `Dome: ${this.S.sub.split("/").pop()}`, "stage");
-      this.toast("Qwen Image 2.1 is painting the world past the frame (about a minute)");
+      const erased = !!this.S.meta?.erased?.length;      // erased first: what's behind the things is already real paint
+      const job = await this.api.submit(this.G.stagePaint({stage: this.S.sub, seed: this.S.domeSeed, plate: !erased}), `Paint: ${this.S.sub.split("/").pop()}`, "stage");
+      this.toast(erased ? "Qwen Image 2.1 paints the world past the frame (about 1 min)"
+        : "Qwen Image 2.1 paints the world past the frame, Krea 2 edit a clean plate behind the people and things (about 3 min)");
       await this.until(job);
-      // only the dome changes: the camera, the sequence, the layer settings stay as they are
+      // the layers (behind) and the dome changed: reload them, but keep the camera, the sequence and the effects
+      const keep = Object.fromEntries(this.stage.layers.map(l => [l.name, {visible: l.visible, zoff: l.zoff}]));
       const meta = await fetch(this.file(this.S.sub, "stage.json") + `&t=${Date.now()}`).then(r => r.json());
-      this.S.meta.dome = meta.dome; this.S.meta.surround = meta.surround;
-      await this.stage.loadDome(meta.dome);
+      const rev = meta.dome?.rev || Date.now();
+      await this.stage.load(f => this.file(this.S.sub, f) + (/^(layer|dome)/.test(f) ? `&v=${rev}` : ""), meta);
+      this.S.meta = meta;
+      for (const l of this.stage.layers) Object.assign(l, keep[l.name] || {});
       this.refit();
-      this.toast(`Painted. ${this.S.wide ? "" : "Pick Show the dome to see past the edge. "}Save the 3D set again to take it along.`);
+      const and = (xs) => xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}` : xs[0];
+      const removed = meta.plate?.removed?.length ? ` and behind ${and(meta.plate.removed)}`
+        : meta.erased?.length ? `; ${and(meta.erased)} ${meta.erased.length > 1 ? "were" : "was"} erased from the still first, so a move shows real paint behind ${meta.erased.length > 1 ? "them" : "it"}` : "";
+      this.toast(`Painted the world past the frame${removed}. Save the 3D set again to take it along.`);
     } finally { btn.disabled = false; btn.innerHTML = label; }
   }
 
@@ -384,6 +405,31 @@ export class StageView {
       this.toast(`${name}: ${count.toLocaleString()} splats, ${(blob.size / 1e6).toFixed(1)} MB` +
         (dome ? ` · with the far dome (${domeCount.toLocaleString()} of them)` : " · no dome: split the still again to get one") + " · hidden layers left out");
     } finally { btn.disabled = false; btn.innerHTML = label; }
+  }
+
+  // The camera move as an INRIA cameras.json (the format 3DGS training writes): SuperSplat turns it into one timeline
+  // key per entry, so the same move plays on the 3D set in a real splat renderer (and renders to video there). One
+  // key per frame at 30 fps; the stage's space is already the .ply's (x right, y down, looking down +z).
+  async saveCameras() {
+    if (!this.stage) throw new Error("Open a stage first");
+    const fps = 30, n = Math.max(2, Math.round(this.S.sec * fps)), m = this.S.meta;
+    const cams = [];
+    for (let i = 0; i < n; i++) {
+      const [cam] = this.frameAt(i / fps);
+      const a = cam.rot, f = this.stage.f0 * (cam.zoom ?? 1);
+      // cam.rot is world -> camera, column-major (WebGL): camera -> world, row by row, is a[r * 3 + c]
+      const rotation = [0, 1, 2].map(r => [0, 1, 2].map(c => +a[r * 3 + c].toFixed(6)));
+      cams.push({id: i + 1, img_name: `valis_${String(i + 1).padStart(4, "0")}`, width: m.width, height: m.height,
+                 position: cam.pos.map(v => +v.toFixed(6)), rotation, fx: +f.toFixed(3), fy: +f.toFixed(3)});
+    }
+    const blob = new Blob([JSON.stringify(cams)], {type: "application/json"});
+    const shot = [this.S.move, ...this.S.then.map(t => t.move)].join("_then_");
+    const name = `${(this.S.sub || "stage").split("/").pop()}_${shot}_cameras.json`;
+    const el = this.h("a", {href: URL.createObjectURL(blob), download: name});
+    document.body.append(el); el.click(); el.remove();
+    setTimeout(() => URL.revokeObjectURL(el.href), 60000);
+    this.toast(`${name}: ${n} keys at ${fps} fps. In SuperSplat: open the 3D set, then drop this file on it; render at ${fps} fps.`);
+    return cams;
   }
 
   async export() {

@@ -81,6 +81,12 @@ try:
     except Exception as e:
         print(f"[valis] stage routes not registered: {e}")
 
+    try:
+        from .model_routes import register as _model_routes
+        _model_routes(routes)
+    except Exception as e:
+        print(f"[valis] model routes not registered: {e}")
+
     from .sdk_api import mount
     mount(routes, server.PromptServer.instance.app)
 except Exception as e:

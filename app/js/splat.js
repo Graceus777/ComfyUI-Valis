@@ -58,8 +58,9 @@ async function layerSplats(stage, L, stride, orient, snap, cx, feather = 0) {
     const lo = minmax(z, W, H, 3, Math.min), hi = minmax(z, W, H, 3, Math.max);
     for (let i = 0; i < W * H; i++) if (hi[i] - lo[i] > 0.12 * lo[i]) z[i] = z[i] - lo[i] < hi[i] - z[i] ? lo[i] : hi[i];
   }
-  // world position of pixel (x, y): y up, looking down -z (the splat viewers' convention)
-  const P = (x, y, o) => { const zz = z[y * W + x]; o[0] = (x + 0.5 - W / 2) / f0 * zz; o[1] = -(y + 0.5 - H / 2) / f0 * zz; o[2] = -zz; return o; };
+  // world position of pixel (x, y) in the 3DGS/COLMAP convention every trained .ply uses (x right, y down, the
+  // camera looking down +z): splat tools expect it (SuperSplat turns PLY data 180 degrees about z to show it upright)
+  const P = (x, y, o) => { const zz = z[y * W + x]; o[0] = (x + 0.5 - W / 2) / f0 * zz; o[1] = (y + 0.5 - H / 2) / f0 * zz; o[2] = zz; return o; };
   const solid = (x, y) => rgba[(y * W + x) * 4 + 3] > 89;
   const out = new Float32Array(Math.ceil(W / stride) * Math.ceil(H / stride) * F);
   let n = 0;
@@ -119,8 +120,8 @@ async function domeSplats(stage, cx) {
     const pa = (d.pitch - 2 * d.pitch * j / (ny - 1)) * rad, cp = Math.cos(pa), sp = Math.sin(pa);
     for (let i = 0; i < nx; i++) {
       const ya = (-d.yaw + 2 * d.yaw * i / (nx - 1)) * rad;
-      const nr = [Math.sin(ya) * cp, sp, -Math.cos(ya) * cp];
-      const l = Math.hypot(nr[2], nr[0]) || 1, t1 = [nr[2] / l, 0, -nr[0] / l];        // up x n, normalised
+      const nr = [Math.sin(ya) * cp, -sp, Math.cos(ya) * cp];                         // y down, +z ahead
+      const l = Math.hypot(nr[2], nr[0]) || 1, t1 = [-nr[2] / l, 0, nr[0] / l];       // up x n (up = -y), normalised
       const t2 = [nr[1] * t1[2] - nr[2] * t1[1], nr[2] * t1[0] - nr[0] * t1[2], nr[0] * t1[1] - nr[1] * t1[0]];
       quat(t1, t2, nr, q, 0);
       const k = j * nx + i, o = k * F;

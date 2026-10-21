@@ -4,10 +4,12 @@
 //   transform SAM 3 track -> MVEx crop -> Krea 2 identity-edit anchors (first/last) -> H3 ref2va masked re-render -> uncrop
 //   remove    the same, with Qwen Image 2.1 edit anchors ("remove the man from the mirror")
 //   mask      SAM 3 track -> cleanup -> mask video + an overlay preview
+import {withRefEngine, FAST_REF} from "./refengine.js";   // the ref2va engine switch (base | fast)
 export const MODELS = {
   krea: "krea2_turbo_fp8_scaled.safetensors", kreaTE: "qwen3vl_4b_fp8_scaled.safetensors", kreaVAE: "qwen_image_vae.safetensors",
   kreaLora: "Krea2\\krea2_identity_edit_v1_2_r64.safetensors",
   h3i2v: "minimax_h3_fl2va_pruned_w4a8_mixed.safetensors", h3ref: "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+  h3refFast: FAST_REF,      // FastH3 OmniRef: ref2va distilled to 8 steps (refengine.js)
   h3TE: "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors", h3VAE: "minimax_h3_video_vae_fp16.safetensors",
   h3AVAE: "minimax_h3_audio_vae_fp32.safetensors", pdd: "MiniMax-H3-FL2VA-Acc-8Step.safetensors",
   qwen: "qwen_image_2.1-Q6_K.gguf", qwenTE: "qwen3vl_8b_w4a8.safetensors", qwenVAE: "qwen_image_2.1_vae_bf16.safetensors",
@@ -248,7 +250,7 @@ function h3Prompt({who, desc, keep, extra}) {
 
 // mode: "transform" (Krea anchors), "remove" (Qwen anchors), "swap" (Krea anchors + a character reference)
 export function edit({mode, video, audio, target, anchorPrompt, desc, who = "the subject", keep = "its shape and material",
-                      refBoost = 0.5, grow = 12, crop = 1.3, character = null, lastFrame = -1, maxSeconds = 15, prefix = "valis/edit"}) {
+                      refBoost = 0.5, grow = 12, crop = 1.3, character = null, lastFrame = -1, maxSeconds = 15, prefix = "valis/edit", engine}) {
   const g = track(video, target, {audio, grow, maxSeconds});
   Object.assign(g, {
     "24": N("MVEx_SubjectCrop", {original_images: ["18", 0], masks: ["23", 0], mode: "tracked", "mode.crop_scale": crop, "mode.padding": "firm", "mode.prefer": "stillness", "mode.aspect_ratio": 0, "mode.seamless_loop": false, divisible_by: 32, upscale_megapixels: -0.6, resize_method: "auto"}),
@@ -302,7 +304,7 @@ export function edit({mode, video, audio, target, anchorPrompt, desc, who = "the
     "14": N("CreateVideo", {images: ["33", 0], fps: ["18", 3], audio: ["18", 2]}),
     "15": N("SaveVideo", {video: ["14", 0], filename_prefix: prefix, format: "auto", codec: "auto"}),
   });
-  return g;
+  return withRefEngine(g, engine);
 }
 
 // ---------------------------------------------------------------- full character swap (H3 ref2va + character-swap LoRA)
@@ -323,7 +325,7 @@ export function swapPrompt({target = "the man", look = "", action = "facing the 
 // turbo: stack the ref2v 8-step speed LoRA after the swap LoRA and sample er_sde/beta in 8 steps (~2.5x faster).
 export const TURBO_LORA = "minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors";
 export function swapFull({video, character, prompt, background = null, person = "person", megapixels = 0.5625, lora = SWAP_LORA,
-                          loraStrength = 1.0, turbo = false, steps = null, seed = 31, maxSeconds = 15, match = false, prefix = "valis/swap"}) {
+                          loraStrength = 1.0, turbo = false, steps = null, seed = 31, maxSeconds = 15, match = false, prefix = "valis/swap", engine}) {
   steps = steps || (turbo ? 8 : 20);
   const g = {
     "16": N("LoadVideo", {file: video}),
@@ -374,7 +376,7 @@ export function swapFull({video, character, prompt, background = null, person = 
     g["92"] = N("ValisSwapMatch", {plate, swapped: ["12", 0], mask: ["23", 0], swapped_mask: ["97", 0], color: 0.85, grain: true, soften: true, light_wrap: 0.25});
     g["14"].inputs.images = ["92", 0];
   }
-  return g;
+  return withRefEngine(g, engine);
 }
 function personMatte(images, text, b, grow = 2) {
   const i = (k) => String(b + k);
@@ -548,7 +550,7 @@ export function fx({clip, other = null, subject = "", source = "sheet", audio = 
 export function genjutsu({video, refs = [], prompt, mode = "motion", control = mode === "motion" ? "pose" : "canny", seconds = 5,
                           start = 0, megapixels = 0.4, aspect = "9:16 (Portrait Widescreen)", strength = 1.0, steps = 20, turbo = false,
                           keepAudio = true, target = "", keepRest = true, cn = MODELS.funCN, canny = {low: 0.25, high: 0.6}, batchedCanny = false,
-                          seed = 1086, prefix = "valis/genjutsu"}) {
+                          seed = 1086, prefix = "valis/genjutsu", engine}) {
   const g = {
     "v": N("LoadVideo", {file: video}),
     "vs": N("Video Slice", {video: ["v", 0], start_time: start, duration: seconds, strict_duration: false}),
@@ -599,7 +601,7 @@ export function genjutsu({video, refs = [], prompt, mode = "motion", control = m
   });
   if (mode === "swap" && keepRest)
     g["keep"] = N("ValisSwapMatch", {plate: ["sc", 0], swapped: ["dec", 0], mask: ["mk", 0], color: 0.0, grain: true, soften: true, light_wrap: 0.15});
-  return g;
+  return withRefEngine(g, engine);
 }
 
 // The pose skeleton Motion Transfer is driven by: RT-DETR finds the person, SDPose reads 133 keypoints, drawn OpenPose-style.
@@ -720,8 +722,20 @@ export function upscale({video, resolution = 1080, batch = 9, seed = 42, prefix 
 // and tall (solid gray around it), Qwen Image 2.1 + the outpaint LoRA paints the gray out as a continuation of the
 // scene (its trained instruction, ~1 min on 12 GB), and Valis Stage Dome writes the painting into the stage's dome.png.
 export const OUTPAINT = "Outpaint the image: replace the solid gray areas with a seamless continuation of the scene, keeping the existing picture unchanged.";
-export function stageDome({stage, seed = 101, steps = 25}) {
-  return {
+// plate: the same job also paints behind the things standing in the scene. Valis Stage Clean Plate hands Krea 2 edit
+// (the identity-edit LoRA, 10 steps) the still and "Remove the man and the fire from the picture…", plus the biggest
+// thing alone, and Valis Stage Plate checks what really went, then puts the clean plate under every layer where those
+// things stood, so a move uncovers real paint instead of a smear. At rest nothing changes.
+export function stagePaint({stage, seed = 101, steps = 25, dome = true, plate = true}) {
+  const g = {};
+  if (plate) Object.assign(g, kreaLoaders(), {
+    "cp": N("ValisStageCleanPlate", {stage, megapixels: 1.0}),
+    ...kreaEdit(300, ["cp", 0], ["cp", 1], seed + 1, null, 1.0),
+    // the biggest thing alone too: asked for four things at once, Krea kept the lighthouse (and Qwen once kept a man)
+    ...kreaEdit(320, ["cp", 0], ["cp", 3], seed + 2, null, 1.0),
+    "plate": N("ValisStagePlate", {stage, plate: ["312", 0], removed: ["cp", 2], plate_main: ["332", 0], removed_main: ["cp", 4]}),
+  });
+  if (dome) Object.assign(g, {
     "250": N("UnetLoaderGGUF", {unet_name: MODELS.qwen}),
     "251": N("CLIPLoader", {clip_name: MODELS.qwenTE, type: "qwen_image", device: "default"}),
     "252": N("VAELoader", {vae_name: MODELS.qwenVAE}),
@@ -731,15 +745,17 @@ export function stageDome({stage, seed = 101, steps = 25}) {
     "ks": N("KSampler", {model: ["253", 0], positive: ["enc", 0], negative: ["enc", 1], latent_image: ["enc", 2], seed, steps, cfg: 1, sampler_name: "euler", scheduler: "simple", denoise: 1}),
     "dec": N("VAEDecode", {samples: ["ks", 0], vae: ["252", 0]}),
     "dome": N("ValisStageDome", {stage, painted: ["dec", 0]}),
-  };
+  });
+  return g;
 }
+export const stageDome = (o) => stagePaint({...o, plate: false});
 
 // sharpen: a still smaller than the export gets SeedVR2 (3B Q8, the same settings as Upscale) to this many px on its
 // short side first. SAM 3 and Depth Anything still look at the original (they work below 1008 px anyway); only the
 // layers' paint comes from the sharp copy, which is also saved into the stage folder as still_*.png.
 // prompt: no still yet, so Krea 2 turbo paints one first (16:9, `size`), in the same job: words in, a set out.
 export function stage({image, names, name = "stage", far = 6, band = 0.025, threshold = 0.35, perName = 20, sharpen = 0,
-                       prompt = null, size = [1792, 1008], seed = 7101}) {
+                       prompt = null, size = [1792, 1008], seed = 7101, erase = false}) {
   const g = {
     "1": prompt ? N("VAEDecode", {samples: ["k5", 0], vae: ["k3", 0]}) : N("LoadImage", {image}),
     "2": N("LoadDA3Model", {model_name: MODELS.da3, weight_dtype: "default"}),
@@ -773,6 +789,31 @@ export function stage({image, names, name = "stage", far = 6, band = 0.025, thre
       uniform_batch_size: false, color_correction: "lab", offload_device: "cpu"});
     g["s4"] = N("SaveImage", {images: ["s3", 0], filename_prefix: `valis/stage/${name}/still`});
     st.image = ["s3", 0];
+  }
+  if (erase) {
+    // erase first: Krea 2 edit erases the things standing in the still (all of them, and the biggest alone), SAM 3
+    // checks the first edit for a thing it only moved, Valis Erase builds the erased picture, SAM 3 and Depth Anything 3
+    // read the scenery in it, and Valis Stage Erased puts the things back on top as cutouts from the still
+    const still = st.image, eNames = names.join("\n");
+    const ms = {}, pms = {}, ems = {};
+    Object.assign(g, kreaLoaders());
+    g["e1"] = N("ValisEraseSetup", {image: still, names: eNames, megapixels: 1.0});
+    Object.assign(g, kreaEdit(300, ["e1", 0], ["e1", 1], seed + 11, null, 1.0), kreaEdit(320, ["e1", 0], ["e1", 2], seed + 12, null, 1.0));
+    names.slice(0, 12).forEach((n, i) => {
+      const b = 100 + 10 * i, id = (j) => String(b + j);
+      ms[`mask_${i + 1}`] = [id(1), 0];
+      g[id(2)] = N("SAM3_Detect", {model: ["5", 0], image: ["312", 0], conditioning: [id(0), 0], threshold, refine_iterations: 2, individual_masks: true});
+      pms[`pmask_${i + 1}`] = [id(2), 0];
+      g[id(3)] = N("SAM3_Detect", {model: ["5", 0], image: ["e2", 0], conditioning: [id(0), 0], threshold, refine_iterations: 2, individual_masks: true});
+      ems[`emask_${i + 1}`] = [id(3), 0];
+    });
+    Object.assign(g["e1"].inputs, ms);
+    g["e2"] = N("ValisErase", {image: still, plan: ["e1", 3], plate_all: ["312", 0], plate_main: ["332", 0], names: eNames, ...ms, ...pms});
+    g["e3"] = N("DA3Inference", {da3_model: ["2", 0], image: ["e2", 0], resolution: 1008, resize_method: "upper_bound_resize", mode: "mono"});
+    g["e4"] = N("DA3Render", {da3_geometry: ["e3", 0], output: "depth", "output.normalization": "min_max", "output.apply_sky_clip": false});
+    g["900"] = N("ValisStageErased", {image: still, depth: st.depth, erased: ["e2", 0], erased_depth: ["e4", 0], report: ["e2", 1],
+      names: eNames, stage_name: name, far, band, ...ms, ...ems});
+    return g;
   }
   g["900"] = N("ValisStage", st);
   return g;

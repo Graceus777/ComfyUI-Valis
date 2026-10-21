@@ -60,7 +60,9 @@ def layer_points(folder, meta, L, stride, f0, orient=True, snap=True, feather=0.
         steep = (hi - lo) > 0.12 * lo                     # a jump of 12% in depth within 7 px (a floor never does that)
         z = np.where(steep, np.where(z - lo < hi - z, lo, hi), z)
     gy, gx = np.mgrid[0:H, 0:W].astype(np.float64)
-    P = np.stack([(gx + 0.5 - W / 2) / f0 * z, -(gy + 0.5 - H / 2) / f0 * z, -z], -1)   # y up, looking down -z
+    # the 3DGS/COLMAP convention every .ply from training uses (x right, y down, the camera looking down +z): splat
+    # tools expect it (SuperSplat turns PLY data 180 degrees about z to show it upright), and it is the studio's own
+    P = np.stack([(gx + 0.5 - W / 2) / f0 * z, (gy + 0.5 - H / 2) / f0 * z, z], -1)
     ys, xs = np.mgrid[0:H:stride, 0:W:stride]
     a = rgba[ys, xs, 3].astype(np.float32) / 255.0
     keep = a > 0.35
@@ -128,13 +130,13 @@ def dome_points(folder, meta, radius=None):
     ya = np.radians(np.linspace(-d["yaw"], d["yaw"], nx))[None, :].repeat(ny, 0)
     pa = np.radians(np.linspace(d["pitch"], -d["pitch"], ny))[:, None].repeat(nx, 1)
     R = radius or 3.0 * meta["far"]
-    n_ = np.stack([np.sin(ya) * np.cos(pa), np.sin(pa), -np.cos(ya) * np.cos(pa)], -1).reshape(-1, 3)
+    n_ = np.stack([np.sin(ya) * np.cos(pa), -np.sin(pa), np.cos(ya) * np.cos(pa)], -1).reshape(-1, 3)   # y down, +z ahead
     pos = (n_ * R).astype(np.float32)
     col = tex.reshape(-1, 3)
     n = len(pos)
     a = np.full(n, 0.98, np.float32)
     # discs tangent to the sphere (thin along the ray from the camera), a texel wide
-    t1 = np.cross(np.array([0.0, 1.0, 0.0]), n_); t1 /= np.maximum(np.linalg.norm(t1, axis=1, keepdims=True), 1e-9)
+    t1 = np.cross(np.array([0.0, -1.0, 0.0]), n_); t1 /= np.maximum(np.linalg.norm(t1, axis=1, keepdims=True), 1e-9)
     t2 = np.cross(n_, t1)
     rot = _quat(np.stack([t1, t2, n_], 2)).astype(np.float32)
     w = R * np.radians(d["step"])
@@ -142,7 +144,7 @@ def dome_points(folder, meta, radius=None):
     return pos, col, a, S, rot
 
 
-def write_ply(path, P, C, A, S, Q):
+def write_ply(path, P, C, A, S, Q, label=None):
     n = len(P)
     a = np.clip(A, 1e-4, 1 - 1e-4)
     opacity = np.log(a / (1 - a))
@@ -154,7 +156,8 @@ def write_ply(path, P, C, A, S, Q):
     data = np.concatenate([c.astype(np.float32) for c in cols], 1)
     names = ["x", "y", "z", "nx", "ny", "nz", "f_dc_0", "f_dc_1", "f_dc_2", "opacity",
              "scale_0", "scale_1", "scale_2", "rot_0", "rot_1", "rot_2", "rot_3"]
-    head = "ply\nformat binary_little_endian 1.0\nelement vertex %d\n" % n + "".join(f"property float {k}\n" for k in names) + "end_header\n"
+    note = "".join(f"comment {x}\n" for x in (label or "").splitlines() if x.strip())     # the file says what it is
+    head = "ply\nformat binary_little_endian 1.0\n" + note + "element vertex %d\n" % n + "".join(f"property float {k}\n" for k in names) + "end_header\n"
     with open(path, "wb") as f:
         f.write(head.encode())
         f.write(data.tobytes())
@@ -186,7 +189,13 @@ def stage_to_ply(folder, out, stride=1, fov=50.0, backdrop_stride=None, orient=T
         P, C, A, S, Q = dome_points(folder, meta)
         Ps.append(P); Cs.append(C); As.append(A); Ss.append(S); Qs.append(Q)
     P, C, A, S, Q = (np.concatenate(x) for x in (Ps, Cs, As, Ss, Qs))
-    (write_splat if out.endswith(".splat") else write_ply)(out, P, C, A, S, Q)
+    if out.endswith(".splat"):
+        write_splat(out, P, C, A, S, Q)
+    else:
+        name = os.path.basename(os.path.normpath(folder))
+        write_ply(out, P, C, A, S, Q, label=f"VALIS 3D set: {name} ({len(P)} splats, dome {'on' if dome else 'off'})\n"
+                  "axes: x right, y down, +z ahead (COLMAP); the original camera sits at 0,0,0 looking down +z\n"
+                  "open in SuperSplat; a camera move from Valis Studio (Save the camera move) drops onto it")
     return len(P)
 
 
