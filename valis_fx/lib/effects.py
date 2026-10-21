@@ -22,7 +22,7 @@ import math
 import cv2
 import numpy as np
 
-from .core import blur, ease, grid, lum, screen, smooth, value_noise, warp_pull
+from .core import blur, grid, lum, screen, smooth, value_noise, warp_pull
 
 
 def _hit_age(ctx, on):

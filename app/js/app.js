@@ -40,7 +40,7 @@ function show(view) {
 $$(".tab").forEach(b => b.addEventListener("click", () => show(b.dataset.view)));
 addEventListener("keydown", (e) => {
   if (e.target.matches("input, textarea, select")) return;
-  const v = {"0": "stage", "1": "create", "2": "edit", "3": "score", "4": "fx", "5": "renders", "6": "genjutsu"}[e.key];
+  const v = {"1": "create", "2": "edit", "3": "score", "4": "fx", "5": "renders", "6": "genjutsu"}[e.key];
   if (v) show(v);
 });
 
@@ -644,6 +644,6 @@ engineUI();
 api.connect();
 machine(); setInterval(machine, 8000);
 setup();
-show((location.hash || "#stage").slice(1));
+show((location.hash || "#create").slice(1));
 promptsPreview();
 refreshPrompt();

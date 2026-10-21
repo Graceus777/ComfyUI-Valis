@@ -11,7 +11,7 @@ beat rings on the waltz (one layer of many) / candle pulse / spectral clock-face
 bloom, streak, halation / camera punch, shake, refraction with chromatic split / vignette, grain / whiteout.
 usage: python3 danse_fx.py s06 [s07 ...]
 """
-import json, math, os
+import math
 import numpy as np
 import cv2
 

@@ -41,9 +41,7 @@ class ValisStage:
     def build(self, image, depth, names, stage_name, far, band, prompt=None, **masks):
         import torch
         import folder_paths
-        import importlib
         from .valis_fx.lib import stage as S
-        S = importlib.reload(S)          # the layer builder is plain numpy: pick up edits without restarting ComfyUI
         img = _np(image)[0, ..., :3].astype(np.float32)
         dep = _np(depth)[0].astype(np.float32)
         dep = dep[..., 0] if dep.ndim == 3 else dep
@@ -111,10 +109,7 @@ class ValisStageFill:
 
     def fill(self, stage, fill_a=None, fill_b=None):
         import cv2
-        import folder_paths
-        folder = os.path.join(folder_paths.get_output_directory(), stage)
-        with open(os.path.join(folder, "stage.json")) as f:
-            meta = json.load(f)
+        folder, meta = _stage_folder(stage)
         done = []
         for slot, img in zip(meta.get("fill_slots", []), (fill_a, fill_b)):
             if img is None:
@@ -164,8 +159,12 @@ def _soft_mattes(bg_model, img, masks, pad=0.25, min_side=256):
 
 
 def _stage_folder(stage):
+    """a stage's folder, which must be under ComfyUI's output folder (the stage string comes from the graph)"""
     import folder_paths
-    folder = os.path.join(folder_paths.get_output_directory(), stage)
+    root = os.path.realpath(folder_paths.get_output_directory())
+    folder = os.path.realpath(os.path.join(root, stage))
+    if not folder.startswith(root + os.sep):
+        raise ValueError(f"not a stage under output: {stage}")
     with open(os.path.join(folder, "stage.json")) as f:
         return folder, json.load(f)
 
@@ -190,10 +189,8 @@ class ValisStageSurround:
     CATEGORY = "Valis/stage"
 
     def canvas(self, stage, megapixels, pad=0.0):
-        import importlib
         import torch
         from .valis_fx.lib import stage as S
-        S = importlib.reload(S)
         folder, meta = _stage_folder(stage)
         still = S.composite([{"rgba": x} for x in S.load_layers(folder, meta)])
         sur = {"megapixels": megapixels, "pad": pad}
@@ -222,10 +219,8 @@ class ValisStageDome:
     CATEGORY = "Valis/stage"
 
     def dome(self, stage, painted):
-        import importlib
         import cv2
         from .valis_fx.lib import stage as S
-        S = importlib.reload(S)
         folder, meta = _stage_folder(stage)
         rgba = S.load_layers(folder, meta)
         still = S.composite([{"rgba": x} for x in rgba])
@@ -259,11 +254,9 @@ class ValisStageCleanPlate:
     CATEGORY = "Valis/stage"
 
     def plate(self, stage, megapixels):
-        import importlib
         import cv2
         import torch
         from .valis_fx.lib import stage as S
-        S = importlib.reload(S)
         folder, meta = _stage_folder(stage)
         still = S.composite([{"rgba": x} for x in S.load_layers(folder, meta)])
         h, w = still.shape[:2]
@@ -292,9 +285,7 @@ class ValisStagePlate:
         # the second plate (the biggest thing alone) is only painted when the first left that thing standing
         if plate_main is not None or not removed_main:
             return []
-        import importlib
         from .valis_fx.lib import stage as S
-        S = importlib.reload(S)
         main = json.loads(removed_main or "[]")
         if not main:
             return []
@@ -310,9 +301,7 @@ class ValisStagePlate:
     CATEGORY = "Valis/stage"
 
     def apply(self, stage, plate, removed, plate_main=None, removed_main=None):
-        import importlib
         from .valis_fx.lib import stage as S
-        S = importlib.reload(S)
         folder, meta = _stage_folder(stage)
         names = json.loads(removed or "[]")
         if names:
@@ -374,9 +363,8 @@ class ValisEraseSetup:
     CATEGORY = "Valis/stage"
 
     def setup(self, image, names, megapixels, **masks):
-        import torch, cv2, importlib
+        import torch, cv2
         from .valis_fx.lib import stage as S
-        S = importlib.reload(S)
         img = _np(image)[0, ..., :3].astype(np.float32)
         h, w = img.shape[:2]
         lines = _lines(names)
@@ -412,9 +400,7 @@ class ValisErase:
     CATEGORY = "Valis/stage"
 
     def check_lazy_status(self, image, plan, plate_all, names, plate_main=None, plate_rest=None, **masks):
-        import importlib
         from .valis_fx.lib import stage as S
-        S = importlib.reload(S)
         lines = _lines(names)
         try:
             return S.erase_needs(_np(image)[0, ..., :3].astype(np.float32), _masks(S, lines, masks), lines, json.loads(plan),
@@ -425,9 +411,8 @@ class ValisErase:
             return [k for k, v in (("plate_main", plate_main), ("plate_rest", plate_rest)) if v is None]
 
     def erase(self, image, plan, plate_all, names, plate_main=None, plate_rest=None, **masks):
-        import torch, importlib
+        import torch
         from .valis_fx.lib import stage as S
-        S = importlib.reload(S)
         img = _np(image)[0, ..., :3].astype(np.float32)
         lines = _lines(names)
         out, report, fps = S.erase_combine(img, _masks(S, lines, masks), lines, json.loads(plan), _np(plate_all)[0],
@@ -465,10 +450,9 @@ class ValisStageErased:
     CATEGORY = "Valis/stage"
 
     def build(self, image, depth, erased, erased_depth, report, names, stage_name, far, band, footprints=None, bg_model=None, prompt=None, **masks):
-        import torch, cv2, importlib
+        import torch, cv2
         import folder_paths
         from .valis_fx.lib import stage as S
-        S = importlib.reload(S)
         img = _np(image)[0, ..., :3].astype(np.float32)
         er = _np(erased)[0, ..., :3].astype(np.float32)
         er = cv2.resize(er, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_AREA) if er.shape[:2] != img.shape[:2] else er

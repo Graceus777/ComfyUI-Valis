@@ -20,7 +20,6 @@ const norm = (v) => String(v).replace(/\\/g, "/");
 export function features() {
   const e = {video: "x.mp4", target: "x", anchorPrompt: "x", desc: "x"};
   return {
-    "Stage · Split a still": G.stage({image: "a.png", names: ["the sky", "the person"]}),
     "Create · Frame it": G.keyframes({prompt: "x"}),
     "Create · cast a character": G.castCharacter({keyframe: "a.png", character: "b.png", prompt: "x"}),
     "Create · Shoot it": G.shot({image: "a.png", motion: "x"}),
