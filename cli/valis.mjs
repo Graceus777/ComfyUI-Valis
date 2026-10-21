@@ -139,7 +139,9 @@ if (job.status !== "succeeded") {
 const out = opt.out || "valis_out";
 fs.mkdirSync(out, {recursive: true});
 const saved = [];
+const saves = new Set(Object.entries(graph).filter(([, n]) => /^Save/.test(n.class_type)).map(([id]) => id));   // results, not the loaders' previews
 for (const o of job.outputs) {
+  if (o.nodeId && !saves.has(o.nodeId)) continue;
   const dest = path.join(out, o.name);
   fs.writeFileSync(dest, await o.toBytes());
   saved.push(dest);
