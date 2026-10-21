@@ -74,7 +74,7 @@ def register(routes):
                 audio = (y, sr)
                 ast = out.add_stream("aac", rate=sr)
                 ast.layout = "mono"
-        sessions[job] = {"out": out, "st": st, "ast": ast, "audio": audio, "w": w, "h": h, "n": 0, "fn": fn, "sub": sub}
+        sessions[job] = {"out": out, "st": st, "ast": ast, "audio": audio, "w": w, "h": h, "n": 0, "fn": fn, "sub": sub, "fps": fps}
         return web.json_response({"ok": True, "filename": fn})
 
     @routes.post("/valis/stage/raw")
@@ -106,7 +106,7 @@ def register(routes):
             out.mux(p)
         if ast is not None:
             y, sr = S["audio"]
-            y = y[:int(S["n"] / float(st.rate) * sr)].astype(np.float32)
+            y = y[:int(S["n"] / float(S.get("fps", 24)) * sr)].astype(np.float32)      # (VideoStream.rate is gone in newer PyAV)
             for i in range(0, len(y), 1024):
                 fr = av.AudioFrame.from_ndarray(np.ascontiguousarray(y[None, i:i + 1024]), format="fltp", layout="mono")
                 fr.sample_rate = sr

@@ -83,6 +83,9 @@ const flows = {
   "25_cinema_light_change": [G.shot({image: "valis/keyframe.png", last: "valis/keyframe_relit.png",
     motion: "The scene holds still while the light slowly changes: an orange fire glow rises and floods everything. One continuous shot, no cuts, no text."}),
     "Cinema Studio · light change: H3 first/last frame from a keyframe to its relit version, so the light shifts during the shot (BURN SEASON trailer 2: the fire reaching the town)."],
+  "26_transform_vampire_fasth3": [G.edit({mode: "transform", video: "valis/clip.mp4", target: T, anchorPrompt: vamp.anchor.replaceAll("{T}", T), desc: vamp.desc,
+    who: vamp.who, keep: vamp.keep, refBoost: vamp.rb, engine: "fast"}),
+    "Edit · Transform on FastH3 OmniRef (Renders · Engine): workflow 05 with the 8-step distilled ref2va (FastVideo/FastH3-Omni-Comfy), PDD block sigmas, euler, shift 12/3."],
 };
 
 const index = [];
