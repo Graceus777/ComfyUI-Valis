@@ -1,14 +1,31 @@
 # Valis
 
-**Direct a shot like a film set, then let the music fire the effects.** Valis is an open studio for ComfyUI: Higgsfield's
-Cinema Studio and Genjutsu rebuilt on open weights that fit a 12 GB laptop, a name-it-and-change-it editor, and the part
-no other tool has: a cue engine that turns any song, any voice line or YuE2's own sheet music into events, and a library of
-effects and synthesized sound that fire on them.
+**One line in, a scored and cut short film out, on a 12 GB laptop.** Valis is an open studio for ComfyUI. Say what the
+film is about: a local Qwen3 writes the shot list and the song brief, YuE2 writes and performs the song, Krea 2 frames
+every shot, MiniMax H3 shoots it, SAM 3 tracks the subject, a library of effects fires on the song's own lanes with sound
+synthesized in its key, and the cut lands on the bars. Around it: Higgsfield's Cinema Studio and Genjutsu rebuilt on open
+weights, a name-it-and-change-it editor, and the cue engine that drives all of it from any song, voice line or sheet music.
 
 ![Five shots of DANSE MACABRE, made with Valis on one laptop: every reveal, shockwave and halo fired by the score](docs/hero.jpg)
 
 **[Demo video](#)** · [Workflows](workflows/) · [CLI](#headless-the-cli-and-agents) · built for #OpenSourceHiggsfield ·
 open weights only · MiniMax H3 is the video model
+
+## One line, one film
+
+Type what the film is about and press **Plan it**. A local Qwen3 (ComfyUI's own text generation, on the Qwen Image
+encoder already on disk) writes the plan as something you can edit: title, cast, place, a song brief, and a line per
+shot with its framing, its motion, what to track and which effect fires on which lane. Press **Make the film**: YuE2
+writes the sheet music and performs it; Krea 2 frames every shot in one pass; MiniMax H3 shoots each one; SAM 3 tracks
+the shot's subject; the library fires the shot's effect on the song's lane and synthesizes its sound in the song's key,
+each shot at its own place in the song; and the cut lands every shot on the bars. Six shots is about 25 seconds of film
+and about an hour on a 12 GB card. Nothing is prompted by hand and nothing leaves the machine.
+
+The same chain runs headless, for people and for agents:
+
+```sh
+node cli/valis.mjs film --idea "a lighthouse keeper rows out into the storm to bring back the woman the sea took" --genre gothic --shots 6
+```
 
 ## Try it in five minutes, no model needed
 
@@ -22,6 +39,7 @@ score-driven pass can be played without generating anything.
 
 | Tab | What it does |
 |---|---|
+| **Film** | One line to a film: the plan (Qwen3), the song (YuE2), the keyframes (Krea 2), the shots (MiniMax H3), the effects and sound (SAM 3 and the Valis library, on the song's lanes), the cut (on the bars). The plan is shown and editable before anything expensive runs. |
 | **Create** (Cinema Studio) | A director's panel: describe the shot, pick genre, framing, lens, camera body, era, light, emotion, tempo, colour palette and one of 44 camera moves. *Frame it* makes two Krea 2 keyframes; drop a character sheet to cast it in. *Shoot it* turns the keyframe into a MiniMax H3 shot. **Trained moves**: with a camera LoRA installed, the move is learned, not described (360 orbit, bullet time, push-in, crane up, FPV on H3; crash zoom and arcs on Wan 2.2). **Dolly zoom** is a real trained push re-framed by *Valis Dolly Zoom* so the subject keeps its size. **Whip pan** is a steady H3 pan speed-ramped by *Valis Whip Pan* with the camera's own motion blur. **Relight** (Qwen Image edit, 10 presets) and **light change** (H3 from the keyframe to its relit version). Under every result: **Extend**, **Upscale** (SeedVR2) and a **Color Palette** grade. |
 | **Genjutsu** | Drop a video. **Motion transfer**: up to 8 reference images become the new cast and place; SDPose skeletons carry the motion, camera and timing (H3 Fun ControlNet Union); the source audio is kept. **Restyle**: 24 looks over Canny edges. **Object swap**: name one thing, describe its replacement; SAM 3 finds it, the ControlNet inpaints only that, and the result is composited back onto the untouched plate. **Check source** runs only the pose step and *Valis Pose Check* marks where the body can't be read before a 20-minute render. |
 | **Edit** | Drop a clip and name what to change ("his head", "her dress"). SAM 3 tracks it. **Transform** re-renders only the masked region in a new look (vampire, bride, ghostfire, smoke, chrome, stone, skeleton, fire). **Remove** paints it out. **Swap** replaces the whole person with a character sheet; *Match the plate* checks the take first and matches brightness, contrast, colour and grain back to the plate with no AI. **Turn** makes one take become another on a chosen word, and can turn the voice on the same word. |
@@ -39,6 +57,10 @@ score-driven pass can be played without generating anything.
 
 ## What's new here
 
+- **One line, one film.** The planner is open weights on disk (ComfyUI's `TextGenerate` on the Qwen3-VL 8B encoder
+  that Qwen Image uses), so a film is written, scored, shot, effected and cut without a prompt typed by hand and
+  without a request leaving the machine. The shot length follows the song: every shot is cut to whole bars of the
+  tempo YuE2 actually played, so the picture changes on the music's own grid.
 - **The score is the director.** `ValisCues` merges lanes from a Valis score, any music (a beat tracker, band onsets,
   loudness and brightness curves), a voice (syllable onsets), YuE2's ABC notation aligned to its own performance, or a
   plain-text cue sheet (`1.5 shatter`, `every 1/2 beat from 3:1 to 7:1 pulse`, `ramp slip 0 0 4 1`). Every effect,
@@ -170,6 +192,8 @@ ComfyUI canvas, point its Load nodes at your files, and queue it. `node tools/ex
 It needs Node 18+ and nothing else.
 
 ```sh
+node cli/valis.mjs film --idea "a lighthouse keeper rows out into the storm to bring back the woman the sea took" --genre gothic --shots 6
+node cli/valis.mjs film --idea "..." --plan-only > plan.json      # edit it, then: valis film --plan plan.json
 node cli/valis.mjs frame --prompt "a lighthouse keeper on a rocky shore at night, holding a lantern" --genre gothic
 node cli/valis.mjs shoot --image key.png --motion "he raises the lantern and turns to the sea" --move push
 node cli/valis.mjs swap --video take.mp4 --character vampire_sheet.png --background ballroom.png --person man
@@ -189,8 +213,9 @@ these graphs. `--api` / `--key` point the CLI at Comfy Cloud or a Comfy API depl
   `Valis Score (load)`, `Valis Score (from a voice)` and `Valis FX (score-driven pass)`; `nodes_lib.py` exposes the
   library (cues, layers, render, sound design, swap check and match, voice turn, colour palette, trim hold, dolly zoom,
   whip pan, batched Canny, pose check). `model_routes.py` fetches a missing model file from Hugging Face when you ask.
-- **The studio:** plain ES modules under `app/`, with no build step. `api.js` is the SDK client. `graphs.js` has every
-  workflow as an API-format builder. `presets.js` holds the director's panel and the looks. `score.js` is the timeline.
+- **The studio:** plain ES modules under `app/`, with no build step. `api.js` is the SDK client. `film.js` is the film
+  chain, run by the Film tab and by `valis film` through the same SDK. `graphs.js` has every workflow as an API-format
+  builder. `presets.js` holds the director's panel and the looks. `score.js` is the timeline.
   `fx.js` is the library tab. `check.js` is the setup check. `app/vendor/comfy-sdk.js` is `@comfyorg/sdk` bundled for
   the browser by `tools/build-sdk/`.
 - **The engine:** `valis_fx/` (numpy and OpenCV, CPU). `engine.py` is the score-driven pass, `forge.py` the shared
@@ -204,6 +229,8 @@ these graphs. `--api` / `--key` point the CLI at Comfy Cloud or a Comfy API depl
 
 | Step | Time |
 |---|---|
+| Film · plan (Qwen3, with the model load) | ~2 min |
+| Film · 6 shots, start to finish | ~1 h |
 | Frame it (2 Krea 2 keyframes) | ~40 s |
 | Cast a character (Krea 2 identity edit) | ~80 s |
 | Shoot it (4.5 s H3 shot, 8 steps) | ~7 min |

@@ -32,3 +32,6 @@ them in `app/js/graphs.js`). Drag one onto the ComfyUI canvas, point its Load no
 | `24_cinema_relight_keyframe.json` | Cinema Studio · Relight: Qwen Image 2.1 edit relights a keyframe (same people, pose and place; new light). Ten presets in the app. | `valis/keyframe.png` |
 | `25_cinema_light_change.json` | Cinema Studio · light change: H3 first/last frame from a keyframe to its relit version, so the light shifts during the shot (BURN SEASON trailer 2: the fire reaching the town). | `valis/keyframe.png`, `valis/keyframe_relit.png` |
 | `26_transform_vampire_fasth3.json` | Edit · Transform on FastH3 OmniRef (Renders · Engine): workflow 05 with the 8-step distilled ref2va (FastVideo/FastH3-Omni-Comfy), PDD block sigmas, euler, shift 12/3. | `valis/clip.mp4` |
+| `27_film_plan.json` | Film · plan: ComfyUI's own text generation on the Qwen3-VL 8B encoder (the one Qwen Image uses) writes the shot list and the song brief as JSON; the Film tab and `valis film` run the rest of the chain from it. | none |
+| `28_film_keyframes.json` | Film · keyframes: every shot's Krea 2 keyframe in one graph (the model loads once). | none |
+| `29_film_cut.json` | Film · cut: each shot trimmed to whole bars of the song and joined, carrying its own slice of the song and its sounds. | `valis/film_fx_1.mp4`, `valis/film_fx_2.mp4` |

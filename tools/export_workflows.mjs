@@ -84,6 +84,12 @@ const flows = {
   "26_transform_vampire_fasth3": [G.edit({mode: "transform", video: "valis/clip.mp4", target: T, anchorPrompt: vamp.anchor.replaceAll("{T}", T), desc: vamp.desc,
     who: vamp.who, keep: vamp.keep, refBoost: vamp.rb, engine: "fast"}),
     "Edit · Transform on FastH3 OmniRef (Renders · Engine): workflow 05 with the 8-step distilled ref2va (FastVideo/FastH3-Omni-Comfy), PDD block sigmas, euler, shift 12/3."],
+  "27_film_plan": [G.filmPlan({idea: "a lighthouse keeper rows out into the storm to bring back the woman the sea took", shots: 6, genre: P.GENRES[0]}),
+    "Film · plan: ComfyUI's own text generation on the Qwen3-VL 8B encoder (the one Qwen Image uses) writes the shot list and the song brief as JSON; the Film tab and `valis film` run the rest of the chain from it."],
+  "28_film_keyframes": [G.filmKeyframes({prompts: ["Wide shot: a lighthouse keeper rowing out into a storm, moonlight through mist.", "Close shot: the keeper's face, candlelight in his eyes, rain."], prefix: "valis/film_key"}),
+    "Film · keyframes: every shot's Krea 2 keyframe in one graph (the model loads once)."],
+  "29_film_cut": [G.filmCut({shots: [{file: "valis/film_fx_1.mp4", seconds: 4.444}, {file: "valis/film_fx_2.mp4", seconds: 4.444}], prefix: "valis/film"}),
+    "Film · cut: each shot trimmed to whole bars of the song and joined, carrying its own slice of the song and its sounds."],
 };
 
 const index = [];

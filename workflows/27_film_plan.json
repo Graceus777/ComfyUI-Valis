@@ -1,0 +1,35 @@
+{
+  "1": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen3vl_8b_w4a8.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    }
+  },
+  "2": {
+    "class_type": "TextGenerate",
+    "inputs": {
+      "clip": [
+        "1",
+        0
+      ],
+      "prompt": "You are the writer and director of a 27-second film with no dialogue. Idea: \"a lighthouse keeper rows out into the storm to bring back the woman the sea took\". Genre look: Gothic horror. Cinematic live-action film still, shot on 35mm, dark and moody gothic horror, high contrast, cold blue moonlight against warm candlelight, drifting mist, fine film grain, sharp focus.\nWrite the plan as one JSON object and nothing else: no prose before or after it, no code fences.\n{\"title\": \"two or three words\",\n \"logline\": \"one sentence\",\n \"cast\": \"one sentence describing each main character's look (age, hair, clothes), to be repeated under every shot\",\n \"place\": \"one sentence describing the setting and its light\",\n \"song\": {\"style\": \"the music in at most twelve words: genre, instruments, mood, ending with the tempo, 108 BPM\", \"lyrics\": \"[Instrumental]\"},\n \"shots\": [exactly 6 objects in story order, each\n   {\"keyframe\": \"one sentence: what the still frame shows, who and where, the framing (wide, medium or close) and the light\",\n    \"motion\": \"one sentence: what moves during these four seconds\",\n    \"subject\": \"two or three words naming the main thing in frame, for a tracker, e.g. the woman, the lantern\",\n    \"effect\": one of [\"Shockwave\",\"Rays\",\"Echo\",\"Glitch\",\"Punch\",\"Frost\",\"Datamosh\",\"SlitScan\",\"Projector\",\"Lens\",\"Vertigo\",\"none\"],\n    \"on\": one of [\"kick\",\"snare\",\"hat\",\"beat\",\"downbeat\",\"bar\",\"melody\",\"bass\"]}]}\nRules: every shot is rendered on its own, so describe the cast the same way each time; vary the framing from shot to shot; build to an impact in the last third. Effects: Shockwave or Punch on downbeat for an impact, Rays on beat for a light source, Echo on beat for a moving body, Frost or Datamosh on kick for dread, Projector on bar for a memory, Lens on downbeat for the uncanny, Glitch on hat for machines, Vertigo on bar for a realisation, SlitScan on melody for time passing; \"none\" for a quiet shot.",
+      "max_length": 2200,
+      "sampling_mode": "off",
+      "thinking": false,
+      "use_default_template": true
+    }
+  },
+  "3": {
+    "class_type": "SaveText",
+    "inputs": {
+      "text": [
+        "2",
+        0
+      ],
+      "filename_prefix": "valis/film_plan",
+      "format": "txt"
+    }
+  }
+}

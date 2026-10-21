@@ -1,0 +1,64 @@
+{
+  "v0": {
+    "class_type": "LoadVideo",
+    "inputs": {
+      "file": "valis/film_fx_1.mp4"
+    }
+  },
+  "s0": {
+    "class_type": "Video Slice",
+    "inputs": {
+      "video": [
+        "v0",
+        0
+      ],
+      "start_time": 0,
+      "duration": 4.444,
+      "strict_duration": false
+    }
+  },
+  "v1": {
+    "class_type": "LoadVideo",
+    "inputs": {
+      "file": "valis/film_fx_2.mp4"
+    }
+  },
+  "s1": {
+    "class_type": "Video Slice",
+    "inputs": {
+      "video": [
+        "v1",
+        0
+      ],
+      "start_time": 0,
+      "duration": 4.444,
+      "strict_duration": false
+    }
+  },
+  "cat": {
+    "class_type": "ConcatenateVideo",
+    "inputs": {
+      "videos.video0": [
+        "s0",
+        0
+      ],
+      "videos.video1": [
+        "s1",
+        0
+      ],
+      "codec": "auto"
+    }
+  },
+  "save": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "cat",
+        0
+      ],
+      "filename_prefix": "valis/film",
+      "format": "auto",
+      "codec": "auto"
+    }
+  }
+}
