@@ -11,8 +11,10 @@
   Valis Voice Turn    - the voice turns with the face: the take's voice until the turn, the monster after it
   Valis Color Palette - a named look or your own HEX colours graded onto every frame
   Valis Dolly Zoom    - a push-in or pull-back re-framed so the subject holds its size: the vertigo shot
+  Valis Title Card    - a title over black, fading in and out, as frames (the end of a film)
 """
 import json
+import os
 
 import numpy as np
 
@@ -424,6 +426,64 @@ class ValisPoseCheck:
                 "result": (txt, torch.from_numpy(strip[None].astype(np.float32)), float(bw.get("start", 0.0)), float(bw.get("duration", 0.0)))}
 
 
+class ValisTitleCard:
+    """A title (and a line under it) over black, fading in and out: the card at the end of a film, as frames for
+    CreateVideo. Set in the studio's own serif (Cormorant Garamond, bundled)."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"title": ("STRING", {"default": "Untitled"}),
+                             "subtitle": ("STRING", {"default": "a Valis film"}),
+                             "width": ("INT", {"default": 768, "min": 64, "max": 4096, "step": 8}),
+                             "height": ("INT", {"default": 1344, "min": 64, "max": 4096, "step": 8}),
+                             "seconds": ("FLOAT", {"default": 3.0, "min": 0.5, "max": 30.0, "step": 0.1}),
+                             "fps": ("FLOAT", {"default": 24.0, "min": 1.0, "max": 120.0}),
+                             "fade": ("FLOAT", {"default": 0.8, "min": 0.0, "max": 5.0, "step": 0.1, "tooltip": "seconds of fade in and out"})}}
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "card"
+    CATEGORY = "Valis/library"
+
+    def card(self, title, subtitle, width, height, seconds, fps, fade):
+        import torch
+        from PIL import Image, ImageDraw, ImageFont
+        font = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app", "vendor", "fonts", "CormorantGaramond.ttf")
+        def face(size):
+            f = ImageFont.truetype(font, size)
+            try:
+                f.set_variation_by_axes([500])
+            except OSError:
+                pass
+            return f
+        im = Image.new("RGB", (width, height), (0, 0, 0))
+        d = ImageDraw.Draw(im)
+        t = title.strip().upper()
+        track = width * 0.012                                       # a little tracking, like the studio's mark
+        size = max(16, width // 9)
+        while True:                                                 # the biggest size that fits the frame with a margin
+            big = face(size)
+            tw = d.textlength(t, font=big) + max(0, len(t) - 1) * track
+            if tw <= width * 0.86 or size <= width // 24:
+                break
+            size -= 2
+        small = face(max(12, width // 26))
+        x, y = (width - tw) / 2, height * 0.46 - big.size / 2
+        for ch in t:
+            d.text((x, y), ch, font=big, fill=(232, 220, 192))
+            x += d.textlength(ch, font=big) + track
+        if subtitle.strip():
+            sw = d.textlength(subtitle.strip(), font=small)
+            d.text(((width - sw) / 2, y + big.size * 1.15), subtitle.strip(), font=small, fill=(150, 150, 165))
+        frame = torch.from_numpy(np.asarray(im).astype(np.float32) / 255.0)
+        n = max(1, int(round(seconds * fps)))
+        k = min(n // 2, int(round(fade * fps)))
+        gain = np.ones(n, np.float32)
+        if k > 0:
+            ramp = (np.arange(k, dtype=np.float32) + 1) / k
+            gain[:k] = ramp; gain[n - k:] = ramp[::-1]
+        return (frame[None] * torch.from_numpy(gain)[:, None, None, None],)
+
+
 class ValisSwapCheck:
     @classmethod
     def INPUT_TYPES(cls):
@@ -496,14 +556,14 @@ class ValisVoiceTurn:
         return ({"waveform": torch.from_numpy(out[None].astype(np.float32)), "sample_rate": sr},)
 
 
-NODE_CLASS_MAPPINGS = {"ValisCues": ValisCues, "ValisLayer": ValisLayer, "ValisRender": ValisRender, "ValisSoundDesign": ValisSoundDesign,
+NODE_CLASS_MAPPINGS = {"ValisCues": ValisCues, "ValisLayer": ValisLayer, "ValisRender": ValisRender, "ValisSoundDesign": ValisSoundDesign, "ValisTitleCard": ValisTitleCard,
                        "ValisSwapCheck": ValisSwapCheck, "ValisSwapMatch": ValisSwapMatch, "ValisVoiceTurn": ValisVoiceTurn,
                        "ValisColorPalette": ValisColorPalette, "ValisTrimHold": ValisTrimHold, "ValisDollyZoom": ValisDollyZoom, "ValisWhipPan": ValisWhipPan, "ValisCanny": ValisCanny, "ValisPoseCheck": ValisPoseCheck}
 NODE_DISPLAY_NAME_MAPPINGS = {"ValisCues": "Valis Cues (score / music / sheet music / voice / cue sheet)", "ValisLayer": "Valis Layer (library effect)",
                               "ValisRender": "Valis Render (library stack)", "ValisSoundDesign": "Valis Sound Design",
                               "ValisSwapCheck": "Valis Swap Check (pre)", "ValisSwapMatch": "Valis Swap Match (post)",
                               "ValisVoiceTurn": "Valis Voice Turn", "ValisColorPalette": "Valis Color Palette (looks / HEX)",
-                              "ValisTrimHold": "Valis Trim Hold (cut a frozen end)",
+                              "ValisTrimHold": "Valis Trim Hold (cut a frozen end)", "ValisTitleCard": "Valis Title Card (a title over black, fading)",
                               "ValisDollyZoom": "Valis Dolly Zoom (lock the subject through a push or pull)",
                               "ValisWhipPan": "Valis Whip Pan (speed-ramp a real pan into a whip)",
                               "ValisCanny": "Valis Canny (batched: long clips without running out of VRAM)",

@@ -99,7 +99,9 @@ export async function makeFilm(plan, io, {genre = null, onStage = () => {}} = {}
     fxed.push(v);
   }
   onStage("cut", `cutting ${n} shots on the bars (${cut.bars} bar${cut.bars > 1 ? "s" : ""} each at ${bar.bpm} BPM)`);
-  const r = await io.run(G.filmCut({shots: fxed.map(v => ({file: io.ref(v), seconds: cut.seconds})), prefix: `${pre}_film`}), "Film · cut");
+  // the title card at the end needs the Valis Title Card node (a pack loaded before it existed has no such node until a restart)
+  const card = io.has && await io.has("ValisTitleCard") ? {text: plan.title, song: io.ref(audio), start: n * cut.seconds, seconds: 3, width: 768, height: 1344} : null;
+  const r = await io.run(G.filmCut({shots: fxed.map(v => ({file: io.ref(v), seconds: cut.seconds})), title: card, prefix: `${pre}_film`}), "Film · cut");
   const film = r.outputs.find(isVideo);
   if (!film) throw new Error("the cut saved no video");
   return {film, song: audio, abc, bar, cut, keys: keys.outputs.filter(o => /\.png$/i.test(o.filename)), clips, fxed, tag};

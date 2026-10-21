@@ -135,6 +135,7 @@ if (cmd === "film") {
     text: async (f) => Buffer.from(await f._o.toBytes()).toString("utf8"),
     ref: (f) => `${f.subfolder}/${f.filename} [output]`,
     free: () => fetch(`${process.env.COMFY_BASE_URL}/free`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({unload_models: true, free_memory: true})}),
+    has: async (node) => !!(await fetch(`${process.env.COMFY_BASE_URL}/object_info/${node}`).then(r => r.json()).catch(() => ({})))[node],
   };
   let plan;
   if (opt.plan && fs.existsSync(opt.plan)) plan = JSON.parse(fs.readFileSync(opt.plan, "utf8"));       // a plan edited by hand

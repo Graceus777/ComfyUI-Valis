@@ -774,13 +774,22 @@ export function filmKeyframes({prompts, seed = 7101, width = 768, height = 1344,
 }
 
 // the cut: every shot trimmed to its bars and joined; each shot carries its own slice of the song and its sounds
-export function filmCut({shots, prefix = "valis/film"}) {
+// title: {text, subtitle, song, start, seconds, width, height}: a card over black after the last shot, with the song's tail
+// under it (every chunk of the cut must carry audio of the same kind)
+export function filmCut({shots, title = null, prefix = "valis/film"}) {
   const g = {}, vids = {};
   shots.forEach((s, k) => {
     g[`v${k}`] = N("LoadVideo", {file: s.file});
     g[`s${k}`] = N("Video Slice", {video: [`v${k}`, 0], start_time: 0, duration: s.seconds, strict_duration: false});
     vids[`videos.video${k}`] = [`s${k}`, 0];
   });
+  if (title) {
+    g["tc"] = N("ValisTitleCard", {title: title.text, subtitle: title.subtitle ?? "a Valis film", width: title.width, height: title.height, seconds: title.seconds, fps: 24.0, fade: 0.8});
+    g["ta"] = N("LoadAudio", {audio: title.song});
+    g["tt"] = N("TrimAudioDuration", {audio: ["ta", 0], start_index: title.start, duration: title.seconds});
+    g["tv"] = N("CreateVideo", {images: ["tc", 0], fps: 24.0, audio: ["tt", 0]});
+    vids[`videos.video${shots.length}`] = ["tv", 0];
+  }
   g["cat"] = N("ConcatenateVideo", {...vids, codec: "auto"});
   g["save"] = N("SaveVideo", {video: ["cat", 0], filename_prefix: prefix, format: "auto", codec: "auto"});
   return g;
