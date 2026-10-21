@@ -734,16 +734,17 @@ export function filmPlanPrompt({idea, shots = 6, genre = null}) {
 Write the plan as one JSON object and nothing else: no prose before or after it, no code fences.
 {"title": "two or three words",
  "logline": "one sentence",
- "cast": "one sentence describing each main character's look (age, hair, clothes), to be repeated under every shot",
+ "cast": [one object per character, at most three: {"name": "a short name used in the shots, e.g. the keeper", "look": "one sentence: age, hair, clothes, anything that must stay the same from shot to shot"}],
  "place": "one sentence describing the setting and its light",
  "song": {"style": "the music in at most twelve words: genre, instruments, mood, ending with the tempo, 108 BPM", "lyrics": "[Instrumental]"},
  "shots": [exactly ${shots} objects in story order, each
-   {"keyframe": "one sentence: what the still frame shows, who and where, the framing (wide, medium or close) and the light",
+   {"who": [the names from the cast who are in this frame; an empty list for an empty scene],
+    "keyframe": "one sentence: what the still frame shows, who and where, the framing (wide, medium or close) and the light",
     "motion": "one sentence: what moves during these four seconds",
     "subject": "two or three words naming the main thing in frame, for a tracker, e.g. the woman, the lantern",
     "effect": one of ${JSON.stringify(FILM_EFFECTS)},
     "on": one of ${JSON.stringify(FILM_LANES)}}]}
-Rules: every shot is rendered on its own, so describe the cast the same way each time; vary the framing from shot to shot; build to an impact in the last third. Effects: Shockwave or Punch on downbeat for an impact, Rays on beat for a light source, Echo on beat for a moving body, Frost or Datamosh on kick for dread, Projector on bar for a memory, Lens on downbeat for the uncanny, Glitch on hat for machines, Vertigo on bar for a realisation, SlitScan on melody for time passing; "none" for a quiet shot.`;
+Rules: every shot is rendered on its own from its own sentence, so a character is only in a shot if "who" names them; not every shot needs everyone; vary the framing from shot to shot; build to an impact in the last third. Effects: Shockwave or Punch on downbeat for an impact, Rays on beat for a light source, Echo on beat for a moving body, Frost or Datamosh on kick for dread, Projector on bar for a memory, Lens on downbeat for the uncanny, Glitch on hat for machines, Vertigo on bar for a realisation, SlitScan on melody for time passing; "none" for a quiet shot.`;
 }
 
 export function filmPlan({idea, shots = 6, genre = null, prefix = "valis/film_plan"}) {

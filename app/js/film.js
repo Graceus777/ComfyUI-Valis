@@ -21,10 +21,13 @@ export function parsePlan(text, shots) {
   try { plan = JSON.parse(text.slice(a, b + 1)); } catch (e) { throw new Error(`the planner's JSON doesn't parse: ${e.message}`); }
   if (!Array.isArray(plan.shots) || !plan.shots.length) throw new Error("the plan has no shots");
   const str = (v, d = "") => (v == null ? d : String(v)).trim() || d;
+  // the cast: [{name, look}]; a plan written as one sentence becomes one unnamed member who is in every shot
+  const cast = Array.isArray(plan.cast) ? plan.cast.map(c => ({name: str(c?.name), look: str(c?.look)})).filter(c => c.look) : (str(plan.cast) ? [{name: "", look: str(plan.cast)}] : []);
   const out = {
-    title: str(plan.title, "Untitled"), logline: str(plan.logline), cast: str(plan.cast), place: str(plan.place),
+    title: str(plan.title, "Untitled"), logline: str(plan.logline), cast, place: str(plan.place),
     song: {style: str(plan.song?.style, "cinematic, instrumental"), lyrics: str(plan.song?.lyrics, "[Instrumental]")},
     shots: plan.shots.slice(0, shots).map(s => ({
+      who: Array.isArray(s.who) ? s.who.map(w => str(w)).filter(Boolean) : null,
       keyframe: str(s.keyframe ?? s.frame), motion: str(s.motion, "subtle natural motion"), subject: str(s.subject, "the person"),
       effect: G.FILM_EFFECTS.includes(s.effect) ? s.effect : "none", on: G.FILM_LANES.includes(s.on) ? s.on : "beat"})),
   };
@@ -60,7 +63,9 @@ export async function planFilm({idea, shots = 6, genre = null}, io) {
 
 export async function makeFilm(plan, io, {genre = null, onStage = () => {}} = {}) {
   const tag = plan.tag || Date.now().toString(36), n = plan.shots.length, pre = `valis/film_${tag}`;
-  const still = (s) => [genre?.style || "", s.keyframe, plan.cast, plan.place].filter(Boolean).join(" ");
+  // a shot's still: the genre's look, the shot, the looks of the cast who are in it (all of them when the plan doesn't say), the place
+  const inShot = (s) => (plan.cast || []).filter(c => !s.who || !c.name || s.who.some(w => w.toLowerCase().includes(c.name.toLowerCase()) || c.name.toLowerCase().includes(w.toLowerCase())));
+  const still = (s) => [genre?.style || "", s.keyframe, ...inShot(s).map(c => c.look), plan.place].filter(Boolean).join(" ");
   const push = P.MOVES.find(m => m.id === "push");
   const free = async () => { if (io.free) await io.free().catch(() => {}); };
   await free();

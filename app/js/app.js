@@ -665,9 +665,9 @@ function drawPlan() {
   if (!p) { box.replaceChildren(); return; }
   const field = (label, get, set) => h("div", {class: "maprow"}, h("label", {}, label), h("input", {type: "text", value: get(), oninput: (e) => set(e.target.value)}));
   box.replaceChildren(h("h2", {}, p.title), h("p", {class: "hint"}, p.logline),
-    field("cast", () => p.cast, (v) => { p.cast = v; }), field("place", () => p.place, (v) => { p.place = v; }), field("song", () => p.song.style, (v) => { p.song.style = v; }),
+    ...p.cast.map(c => field(c.name || "cast", () => c.look, (v) => { c.look = v; })), field("place", () => p.place, (v) => { p.place = v; }), field("song", () => p.song.style, (v) => { p.song.style = v; }),
     ...p.shots.map((sh, k) => h("div", {class: "shot"}, h("b", {}, String(k + 1)),
-      h("textarea", {rows: 2, title: "the still frame", oninput: (e) => { sh.keyframe = e.target.value; }}, sh.keyframe),
+      h("textarea", {rows: 2, title: sh.who ? `the still frame · in it: ${sh.who.join(", ") || "no one"}` : "the still frame", oninput: (e) => { sh.keyframe = e.target.value; }}, sh.keyframe),
       h("input", {type: "text", value: sh.motion, placeholder: "what moves", title: "what moves in the shot", oninput: (e) => { sh.motion = e.target.value; }}),
       h("input", {type: "text", value: sh.subject, placeholder: "subject", title: "what SAM 3 tracks", oninput: (e) => { sh.subject = e.target.value; }}),
       h("select", {title: "the effect", onchange: (e) => { sh.effect = e.target.value; }}, ...G.FILM_EFFECTS.map(x => h("option", {value: x, selected: x === sh.effect}, x))),
