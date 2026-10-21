@@ -5,7 +5,6 @@ Comfy SDK (@comfyorg/sdk) and Comfy API v2, which this pack mounts on ComfyUI's 
 comfy-api-proxy (sdk_api.py): same origin, no CORS, no second server.
 
 Tabs:
-  Stage   - one still, split by words into depth layers (SAM 3 + Depth Anything 3), played by a live 2.5D camera
   Create  - a director's panel (genre, camera, lens, light, grade) -> keyframe (Krea 2) -> shot (MiniMax H3 i2v)
   Edit    - point at anything in a clip by name (SAM 3) and Transform / Remove / Swap it (Krea or Qwen anchors ->
             H3 masked re-render)
@@ -27,13 +26,6 @@ try:
     NODE_DISPLAY_NAME_MAPPINGS.update(_D)
 except Exception as e:                       # the studio must load even if an optional node fails
     print(f"[valis] nodes not loaded: {e}")
-
-try:
-    from .nodes_stage import NODE_CLASS_MAPPINGS as _NS, NODE_DISPLAY_NAME_MAPPINGS as _DS
-    NODE_CLASS_MAPPINGS.update(_NS)
-    NODE_DISPLAY_NAME_MAPPINGS.update(_DS)
-except Exception as e:
-    print(f"[valis] stage node not loaded: {e}")
 
 try:
     from .nodes_lib import NODE_CLASS_MAPPINGS as _NL, NODE_DISPLAY_NAME_MAPPINGS as _DL
@@ -74,12 +66,6 @@ try:
         return web.FileResponse(full, headers={"Cache-Control": "no-cache"})
 
     print("[valis] studio at /valis")
-
-    try:
-        from .stage_routes import register as _stage_routes
-        _stage_routes(routes)
-    except Exception as e:
-        print(f"[valis] stage routes not registered: {e}")
 
     try:
         from .model_routes import register as _model_routes

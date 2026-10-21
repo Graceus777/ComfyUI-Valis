@@ -195,12 +195,3 @@ details.prompt pre { margin: 0; padding: 0 12px 12px; white-space: pre-wrap; col
 .gj-report .lanes { font-size: 11px; color: var(--dim); }
 .gj-report .btn { margin-top: 10px; }
 
-/* ---------- stage */
-#s-layers .maprow { display: flex; align-items: center; gap: 6px; }
-#s-layers .maprow input[type=range] { width: 110px; }
-#s-rules .rule { display: grid; grid-template-columns: 1.3fr 1fr 1fr 60px 28px; gap: 4px; }
-#s-rules .rule select { padding: 6px; font-size: 12px; }
-#s-rules .rule .chip { padding: 4px 8px; }
-#s-then .rule { display: grid; grid-template-columns: 1.4fr 1fr 64px 60px 28px; gap: 4px; cursor: pointer; }
-#s-then .rule.on { outline: 1px solid var(--accent2); border-radius: 6px; }
-#s-then .rule select, #s-then .rule input[type=number] { padding: 6px; font-size: 12px; }

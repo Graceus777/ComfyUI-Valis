@@ -759,7 +759,6 @@ class Shockwave:
             amp = self.strength * v * fall * (W / 768)
             dx += ddx / d * (u * g * amp); dy += ddy / d * (u * g * amp)
             front += g * fall * min(v, 1.6)
-        mx, my = (XX - dx).astype(np.float32), (YY - dy).astype(np.float32)
         k = self.chroma
         out = np.stack([cv2.remap(img[..., ch], (XX - dx * (1 + k * (1 - ch))).astype(np.float32), (YY - dy * (1 + k * (1 - ch))).astype(np.float32),
                                   cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT_101) for ch in range(3)], -1)
@@ -909,7 +908,7 @@ class Glitch:
         e = ctx.env(self.on, self.tau)
         if e < .05:
             return img
-        H, W = ctx.H, ctx.W
+        H = ctx.H
         r = np.random.default_rng(self.seed + ctx.i)
         out = img.copy()
         for k in range(int(self.blocks * min(1, e))):

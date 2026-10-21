@@ -77,7 +77,6 @@ def _profile(P, fps, mode, peak, linger, land, end_frac=.2, land_frac=0.0):
     ta = min(max(1, round(linger * fps)), int(S * .4))          # linger: real time from the first frame
     vmax = step.max()
     if mode == "return":
-        far = float(np.interp(.92 * P[-1], P, np.arange(n)))      # whip out to where the pan has nearly stopped
         s = list(np.arange(0, ta + 1, 1.0))
         D = P[-1] * .92 - P[ta]
         nb = max(4, round(2 * D / (peak + step[ta])))

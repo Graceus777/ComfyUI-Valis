@@ -6,7 +6,6 @@ them in `app/js/graphs.js`). Drag one onto the ComfyUI canvas, point its Load no
 
 | File | What it does | Inputs to replace |
 |---|---|---|
-| `00_stage_split_a_still.json` | Stage · the main feature: SAM 3 finds every named thing ("the lamps:20" = all of them), Depth Anything 3 orders them, Valis Stage completes each layer behind the ones in front and writes output/valis/stage/<name>/ for the studio's live 2.5D camera. | `valis/still.png` |
 | `01_keyframes_krea2.json` | Create · Frame it: two Krea 2 turbo keyframes from the director's panel prompt. | none |
 | `02_cast_character_krea2.json` | Create · cast a character: Krea 2 identity edit pulls a character sheet into a keyframe. | `valis/keyframe.png`, `valis/character.png` |
 | `03_shot_h3_i2v.json` | Create · Shoot it: MiniMax H3 image-to-video (PDD 8-step), 4.5 s. | `valis/keyframe.png` |

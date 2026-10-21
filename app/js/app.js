@@ -4,7 +4,6 @@ import * as P from "./presets.js";
 import {PALETTES} from "./palettes.js";
 import {ScoreView} from "./score.js";
 import {FxView} from "./fx.js";
-import {StageView} from "./stageview.js";
 import {checkSetup} from "./check.js";
 import * as R from "./refengine.js";
 
@@ -526,9 +525,6 @@ const Score = new ScoreView({$, h, toast, assets: ASSETS, api, G, run});
 // ------------------------------------------------------------------ FX
 const Fx = new FxView({$, h, toast, assets: ASSETS, api, G, run, VID});
 
-// ------------------------------------------------------------------ STAGE
-const StageTab = new StageView({$, h, toast, api, G});
-window.valisStage = StageTab;     // for the console and for agents
 
 // ------------------------------------------------------------------ RENDERS
 const Renders = {

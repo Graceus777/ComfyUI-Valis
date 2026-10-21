@@ -201,7 +201,6 @@ def run_shot(frames, depth=None, masks=None, fx=None, C=None, t0=0.0, k=0, progr
     if E is not None and len(E) > 8:
         E = hold_glitched_tail(E)
     mist_scale = C.get('mist', 1.0)
-    lit = []                 # v3 prologue: candles lit so far (wick positions), each with its ignition time
     zero = np.zeros((H, W), np.float32)
 
     def soft(seq, i, thr=(.3, .7)):
@@ -223,7 +222,6 @@ def run_shot(frames, depth=None, masks=None, fx=None, C=None, t0=0.0, k=0, progr
     lum0 = cv2.GaussianBlur(frames[0].astype(np.float32).max(2), (0, 0), 25)
     lum0[H // 2:] = 0
     my_, mx_ = np.unravel_index(np.argmax(lum0), lum0.shape)
-    stats = []
     for i in range(n):
         t = t0 + (i + .5) / FPS
         tt = i / max(n - 1, 1)

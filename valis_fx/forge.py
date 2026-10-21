@@ -7,7 +7,7 @@ Everything is driven by the score's beat map (events.json) and the still's depth
   sacred halo at the strike / feedback echoes / bloom + anamorphic streak + halation / beat rings (one of many) /
   grain + vignette / whiteout.
 """
-import json, math
+import math
 import numpy as np
 import cv2
 from scipy.ndimage import gaussian_filter
@@ -67,11 +67,6 @@ def env(t, times, tau, attack=0.015):
         if dt >= 0:
             v += (1 - math.exp(-dt / attack)) * math.exp(-dt / tau)
     return v
-
-
-def last_age(t, times):
-    a = [t - e for e in times if t >= e]
-    return min(a) if a else 1e9
 
 
 def bloom(img, thr=0.62, strength=0.9):

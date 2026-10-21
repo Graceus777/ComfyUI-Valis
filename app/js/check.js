@@ -8,7 +8,6 @@ const PACKS = [
   [/^Krea2/, "the Krea 2 identity-edit nodes"],
   [/^(MiniMaxH3|H3)/, "the MiniMax H3 nodes"],
   [/^SAM3_/, "the SAM 3 nodes"],
-  [/^(LoadDA3Model|DA3Inference|DA3Render)$/, "a newer ComfyUI with the Depth Anything 3 nodes (update)"],
   [/^MVEx_/, "MVEx"],
   [/^UnetLoaderGGUF/, "ComfyUI-GGUF"],
   [/^(TextEncodeQwenImage21|LTXV|CreateVideo|SaveVideo|LoadVideo|GetVideoComponents)/, "a newer ComfyUI (update)"],

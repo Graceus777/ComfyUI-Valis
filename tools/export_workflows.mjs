@@ -14,8 +14,6 @@ fs.mkdirSync(out, {recursive: true});
 const vamp = P.LOOKS.find(l => l.id === "vampire");
 const T = "his head";
 const flows = {
-  "00_stage_split_a_still": [G.stage({image: "valis/still.png", names: ["the sky", "the moon", "the temple", "the rocks", "the path", "the lamps"], name: "stage"}),
-    "Stage · the main feature: SAM 3 finds every named thing (\"the lamps:20\" = all of them), Depth Anything 3 orders them, Valis Stage completes each layer behind the ones in front and writes output/valis/stage/<name>/ for the studio's live 2.5D camera."],
   "01_keyframes_krea2": [G.keyframes({prompt: P.keyframePrompt({genre: P.GENRES[0], framing: P.FRAMING[0], lens: P.LENS[0], light: P.LIGHT[0], grade: P.GRADE[0],
     subject: "a pale woman in a white silk ballgown and a tall pale man in a black velvet tailcoat, frozen mid-waltz in an abandoned gothic ballroom at midnight"})}),
     "Create · Frame it: two Krea 2 turbo keyframes from the director's panel prompt."],
