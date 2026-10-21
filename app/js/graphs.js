@@ -14,6 +14,7 @@ export const MODELS = {
   h3AVAE: "minimax_h3_audio_vae_fp32.safetensors", pdd: "MiniMax-H3-FL2VA-Acc-8Step.safetensors",
   qwen: "qwen_image_2.1-Q6_K.gguf", qwenTE: "qwen3vl_8b_w4a8.safetensors", qwenVAE: "qwen_image_2.1_vae_bf16.safetensors",
   qwenOutpaint: "qwen-image-2.1-outpaint-v2.safetensors",
+  kreaAnyPaint: "krea2_anypaint_rank32.safetensors",       // yijunwang2/krea2-anypaint (Krea 2 Community License), with its ComfyUI nodes
   sam: "sam3.1_multiplex_fp16.safetensors",
   da3: "depth_anything_3_small.safetensors",
   funCN: "minimax_h3_fun_controlnet_union_pruned_int8_convrot.safetensors",
@@ -726,8 +727,29 @@ export const OUTPAINT = "Outpaint the image: replace the solid gray areas with a
 // (the identity-edit LoRA, 10 steps) the still and "Remove the man and the fire from the picture…", plus the biggest
 // thing alone, and Valis Stage Plate checks what really went, then puts the clean plate under every layer where those
 // things stood, so a move uncovers real paint instead of a smear. At rest nothing changes.
-export function stagePaint({stage, seed = 101, steps = 25, dome = true, plate = true}) {
+// engine "krea": Krea 2 turbo + the AnyPaint adapter paints the margin of a canvas 30% bigger on each side (~1.6 MP,
+// the margin filled with the still's own edge colours; 8 steps), instead of Qwen on a gray canvas twice the size.
+// Krea 2's licence is cleaner than Qwen Image 2.1's research licence, and Krea is already loaded for the erase.
+export const KREA_SURROUND = "the scene continuing naturally past its edges: a complete coherent image, consistent lighting, perspective and detail";
+export function stagePaint({stage, seed = 101, steps = 25, dome = true, plate = true, engine = "qwen", prompt = "", pad = 0.3, megapixels = 1.6}) {
   const g = {};
+  if (dome && engine === "krea") {
+    Object.assign(g, kreaLoaders(), {
+      "204": N("LoraLoaderModelOnly", {model: ["200", 0], lora_name: MODELS.kreaAnyPaint, strength_model: 1.0}),
+      "205": N("Krea2AnyPaintModelPatch", {model: ["204", 0], kv_cache: true}),
+      "sur": N("ValisStageSurround", {stage, megapixels, pad}),
+      "kp": N("Krea2AnyPaintPrepare", {source: ["sur", 1], left: ["sur", 2], top: ["sur", 3], right: ["sur", 4], bottom: ["sur", 5],
+        reference_max_edge: 384, boundary_redraw_px: 32}),
+      "ke": N("Krea2AnyPaintEncode", {clip: ["201", 0], prompt: `${prompt ? prompt.replace(/[.\s]+$/, "") + ", " : ""}${KREA_SURROUND}`, vae: ["202", 0],
+        semantic_reference: ["kp", 0], known_image: ["kp", 1], keep_mask: ["kp", 3], vlm_reference: true}),
+      "kn": N("CLIPTextEncode", {text: "", clip: ["201", 0]}),
+      "ks": N("KSampler", {model: ["205", 0], positive: ["ke", 0], negative: ["kn", 0], latent_image: ["ke", 1], seed, steps: 8, cfg: 1.0,
+        sampler_name: "euler", scheduler: "simple", denoise: 1.0}),
+      "dec": N("VAEDecode", {samples: ["ks", 0], vae: ["202", 0]}),
+      "dome": N("ValisStageDome", {stage, painted: ["dec", 0]}),
+    });
+    dome = false;
+  }
   if (plate) Object.assign(g, kreaLoaders(), {
     "cp": N("ValisStageCleanPlate", {stage, megapixels: 1.0}),
     ...kreaEdit(300, ["cp", 0], ["cp", 1], seed + 1, null, 1.0),
@@ -754,8 +776,10 @@ export const stageDome = (o) => stagePaint({...o, plate: false});
 // short side first. SAM 3 and Depth Anything still look at the original (they work below 1008 px anyway); only the
 // layers' paint comes from the sharp copy, which is also saved into the stage folder as still_*.png.
 // prompt: no still yet, so Krea 2 turbo paints one first (16:9, `size`), in the same job: words in, a set out.
+// caps: what the loaded Valis nodes can do (the studio reads /object_info): retry = Valis Erase's lazy retry plate and
+// footprints; matte = a BiRefNet file for Valis Stage Erased's soft edges; prompt = the words kept in stage.json
 export function stage({image, names, name = "stage", far = 6, band = 0.025, threshold = 0.35, perName = 20, sharpen = 0,
-                       prompt = null, size = [1792, 1008], seed = 7101, erase = false}) {
+                       prompt = null, size = [1792, 1008], seed = 7101, erase = false, caps = {}}) {
   const g = {
     "1": prompt ? N("VAEDecode", {samples: ["k5", 0], vae: ["k3", 0]}) : N("LoadImage", {image}),
     "2": N("LoadDA3Model", {model_name: MODELS.da3, weight_dtype: "default"}),
@@ -799,6 +823,9 @@ export function stage({image, names, name = "stage", far = 6, band = 0.025, thre
     Object.assign(g, kreaLoaders());
     g["e1"] = N("ValisEraseSetup", {image: still, names: eNames, megapixels: 1.0});
     Object.assign(g, kreaEdit(300, ["e1", 0], ["e1", 1], seed + 11, null, 1.0), kreaEdit(320, ["e1", 0], ["e1", 2], seed + 12, null, 1.0));
+    // the others again, with a new seed: Valis Erase asks for it (and for the biggest alone) only when the first edit
+    // left one of them standing, so a clean first edit costs one edit and a failed one gets one retry
+    if (caps.retry) Object.assign(g, kreaEdit(340, ["e1", 0], ["e1", 4], seed + 13, null, 1.0));
     names.slice(0, 12).forEach((n, i) => {
       const b = 100 + 10 * i, id = (j) => String(b + j);
       ms[`mask_${i + 1}`] = [id(1), 0];
@@ -808,13 +835,19 @@ export function stage({image, names, name = "stage", far = 6, band = 0.025, thre
       ems[`emask_${i + 1}`] = [id(3), 0];
     });
     Object.assign(g["e1"].inputs, ms);
-    g["e2"] = N("ValisErase", {image: still, plan: ["e1", 3], plate_all: ["312", 0], plate_main: ["332", 0], names: eNames, ...ms, ...pms});
+    g["e2"] = N("ValisErase", {image: still, plan: ["e1", 3], plate_all: ["312", 0], plate_main: ["332", 0], names: eNames, ...ms, ...pms,
+      ...(caps.retry ? {plate_rest: ["352", 0]} : {})});
     g["e3"] = N("DA3Inference", {da3_model: ["2", 0], image: ["e2", 0], resolution: 1008, resize_method: "upper_bound_resize", mode: "mono"});
     g["e4"] = N("DA3Render", {da3_geometry: ["e3", 0], output: "depth", "output.normalization": "min_max", "output.apply_sky_clip": false});
+    const extra = {};
+    if (caps.retry) extra.footprints = ["e2", 2];
+    if (caps.matte) { g["bm"] = N("LoadBackgroundRemovalModel", {bg_removal_name: caps.matte}); extra.bg_model = ["bm", 0]; }
+    if (caps.prompt && prompt) extra.prompt = prompt;
     g["900"] = N("ValisStageErased", {image: still, depth: st.depth, erased: ["e2", 0], erased_depth: ["e4", 0], report: ["e2", 1],
-      names: eNames, stage_name: name, far, band, ...ms, ...ems});
+      names: eNames, stage_name: name, far, band, ...ms, ...ems, ...extra});
     return g;
   }
+  if (caps.prompt && prompt) st.prompt = prompt;
   g["900"] = N("ValisStage", st);
   return g;
 }

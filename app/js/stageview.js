@@ -43,6 +43,12 @@ export class StageView {
       if (!this.S.namesTouched) { const n = suggestNames(e.target.value); if (n.length) $("#s-names").value = n.join("\n"); }
     });
     $("#s-make").addEventListener("click", () => this.make().catch(e => this.toast(e.message, true)));
+    $("#st-reseed")?.addEventListener("click", () => {          // the same seed paints the same still; this one doesn't
+      $("#st-seed").value = 1 + Math.floor(Math.random() * 999998);
+      this.make().catch(e => this.toast(e.message, true));
+    });
+    this.S.domeEngine = "qwen";
+    this.caps().then(c => this.drawDomeEngine(c)).catch(() => {});
     $("#s-open").addEventListener("change", (e) => e.target.value && this.open(e.target.value).catch(er => this.toast(er.message, true)));
     $("#s-moves").replaceChildren(...Object.entries(MOVES).map(([id, name]) => h("button", {class: "chip" + (id === this.S.move ? " on" : ""), "data-id": id,
       onclick: () => { this.S.move = id; [...$("#s-moves").children].forEach(c => c.classList.toggle("on", c.dataset.id === id)); this.refit(); this.play(); }}, name)));
@@ -171,12 +177,42 @@ export class StageView {
   // ---- the one GPU step -------------------------------------------------------------------------------------------
   // erase first (the things erased by Krea 2 edit, the scenery split from the erased picture, the things back on top
   // as cutouts) whenever ComfyUI has loaded the nodes for it; else the split as before
-  async canErase() {
-    if (this.S.canErase == null) {
-      const r = await fetch("/object_info/ValisStageErased").then(r => r.json()).catch(() => ({}));
-      this.S.canErase = !!r.ValisStageErased;
-    }
-    return this.S.canErase;
+  async canErase() { return (await this.caps()).erase; }
+
+  // what the loaded nodes can do (read once per page load): a pack loaded before a restart keeps working, it just
+  // doesn't get the new inputs
+  async caps() {
+    if (this.S.caps) return this.S.caps;
+    const get = (n) => fetch(`/object_info/${n}`).then(r => r.json()).then(j => j[n] || null).catch(() => null);
+    const [er, se, sur, ap, bg, lora] = await Promise.all(["ValisErase", "ValisStageErased", "ValisStageSurround", "Krea2AnyPaintPrepare",
+      "LoadBackgroundRemovalModel", "LoraLoaderModelOnly"].map(get));
+    const ins = (o) => ({...(o?.input?.required || {}), ...(o?.input?.optional || {})});
+    const combo = (v) => Array.isArray(v?.[0]) ? v[0] : (v?.[1]?.options || []);
+    const bgFiles = bg ? combo(ins(bg).bg_removal_name) : [], loras = lora ? combo(ins(lora).lora_name) : [];
+    this.S.caps = {
+      erase: !!se,
+      retry: !!(er && ins(er).plate_rest),
+      matte: (se && ins(se).bg_model && bgFiles.find(f => /biref/i.test(f))) || null,
+      prompt: !!(se && ins(se).prompt),
+      kreaDome: !!(sur && ins(sur).pad && ap && loras.some(f => /anypaint/i.test(f))),
+    };
+    return this.S.caps;
+  }
+
+  drawDomeEngine(caps) {
+    const {h, $} = this, el = $("#st-domeeng");
+    if (!el) return;
+    const opts = [["qwen", "Qwen Image 2.1"], ["krea", "Krea 2 AnyPaint"]];
+    const set = (id) => {
+      this.S.domeEngine = id;
+      [...el.children].forEach(b => b.classList.toggle("on", b.dataset.id === id));
+      const sub = $("#st-domesub");
+      if (sub) sub.textContent = id === "krea" ? "the world past the frame · Krea 2 + AnyPaint, 30% more on each side · ~1 min"
+        : "the world past the frame and behind the people and things in it · Qwen Image 2.1 · ~2 min";
+    };
+    el.replaceChildren(...opts.map(([id, n]) => h("button", {class: id === this.S.domeEngine ? "on" : "", "data-id": id,
+      disabled: id === "krea" && !caps.kreaDome, title: id === "krea" && !caps.kreaDome ? "needs the Krea 2 AnyPaint nodes and LoRA, and a ComfyUI restart" : "",
+      onclick: () => set(id)}, n)));
   }
 
   async split() {
@@ -190,8 +226,8 @@ export class StageView {
     const sharpen = short && short < SHARP_BELOW && this.$("#s-sharp")?.checked !== false ? SHARP_TO : 0;
     btn.disabled = true;
     try {
-      const erase = await this.canErase();
-      const job = await this.api.submit(this.G.stage({image: this.S.image, names, name, far: +this.$("#s-far").value, sharpen, erase}), `Stage: ${names.join(", ")}`, "stage");
+      const caps = await this.caps(), erase = caps.erase;
+      const job = await this.api.submit(this.G.stage({image: this.S.image, names, name, far: +this.$("#s-far").value, sharpen, erase, caps}), `Stage: ${names.join(", ")}`, "stage");
       this.toast(sharpen ? `Splitting the still: SeedVR2 sharpens it to ${SHARP_TO}p (~1 min), SAM 3 finds each name${erase ? ", Krea 2 erases the things standing in it (~2 min)" : ""}, Depth Anything 3 orders them`
         : short && short < 1000 ? `This still is only ${short} px on its short side: 1080p exports will be soft` : `Splitting the still: SAM 3 finds each name${erase ? ", Krea 2 erases the things standing in it (~2 min)" : ""}, Depth Anything 3 orders them`);
       await this.until(job);
@@ -213,11 +249,14 @@ export class StageView {
     const btn = this.$("#s-make"), label = btn.innerHTML;
     btn.disabled = true; btn.textContent = "Making the set…";
     try {
-      this.S.makeSeed = (this.S.makeSeed ?? 7100) + 1;            // each press paints a new still
-      const erase = await this.canErase();
-      const job = await this.api.submit(this.G.stage({prompt, names, name, far: +this.$("#s-far").value, sharpen, seed: this.S.makeSeed, erase}),
-        `Stage from words: ${names.join(", ")}`, "stage");
-      this.toast(`Krea 2 paints the still${sharpen ? ", SeedVR2 sharpens it" : ""}, then SAM 3 finds ${names.length} things in it${erase ? " and Krea 2 erases the ones standing in it, so a move uncovers real paint" : ""} (about ${sharpen ? 2 : 1}${erase ? " + 2" : ""} min)`);
+      // the seed field decides the still: the same seed paints the same still (ComfyUI then reuses it, so a changed
+      // name or setting re-splits in ~30 s); "Try another seed" picks a new one
+      const seed = Math.max(0, Math.round(+this.$("#st-seed")?.value || 7101));
+      this.S.makeSeed = seed;
+      const caps = await this.caps(), erase = caps.erase;
+      const job = await this.api.submit(this.G.stage({prompt, names, name, far: +this.$("#s-far").value, sharpen, seed, erase, caps}),
+        `Stage from words: ${names.join(", ")} (seed ${seed})`, "stage");
+      this.toast(`Seed ${seed}: Krea 2 paints the still${sharpen ? ", SeedVR2 sharpens it" : ""}, then SAM 3 finds ${names.length} things in it${erase ? " and Krea 2 erases the ones standing in it, so a move uncovers real paint" : ""} (about ${sharpen ? 2 : 1}${erase ? " + 1–2" : ""} min)`);
       await this.until(job);
       const sub = `valis/stage/${name}`;
       await this.listStages(sub);
@@ -245,9 +284,13 @@ export class StageView {
     try {
       this.S.domeSeed = (this.S.domeSeed ?? 100) + 1;          // each press paints a new take
       const erased = !!this.S.meta?.erased?.length;      // erased first: what's behind the things is already real paint
-      const job = await this.api.submit(this.G.stagePaint({stage: this.S.sub, seed: this.S.domeSeed, plate: !erased}), `Paint: ${this.S.sub.split("/").pop()}`, "stage");
-      this.toast(erased ? "Qwen Image 2.1 paints the world past the frame (about 1 min)"
-        : "Qwen Image 2.1 paints the world past the frame, Krea 2 edit a clean plate behind the people and things (about 3 min)");
+      const krea = this.S.domeEngine === "krea" && (await this.caps()).kreaDome;
+      const words = this.S.meta?.prompt || (this.stage?.layers || []).map(l => l.name).filter(n => n !== "the rest" && !/farther back/.test(n)).join(", ");
+      const job = await this.api.submit(this.G.stagePaint({stage: this.S.sub, seed: this.S.domeSeed, plate: !erased, engine: krea ? "krea" : "qwen", prompt: words}),
+        `Paint: ${this.S.sub.split("/").pop()}${krea ? " (Krea 2)" : ""}`, "stage");
+      const who = krea ? "Krea 2 + AnyPaint" : "Qwen Image 2.1";
+      this.toast(erased ? `${who} paints the world past the frame (about 1 min)`
+        : `${who} paints the world past the frame, Krea 2 edit a clean plate behind the people and things (about 3 min)`);
       await this.until(job);
       // the layers (behind) and the dome changed: reload them, but keep the camera, the sequence and the effects
       const keep = Object.fromEntries(this.stage.layers.map(l => [l.name, {visible: l.visible, zoff: l.zoff}]));
@@ -290,7 +333,24 @@ export class StageView {
     this.drawLayers(); this.drawRules(); this.drawThen();
     $("#s-empty").style.display = "none"; cv.style.display = "block";
     $("#s-controls").style.display = "";
+    this.drawChecks(meta);
     this.refit(); this.play();
+  }
+
+  // the set's checks (stage.json "checks", written when it was split): what a move will show before anyone looks
+  drawChecks(meta) {
+    const {h, $} = this, el = $("#st-checks");
+    if (!el) return;
+    const cs = meta.checks || [];
+    if (!cs.length) { el.replaceChildren(); return; }
+    const mark = (ok) => ok === true ? "✓" : ok === false ? "!" : "·";
+    const color = (ok) => ok === true ? "var(--muted, #8d8d9b)" : ok === false ? "var(--ember, #ff8a4c)" : "var(--muted, #8d8d9b)";
+    el.replaceChildren(h("details", {open: cs.some(c => c.ok === false)},
+      h("summary", {class: "hint", style: "cursor:pointer;margin:6px 0"}, `Checks: ${cs.filter(c => c.ok === true).length} of ${cs.length} pass` +
+        (cs.some(c => c.ok === false) ? ` · ${cs.filter(c => c.ok === false).map(c => c.name.toLowerCase()).join(", ")}` : "")),
+      ...cs.map(c => h("div", {class: "hint", style: `margin:2px 0;color:${color(c.ok)}`}, h("b", {}, `${mark(c.ok)} ${c.name}`), ` · ${c.note || ""}`))));
+    const warn = cs.find(c => c.id === "names" && c.ok === false);
+    if (warn) this.toast(`Names: ${warn.note}`, true);
   }
 
   drawLayers() {

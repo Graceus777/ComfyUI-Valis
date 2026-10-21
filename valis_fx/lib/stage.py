@@ -30,6 +30,82 @@ SKY = re.compile(r"\b(sky|skies|heaven|heavens|night sky|clouds? and sky)\b", re
 CELESTIAL = re.compile(r"\b(moons?|suns?|planets?|comets?|galax(?:y|ies)|nebulae?)\b", re.I)
 
 
+def _replay_dir():
+    try:
+        import folder_paths
+        return os.path.join(folder_paths.get_output_directory(), "valis", "stage", "_replay")
+    except Exception:
+        return None
+
+
+def dump(tag, folder=None, **kw):
+    """Keep a node's inputs (8-bit images, 1-bit masks, float16 depth, JSON for the rest), so a stage can be rebuilt
+    and its checks re-run offline after a stage.py change, without the GPU. Lists of masks may hold None. Returns the
+    path, or None (outside ComfyUI, or on any error: a dump must never break a run)."""
+    try:
+        folder = folder or _replay_dir()
+        if not folder:
+            return None
+        import time
+        os.makedirs(folder, exist_ok=True)
+        arr, js = {}, {}
+        for k, v in kw.items():
+            if isinstance(v, np.ndarray):
+                arr[k] = _pack_arr(v)
+            elif isinstance(v, (list, tuple)) and any(isinstance(x, np.ndarray) for x in v):
+                js[k + "__n"] = len(v)
+                for i, x in enumerate(v):
+                    if x is not None:
+                        arr[f"{k}__{i}"] = _pack_arr(np.asarray(x))
+            else:
+                js[k] = v
+        path = os.path.join(folder, f"{tag}_{time.strftime('%Y%m%d_%H%M%S')}.npz")
+        np.savez_compressed(path, __json__=np.frombuffer(json.dumps(js, default=str).encode(), np.uint8), **arr)
+        if folder == _replay_dir():                    # the shared folder keeps the last few of each kind (~10-25 MB each)
+            old = sorted(f for f in os.listdir(folder) if f.startswith(tag + "_2") and f.endswith(".npz"))
+            for f in old[:-6]:
+                try:
+                    os.remove(os.path.join(folder, f))
+                except OSError:
+                    pass
+        return path
+    except Exception as e:
+        print(f"[valis] could not keep the inputs for replay: {e}")
+        return None
+
+
+def _pack_arr(v):
+    v = np.asarray(v)
+    if v.dtype == bool:
+        return v
+    if v.ndim == 3 and v.shape[-1] in (3, 4):                  # an image in [0, 1]
+        return np.clip(v * 255 + .5, 0, 255).astype(np.uint8)
+    if v.ndim == 2 and v.min() >= 0 and v.max() <= 1 and np.isin(np.unique(v[::7, ::7]), (0, 1)).all():
+        return v > 0.5                                         # a mask
+    return v.astype(np.float16)                                # depth
+
+
+def load_dump(path):
+    """the inputs `dump` kept, as the node passed them (images back to float [0, 1], masks to float 0/1)"""
+    z = np.load(path)
+    js = json.loads(bytes(z["__json__"]).decode())
+    out = {k: v for k, v in js.items() if not k.endswith("__n")}
+
+    def un(v):
+        if v.dtype == np.uint8:
+            return v.astype(np.float32) / 255
+        return v.astype(np.float32)
+    for k in z.files:
+        if k == "__json__" or "__" in k:
+            continue
+        out[k] = un(z[k])
+    for k, n in js.items():
+        if k.endswith("__n"):
+            base = k[:-3]
+            out[base] = [un(z[f"{base}__{i}"]) if f"{base}__{i}" in z.files else None for i in range(n)]
+    return out
+
+
 def nearness_to_z(n, far):
     n = np.clip(n, 0.0, 1.0)
     return 1.0 / (1.0 / far + n * (1.0 - 1.0 / far))
@@ -200,7 +276,7 @@ def _part_depths(zl, own, support, li, owner, z, zmed, is_bd, lum, core=None, re
 
 
 def build(image, nearness, masks, names, far=6.0, threshold=0.5, edge=1.5, min_area=0.0003, band=0.025, backdrop_area=0.35, paint_band=0.09, grow=0.003,
-          z_override=None, exact=True):
+          z_override=None, exact=True, checks=True):
     """image HxWx3 float [0,1]; nearness HxW float [0,1] (bright = near); masks: list of HxW float (one per name).
 
     Returns (layers, info). layers: list far -> near of dicts {name, rgba HxWx4, z HxW, z_med, area, bbox}.
@@ -213,7 +289,7 @@ def build(image, nearness, masks, names, far=6.0, threshold=0.5, edge=1.5, min_a
 
     # one binary mask per name. Naive checks, so a bad name costs nothing but a note:
     #   nothing found / the whole picture ("the city" over a city) / the same thing as an earlier name
-    cand, dropped, cores, grows = [], [], [], []
+    cand, dropped, cores, grows, warnings = [], [], [], [], []
     lum = image[..., :3].astype(np.float32) @ np.array([0.3, 0.59, 0.11], np.float32)
     for name, m in zip(names, masks):
         m = cv2.resize(m.astype(np.float32), (w, h), interpolation=cv2.INTER_LINEAR) > threshold
@@ -221,13 +297,17 @@ def build(image, nearness, masks, names, far=6.0, threshold=0.5, edge=1.5, min_a
             dropped.append({"name": name, "why": "SAM 3 found nothing by that name"})
             continue
         if m.mean() > .85:
-            dropped.append({"name": name, "why": "matched the whole picture: name something more specific"})
+            dropped.append({"name": name, "why": f"matched {round(100 * float(m.mean()))}% of the picture: name one thing in it, like \"the rock in front\"",
+                            "area": round(float(m.mean()), 3)})
             continue
         dup = next((c for c, cm in cand if (m & cm).sum() / max(1, (m | cm).sum()) > .8), None)
         if dup:
             dropped.append({"name": name, "why": f"found the same thing as {dup}"})
             continue
         m0 = m
+        warn = broad_name(name, m, z, far)
+        if warn:
+            warnings.append(warn)
         # a light (its brightest tenth near white: a moon, a lantern, a fire) carries a halo well past SAM's edge; left
         # behind in the backdrop it shows as a second, ghost glow once the light moves. Lights take 4x the fringe.
         gk = grow * (4 if np.percentile(lum[m], 90) > 0.9 else 1)
@@ -409,9 +489,11 @@ def build(image, nearness, masks, names, far=6.0, threshold=0.5, edge=1.5, min_a
         layers.append({"name": allnames[li], "rgba": np.dstack([rgb, a]).astype(np.float32), "z": zl.astype(np.float32),
                        "z_med": zmed[li], "area": float(own.mean()), "backdrop": bool(backdrop), "hole": hole, "relief": relief,
                        "bbox": [int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())]})
-    info = {"width": w, "height": h, "far": far, "border": _border(z), "dropped": dropped}
+    info = {"width": w, "height": h, "far": far, "border": _border(z), "dropped": dropped, "warnings": warnings}
     if exact:
         rest_exact([L["rgba"] for L in layers], image[..., :3].astype(np.float32))
+    if checks:
+        info["checks"] = scorecard(layers, image[..., :3].astype(np.float32), info)
     return layers, info
 
 
@@ -525,6 +607,46 @@ def surround_canvas(still, megapixels=1.03, k=2.0, gray=0.5):
     canvas = np.full((Hc, Wc, 3), gray, np.float32)
     canvas[y0:y0 + rh, x0:x0 + rw] = cv2.resize(still.astype(np.float32), (rw, rh), interpolation=cv2.INTER_AREA)
     return canvas, (x0, y0, rw, rh)
+
+
+def pad_canvas(still, megapixels=1.6, pad=0.3):
+    """The still, smaller, with `pad` of its own size added on every side (0.3 = 30%): the canvas is `megapixels` in
+    all, every size a multiple of 16 (Krea 2's latent grid, so no edge is added on one side only). The margin holds
+    the still's own edge colours, clamped outward and blurred more with distance: a model that reads the margin sees
+    the scene's colours going on, not a gray frame (gray left a gray crease along the old edge on dark stills).
+    Krea 2 AnyPaint paints the margin and keeps the still; extending more than ~40% a side tends to paint the subject
+    twice, and a canvas much past ~1.6 MP creases. Returns the canvas and the still's rect (x, y, w, h)."""
+    H, W = still.shape[:2]
+    a = W / H
+    k = 1 + 2 * pad
+    wc = np.sqrt(megapixels * 1e6 * a)
+    rw = max(64, int(round(wc / k / 16)) * 16)
+    rh = max(64, int(round(rw / a / 16)) * 16)
+    px, py = int(round(rw * pad / 16)) * 16, int(round(rh * pad / 16)) * 16
+    small = cv2.resize(still.astype(np.float32), (rw, rh), interpolation=cv2.INTER_AREA)
+    canvas = cv2.copyMakeBorder(small, py, py, px, px, cv2.BORDER_REPLICATE)
+    if px or py:
+        Hc, Wc = canvas.shape[:2]
+        yy, xx = np.mgrid[0:Hc, 0:Wc]
+        dist = np.maximum(np.maximum(px - xx, xx - (px + rw - 1)), np.maximum(py - yy, yy - (py + rh - 1)))
+        dist = np.maximum(dist, 0).astype(np.float32)
+        levels = [canvas] + [cv2.GaussianBlur(canvas, (0, 0), sg) for sg in (4, 12, 32)]
+        lv = np.clip(np.log2(np.maximum(dist, 1) / 4.0), 0, len(levels) - 1)
+        i0 = np.floor(lv).astype(int); fr = (lv - i0)[..., None]; i1 = np.minimum(i0 + 1, len(levels) - 1)
+        st = np.stack(levels)
+        out = st[i0, yy, xx] * (1 - fr) + st[i1, yy, xx] * fr
+        out[py:py + rh, px:px + rw] = small
+        canvas = out
+    return np.clip(canvas, 0, 1).astype(np.float32), (px, py, rw, rh)
+
+
+def surround_for(still, sur):
+    """the canvas a stage's surround is painted on, from its settings in stage.json (pad > 0: pad_canvas; else the
+    gray canvas twice the size): the same canvas when it is made and when the painting comes back"""
+    sur = sur or {}
+    if float(sur.get("pad") or 0) > 0:
+        return pad_canvas(still, float(sur.get("megapixels", 1.6)), float(sur["pad"]))
+    return surround_canvas(still, float(sur.get("megapixels", 1.03)))
 
 
 def match_colour(painted, ref, rect):
@@ -727,7 +849,8 @@ def erase_plan(masks, names, w, h, threshold=0.5, min_area=0.0003, backdrop_area
     """Which names are things standing in the scene, to erase and put back as cutouts: not a sky or a moon, not filling much of
     the frame, and not running out of the frame at the left, right or top (scenery: a sea, a ridge, a table; a
     person cut off at the bottom is still a person). The biggest gets an edit of its own as well: asked for four
-    things at once, Krea kept a lighthouse."""
+    things at once, Krea kept a lighthouse. The others together get one more ("rest"), made only when the first edit
+    left one of them standing (one retry, never more)."""
     out, areas = [], {}
     for n, m in zip(names, masks):
         if m is None or SKY.search(n) or CELESTIAL.search(n):   # a moon is in the sky: split it as scenery, at the far wall
@@ -741,92 +864,267 @@ def erase_plan(masks, names, w, h, threshold=0.5, min_area=0.0003, backdrop_area
             continue
         out.append(n); areas[n] = a
     main = max(out, key=lambda n: areas[n]) if out else ""
+    rest = [n for n in out if n != main]
     keep_all = "Keep the picture exactly as it is."
-    return {"erase": out, "main": main, "prompt_all": plate_prompt(out) or keep_all,
-            "prompt_main": plate_prompt([main]) if main else keep_all}
+    return {"erase": out, "main": main, "rest": rest, "prompt_all": plate_prompt(out) or keep_all,
+            "prompt_main": plate_prompt([main]) if main else keep_all,
+            "prompt_rest": plate_prompt(rest) if rest else keep_all}
 
 
-def erase_combine(still, masks, names, plan, plate_all, plate_main=None, plate_masks=None, ring=0.004):
-    """The erased picture: the still, with each erased thing's place (a hair past its outline) taken from the edit
-    model's plate, the plate matched to the still in colour and in light (an edit model takes a thing's light with
-    it). Naive checks per thing: the plate must no longer look like the still in the thing's own place, and SAM must
-    not find the thing again close by (Krea "removed" a crashed lander by painting a smaller one beside it). A thing
-    neither plate erased stays in the picture, and is split as scenery like before. Returns (picture, report)."""
+def _align_to(p, still, keep, max_shift=0.01):
+    """An edit model may shift its whole picture by a pixel or two, and every edge then differs from the still by that
+    much (a false "changed" rim round everything). Translate the plate onto the still, judged only where nothing was
+    erased (ECC, at ~640 px wide, sub-pixel). Returns (aligned plate, (dx, dy) in still px)."""
     H, W = still.shape[:2]
-    still = still.astype(np.float32)
-    idx = {n: i for i, n in enumerate(names)}
-    rs = lambda im: np.clip(cv2.resize(np.asarray(im, np.float32)[..., :3], (W, H), interpolation=cv2.INTER_CUBIC), 0, 1)
-    P = {"all": rs(plate_all), "main": rs(plate_main) if plate_main is not None else None}
-    core = {}
-    for n in plan.get("erase", []):
-        if n in idx and masks[idx[n]] is not None:
-            c = cv2.resize(np.asarray(masks[idx[n]], np.float32), (W, H), interpolation=cv2.INTER_LINEAR) > 0.5
-            if c.sum() >= 64:
-                core[n] = c
-    r = max(3, int(round(ring * W)))
-    disk = lambda k: cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * k + 1, 2 * k + 1))
-    region = np.zeros((H, W), bool)
-    for c in core.values():
-        region |= cv2.dilate(c.astype(np.uint8), disk(3 * r)) > 0
-    keep = ~region
-    g_s = cv2.cvtColor(still, cv2.COLOR_RGB2GRAY)
+    s = max(1, int(round(W / 640)))
+    sz = (max(16, W // s), max(16, H // s))
+    g1 = cv2.resize(cv2.cvtColor(still.astype(np.float32), cv2.COLOR_RGB2GRAY), sz, interpolation=cv2.INTER_AREA)
+    g2 = cv2.resize(cv2.cvtColor(p.astype(np.float32), cv2.COLOR_RGB2GRAY), sz, interpolation=cv2.INTER_AREA)
+    m = (cv2.resize(keep.astype(np.uint8), sz, interpolation=cv2.INTER_NEAREST) > 0).astype(np.uint8)
+    if m.sum() < 500:
+        return p, (0.0, 0.0)
+    warp = np.eye(2, 3, dtype=np.float32)
+    try:
+        _, warp = cv2.findTransformECC(g1, g2, warp, cv2.MOTION_TRANSLATION,
+                                       (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 80, 1e-6), m, 5)
+    except cv2.error:
+        return p, (0.0, 0.0)
+    dx, dy = float(warp[0, 2]) * W / sz[0], float(warp[1, 2]) * H / sz[1]
+    if max(abs(dx), abs(dy)) > max_shift * W or max(abs(dx), abs(dy)) < 0.1:
+        return p, (round(dx, 3), round(dy, 3))
+    M = np.float32([[1, 0, dx], [0, 1, dy]])
+    out = cv2.warpAffine(p.astype(np.float32), M, (W, H), flags=cv2.INTER_CUBIC | cv2.WARP_INVERSE_MAP, borderMode=cv2.BORDER_REFLECT)
+    return np.clip(out, 0, 1), (round(dx, 3), round(dy, 3))
 
-    def gone(p, part):
+
+def _match_plate(p, still, keep):
+    """the plate matched to the still in colour (globally) and in light (locally, carried in under the erased things)"""
+    H, W = still.shape[:2]
+    if keep.sum() < 1000:
+        return p
+    a, b = p[keep], still[keep]
+    p = np.clip((p - a.mean(0)) / np.maximum(a.std(0), 1e-3) * b.std(0) + b.mean(0), 0, 1)
+    small = (max(8, W // 4), max(8, H // 4))
+    kp = cv2.resize(keep.astype(np.float32), small, interpolation=cv2.INTER_AREA) > 0.99
+    diff = cv2.resize(still - p, small, interpolation=cv2.INTER_AREA)
+    corr = np.stack([_pushpull(np.where(kp, diff[..., c], 0), kp, smooth=0.003) for c in range(3)], -1)
+    return np.clip(p + cv2.resize(corr, (W, H), interpolation=cv2.INTER_CUBIC), 0, 1).astype(np.float32)
+
+
+def _disk(k):
+    k = max(0, int(k))
+    return cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * k + 1, 2 * k + 1))
+
+
+def _grow(m, k):
+    """m dilated by a disk of radius k (an exact distance transform: a 150 px elliptic dilate took seconds)"""
+    m = np.asarray(m, bool)
+    if k <= 0 or not m.any():
+        return m.copy()
+    return cv2.distanceTransform((~m).astype(np.uint8), cv2.DIST_L2, cv2.DIST_MASK_PRECISE) <= k
+
+
+def _colour_model(still, fg, bg, bins=16):
+    """P(thing | colour) from two 3D colour histograms (the thing's own pixels, what is around it), smoothed"""
+    q = np.clip((still * bins).astype(np.int32), 0, bins - 1)
+    code = (q[..., 0] * bins + q[..., 1]) * bins + q[..., 2]
+    hf = np.bincount(code[fg].ravel(), minlength=bins ** 3).astype(np.float32).reshape(bins, bins, bins)
+    hb = np.bincount(code[bg].ravel(), minlength=bins ** 3).astype(np.float32).reshape(bins, bins, bins)
+    hf = ndi.gaussian_filter(hf / max(1.0, hf.sum()), 0.8)
+    hb = ndi.gaussian_filter(hb / max(1.0, hb.sum()), 0.8)
+    pf = (hf / np.maximum(hf + hb, 1e-9)).ravel()
+    return pf[code]
+
+
+class _EraseJob:
+    """What erase_combine and the lazy check share: the things' masks (part by part), the plates aligned and matched
+    to the still, and which plate erased which part."""
+
+    def __init__(self, still, masks, names, plan, plates, plate_masks=None, ring=0.004):
+        H, W = still.shape[:2]
+        self.H, self.W = H, W
+        self.still = still = still[..., :3].astype(np.float32)
+        self.names, self.plan = list(names), plan
+        self.idx = idx = {n: i for i, n in enumerate(names)}
+        rs = lambda im: np.clip(cv2.resize(np.asarray(im, np.float32)[..., :3], (W, H), interpolation=cv2.INTER_CUBIC), 0, 1)
+        self.core = core = {}
+        for n in plan.get("erase", []):
+            if n in idx and idx[n] < len(masks) and masks[idx[n]] is not None:
+                c = cv2.resize(np.asarray(masks[idx[n]], np.float32), (W, H), interpolation=cv2.INTER_LINEAR) > 0.5
+                if c.sum() >= 64:
+                    core[n] = c
+        self.r = r = max(3, int(round(ring * W)))
+        region = np.zeros((H, W), bool)
+        for c in core.values():
+            region |= _grow(c, 3 * r)
+        self.keep = keep = ~region
+        self.plate_masks = plate_masks
+        self.P, self.shift, self.floor = {}, {}, {}
+        for k, p in plates.items():
+            if p is None:
+                continue
+            p, sh = _align_to(rs(p), still, keep)
+            self.P[k] = _match_plate(p, still, keep)
+            self.shift[k] = sh
+            d = np.abs(self.P[k] - still).max(-1)
+            # how much the plate differs from the still where nothing was erased: the edit model's own drift, under
+            # which a difference means nothing
+            self.floor[k] = float(np.clip(np.percentile(d[keep], 95), 0.03, 0.15)) if keep.any() else 0.06
+        self.g_s = cv2.cvtColor(still, cv2.COLOR_RGB2GRAY)
+        self.parts = {}
+        for n in core:
+            g = max(1, int(0.01 * W))
+            lab, k = ndi.label(cv2.dilate(core[n].astype(np.uint8), _disk(g)) > 0)
+            lab = np.where(core[n], lab, 0)
+            self.parts[n] = [lab == j for j in range(1, k + 1) if (lab == j).sum() >= 64] or [core[n]]
+
+    def gone(self, k, part):
+        """the plate no longer looks like the still inside this part (shapes judged, not an overall shift in light)"""
+        p = self.P.get(k)
+        if p is None:
+            return False
         c = cv2.erode(part.astype(np.uint8), np.ones((5, 5), np.uint8)) > 0
         c = c if c.sum() >= 64 else part
-        g1, g2 = cv2.cvtColor(p, cv2.COLOR_RGB2GRAY)[c], g_s[c]
+        g1, g2 = cv2.cvtColor(p, cv2.COLOR_RGB2GRAY)[c], self.g_s[c]
         g1 = g1 - g1.mean() + g2.mean()
         corr = float(np.corrcoef(g1, g2)[0, 1]) if g1.std() > 1e-4 and g2.std() > 1e-4 else 0.0
         return not (corr > 0.6 and np.abs(g1 - g2).mean() < 0.12)
 
-    def found_again(n):
-        if plate_masks is None or idx[n] >= len(plate_masks) or plate_masks[idx[n]] is None:
+    def found_again(self, n):
+        """SAM 3 finds the thing again close by in the first plate (Krea "removed" a lander by painting a smaller one
+        beside it)"""
+        pm_all = self.plate_masks
+        i = self.idx[n]
+        if pm_all is None or i >= len(pm_all) or pm_all[i] is None:
             return False
-        pm = cv2.resize(np.asarray(plate_masks[idx[n]], np.float32), (W, H), interpolation=cv2.INTER_LINEAR) > 0.5
-        around = cv2.dilate(core[n].astype(np.uint8), disk(max(4, int(0.06 * W)))) > 0
-        return (pm & around).sum() > 0.2 * core[n].sum()
+        pm = cv2.resize(np.asarray(pm_all[i], np.float32), (self.W, self.H), interpolation=cv2.INTER_LINEAR) > 0.5
+        around = _grow(self.core[n], max(4, int(0.06 * self.W)))
+        return (pm & around).sum() > 0.2 * self.core[n].sum()
 
-    # part by part: one name can be two things ("the glowing lantern": one on the lighthouse, one in a hand), and an
-    # edit can take one and leave the other. A thing is erased only if every part of it went, in one plate or the other.
-    src, parts = {}, {}
-    for n in core:
-        g = max(1, int(0.01 * W))
-        lab, k = ndi.label(cv2.dilate(core[n].astype(np.uint8), disk(g)) > 0)
-        lab = np.where(core[n], lab, 0)
-        ps = [lab == j for j in range(1, k + 1) if (lab == j).sum() >= 64] or [core[n]]
-        again = found_again(n)
-        pick = []
-        for pt in ps:
-            if gone(P["all"], pt) and not again:
-                pick.append("all")
-            elif P["main"] is not None and gone(P["main"], pt):
-                pick.append("main")
+    def pick(self):
+        """per thing, per part: the first plate that erased it (all, then the biggest alone, then the others again).
+        A thing is erased only if every part of it went. Returns (source by name, [(part, plate)] by name)."""
+        src, parts = {}, {}
+        main, rest = self.plan.get("main", ""), set(self.plan.get("rest", []))
+        for n, ps in self.parts.items():
+            again = self.found_again(n)
+            pick = []
+            for pt in ps:
+                if "all" in self.P and not again and self.gone("all", pt):
+                    pick.append("all")
+                elif n == main and self.gone("main", pt):
+                    pick.append("main")
+                elif n in rest and self.gone("rest", pt):
+                    pick.append("rest")
+                else:
+                    pick.append(None)
+            if None in pick:
+                src[n] = None
             else:
-                pick.append(None)
-        if None in pick:
-            src[n] = None
-        else:
-            src[n] = "+".join(sorted(set(pick)))
-            parts[n] = list(zip(ps, pick))
-    for k, p in P.items():
-        if p is None or keep.sum() < 1000:
-            continue
-        a, b = p[keep], still[keep]
-        p = np.clip((p - a.mean(0)) / np.maximum(a.std(0), 1e-3) * b.std(0) + b.mean(0), 0, 1)
-        small = (max(8, W // 4), max(8, H // 4))
-        kp = cv2.resize(keep.astype(np.float32), small, interpolation=cv2.INTER_AREA) > 0.99
-        diff = cv2.resize(still - p, small, interpolation=cv2.INTER_AREA)
-        corr = np.stack([_pushpull(np.where(kp, diff[..., c], 0), kp, smooth=0.003) for c in range(3)], -1)
-        P[k] = np.clip(p + cv2.resize(corr, (W, H), interpolation=cv2.INTER_CUBIC), 0, 1)
-    out = still.copy()
+                src[n] = "+".join(sorted(set(pick)))
+                parts[n] = list(zip(ps, pick))
+        return src, parts
+
+    def needs(self):
+        """the lazy plates still worth making: the biggest thing alone when the first plate left it standing, the
+        others together when the first plate left one of them standing (each at most once)"""
+        src, _ = self.pick()
+        main, rest = self.plan.get("main", ""), set(self.plan.get("rest", []))
+        want = []
+        if "main" not in self.P and main and src.get(main) is None:
+            want.append("plate_main")
+        if "rest" not in self.P and any(src.get(n) is None for n in rest):
+            want.append("plate_rest")
+        return want
+
+    def footprint(self, n, pt, k, reach=0.006, follow=0.04):
+        """Where the edit really took the thing away, beyond SAM's mask: the plate differs from the still (by more than
+        the plate's own drift) next to the part, either within `reach` of it or along something connected to it up to
+        `follow` away. SAM misses the thinnest bits (a lander's strut tips), and they stayed in the erased picture as
+        specks, and behind on a move. Not a shadow (the still darker than the plate, same hue): a shadow stays on the
+        ground. Returns (what to erase, what belongs to the thing): the second keeps only what looks like the thing in
+        colour (its own palette against what is around it), so the edit model's repainted rocks nearby don't ride
+        along with it."""
+        p, s = self.P[k], self.still
+        W = self.W
+        rr, rf = max(3, int(round(reach * W))), max(6, int(round(follow * W)))
+        zone = _grow(pt, rf) & ~pt
+        # differs from the plate even allowing the plate a few px of local slack: an edit model warps edges a little
+        # (a mesa's outline moved 2 px), and that is not something it took away
+        t = max(2, int(round(0.0012 * W)))
+        ker = np.ones((2 * t + 1, 2 * t + 1), np.uint8)
+        d = np.maximum(np.maximum(s - cv2.dilate(p, ker), cv2.erode(p, ker) - s), 0).max(-1)
+        lum = lambda x: x @ np.array([0.3, 0.59, 0.11], np.float32)
+        cos = (s * p).sum(-1) / np.maximum(np.linalg.norm(s, axis=-1) * np.linalg.norm(p, axis=-1), 1e-6)
+        shadow = (lum(s) < lum(p) * 0.92) & (cos > 0.995)
+        cand = zone & (d > max(1.5 * self.floor[k], 0.06)) & ~shadow
+        if not cand.any():
+            return pt.copy(), pt.copy()
+        dist = ndi.distance_transform_edt(~pt)
+        lab, _ = ndi.label(cand | (cv2.dilate(pt.astype(np.uint8), _disk(2)) > 0))
+        touch = np.unique(lab[pt])
+        conn = np.isin(lab, touch[touch > 0]) & cand
+        close = cand & (dist <= rr)
+        # a piece the edit took whole (a lander's foot pad) differs from the plate at its outline more than inside it:
+        # close it and fill it, so it goes whole, not as a faint half-erased ghost
+        k3 = max(2, int(round(0.0015 * W)))
+        erase = cv2.morphologyEx((pt | conn | close).astype(np.uint8), cv2.MORPH_CLOSE, _disk(k3)) > 0
+        erase = ndi.binary_fill_holes(erase) & (zone | pt)
+        erase |= pt
+        # the thing's own colours: its outer band (where its edge colours are), against the ring past the zone
+        band = pt & ~(cv2.erode(pt.astype(np.uint8), _disk(max(2, int(0.006 * W)))) > 0)
+        outer = _grow(pt, 2 * rf) & ~zone & ~pt
+        if band.sum() < 32 or outer.sum() < 32:
+            return erase, pt.copy()
+        like = _colour_model(s, band, outer) > 0.5
+        mine = (conn | close) & like
+        # what belongs to the thing must still touch it, through its own colours
+        lab2, _ = ndi.label(mine | (cv2.dilate(pt.astype(np.uint8), _disk(2)) > 0))
+        t2 = np.unique(lab2[pt])
+        mine = np.isin(lab2, t2[t2 > 0]) & mine
+        return erase, pt | mine
+
+
+def erase_needs(still, masks, names, plan, plate_all, plate_main=None, plate_rest=None, plate_masks=None):
+    """for Valis Erase's lazy check: which of plate_main / plate_rest to make before combining"""
+    job = _EraseJob(still, masks, names, plan, {"all": plate_all, "main": plate_main, "rest": plate_rest}, plate_masks)
+    return job.needs()
+
+
+def erase_combine(still, masks, names, plan, plate_all, plate_main=None, plate_masks=None, ring=0.004, plate_rest=None,
+                  footprints=False):
+    """The erased picture: the still, with each erased thing's place (a hair past its outline, and wherever the edit
+    took more of it than SAM's mask holds) taken from the edit model's plate, the plate first moved onto the still
+    (sub-pixel) and matched to it in colour and in light (an edit model takes a thing's light with it). Naive checks
+    per thing: the plate must no longer look like the still in the thing's own place, and SAM must not find the
+    thing again close by (Krea "removed" a crashed lander by painting a smaller one beside it). A thing no plate erased
+    stays in the picture, and is split as scenery like before. Returns (picture, report), plus each name's footprint
+    (what is the thing's, for its cutout; None for a name not erased) with footprints=True."""
+    dump("erase", still=still, masks=list(masks), names=list(names), plan=plan, plate_all=np.asarray(plate_all)[..., :3],
+         plate_main=None if plate_main is None else np.asarray(plate_main)[..., :3],
+         plate_rest=None if plate_rest is None else np.asarray(plate_rest)[..., :3],
+         plate_masks=None if plate_masks is None else list(plate_masks))
+    job = _EraseJob(still, masks, names, plan, {"all": plate_all, "main": plate_main, "rest": plate_rest}, plate_masks, ring)
+    src, parts = job.pick()
+    H, W, r = job.H, job.W, job.r
+    out = job.still.copy()
+    fps = [None] * len(names)
+    extra = {}
     for n, ps in parts.items():
+        fp = np.zeros((H, W), bool)
         for pt, k in ps:
-            m = (cv2.dilate(pt.astype(np.uint8), disk(r)) > 0).astype(np.float32)
-            m = np.maximum(cv2.GaussianBlur(m, (0, 0), r / 2), pt)[..., None]
-            out = out * (1 - m) + P[k] * m
+            er, mine = job.footprint(n, pt, k)
+            fp |= mine
+            extra[n] = extra.get(n, 0) + int((mine & ~pt).sum())
+            m = _grow(er, r).astype(np.float32)
+            m = np.maximum(cv2.GaussianBlur(m, (0, 0), r / 2), er)[..., None]
+            out = out * (1 - m) + job.P[k] * m
+        fps[job.idx[n]] = fp.astype(np.float32)
     report = {"erased": [n for n, k in src.items() if k], "kept": [n for n, k in src.items() if not k],
-              "source": src, "main": plan.get("main", "")}
-    return out.astype(np.float32), report
+              "source": src, "main": plan.get("main", ""), "plates": sorted(job.P), "shift": job.shift,
+              "drift": {k: round(v, 4) for k, v in job.floor.items()}, "footprint_px": extra}
+    out = out.astype(np.float32)
+    return (out, report, fps) if footprints else (out, report)
 
 
 def _scenery_masks(masks, masks_erased, names, sn, erased, w, h, threshold=0.5, min_area=0.0003, **_):
@@ -867,22 +1165,42 @@ def _scenery_masks(masks, masks_erased, names, sn, erased, w, h, threshold=0.5, 
 
 
 def build_erased(still, near_still, masks, names, erased_img, near_erased, masks_erased, erased, far=6.0, band=0.025,
-                 ring=0.004, **kw):
+                 ring=0.004, footprints=None, soft=None, report=None, **kw):
     """The set, erase first. Scenery: the erased picture split by every name that wasn't erased (SAM looked for them in
     the erased picture, so a sky goes on behind where a lander stood). Things: cutouts from the still, each drawn
     right after the last scenery layer it stood in front of, their depth from the still's depth map fitted to the
-    erased picture's. Returns (layers, info) as build does."""
+    erased picture's. A thing's cutout is its footprint when Valis Erase gave one (SAM's mask plus what the edit took
+    past it: a lander's strut tips), else SAM's mask. `soft`: name -> a soft matte of the thing (BiRefNet), used in
+    its edge band only where the difference matte can't tell the thing from what is behind (same colours).
+    Returns (layers, info) as build does."""
+    dump("build_erased", still=still[..., :3], near_still=near_still, masks=list(masks), names=list(names), erased_img=erased_img[..., :3],
+         near_erased=near_erased, masks_erased=list(masks_erased), erased=list(erased), far=far, band=band,
+         footprints=None if footprints is None else list(footprints), report=report,
+         soft_names=sorted(soft) if soft else [], soft=[soft[n] for n in sorted(soft)] if soft else None)
     h, w = still.shape[:2]
     still = still[..., :3].astype(np.float32)
     erased = [n for n in erased if n in names]
     sn = [n for n in names if n not in erased]
     layers_bg, info = build(erased_img, near_erased, _scenery_masks(masks, masks_erased, names, sn, erased, w, h, **kw),
-                            sn, far=far, band=band, **kw)
+                            sn, far=far, band=band, checks=False, **kw)
+    if report:
+        info["erase"] = report
     if not erased:
         rest_exact([L["rgba"] for L in layers_bg], still)
-        return layers_bg, dict(info, erased=[])
+        info = dict(info, erased=[])
+        info["checks"] = scorecard(layers_bg, still, info)
+        return layers_bg, info
     disk = lambda k: cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * k + 1, 2 * k + 1))
-    cores = {n: cv2.resize(np.asarray(masks[names.index(n)], np.float32), (w, h), interpolation=cv2.INTER_LINEAR) > 0.5 for n in erased}
+    rs = lambda m: cv2.resize(np.asarray(m, np.float32), (w, h), interpolation=cv2.INTER_LINEAR) > 0.5
+    sam = {n: rs(masks[names.index(n)]) for n in erased}
+    fpl = {}
+    if footprints is not None:
+        for n in erased:
+            i = names.index(n)
+            f = footprints[i] if i < len(footprints) else None
+            if f is not None and np.any(np.asarray(f) > 0.5):
+                fpl[n] = rs(f) | sam[n]
+    cores = {n: fpl.get(n, sam[n]) for n in erased}
     things = np.zeros((h, w), bool)
     for c in cores.values():
         things |= c
@@ -901,8 +1219,8 @@ def build_erased(still, near_still, masks, names, erased_img, near_erased, masks
         x, y = x[sel], y[sel]
     q = ((a * ns + b) - nb.min()) / max(1e-6, nb.max() - nb.min())
     z_things = nearness_to_z(q, far).astype(np.float32)
-    lo, _ = build(still, None, [masks[names.index(n)] for n in erased], erased, far=far, band=band, z_override=z_things,
-                  exact=False, **kw)
+    lo, _ = build(still, None, [cores[n].astype(np.float32) for n in erased], erased, far=far, band=band, z_override=z_things,
+                  exact=False, checks=False, **kw)
     objs = [L for L in lo if L["name"] in erased and not L.get("backdrop")]
     # a thing keeps its own pixels, its soft edge, and its completion only behind another thing in front of it
     # (a lander behind an astronaut); behind the scenery it is erased from, the scenery is real paint
@@ -938,24 +1256,40 @@ def build_erased(still, near_still, masks, names, erased_img, near_erased, masks
         below = composite([{"rgba": M["rgba"]} for M in layers[:k]]) if k else np.zeros_like(still)
         c = cores[L["name"]]
         inner = cv2.erode(c.astype(np.uint8), np.ones((5, 5), np.uint8)) > 0
+        # what the edit took past SAM's mask is the thing, whole (a strut tip is too thin to have an inside)
+        inner |= c & ~(cv2.dilate(sam[L["name"]].astype(np.uint8), np.ones((3, 3), np.uint8)) > 0)
         inner = inner if inner.sum() >= 16 else c
         F = np.stack([_fill_nearest(np.where(inner, still[..., i], 0), inner) for i in range(3)], -1)
-        F = np.where(inner[..., None], L["rgba"][..., :3], cv2.GaussianBlur(F, (0, 0), 1.0))
+        F = np.where(inner[..., None], still, cv2.GaussianBlur(F, (0, 0), 1.0))
         band_px = (cv2.dilate(c.astype(np.uint8), disk(2 * r)) > 0) & ~inner
         d = F - below
         den = (d * d).sum(-1)
         a_new = np.clip(((still - below) * d).sum(-1) / np.maximum(den, 1e-6), 0, 1)
         solve = band_px & (den > 0.05 ** 2)
         al = L["rgba"][..., 3]
+        al[inner] = 1.0
         al[solve] = a_new[solve]
-        al[band_px & ~solve & ~c] = np.minimum(al[band_px & ~solve & ~c], 0.0)
-        L["rgba"][..., :3] = np.where(band_px[..., None], F, L["rgba"][..., :3])
+        un = band_px & ~solve & ~c
+        sm = soft.get(L["name"]) if soft else None
+        if sm is not None:
+            # the thing's colours are the background's here: the difference matte can't tell, a matting model can
+            sm = cv2.resize(np.asarray(sm, np.float32), (w, h), interpolation=cv2.INTER_LINEAR) if sm.shape != (h, w) else sm
+            al[un] = np.clip(sm[un], 0, 1)
+            unc = band_px & ~solve & c
+            al[unc] = np.maximum(np.minimum(al[unc], 1.0), np.clip(sm[unc], 0, 1))
+        else:
+            al[un] = np.minimum(al[un], 0.0)
+        L["rgba"][..., :3] = np.where((band_px | inner)[..., None], F, L["rgba"][..., :3])
     # each thing owns the ring it was erased from: what the still shows there beyond the plate is the thing's glow
     rest_exact([L["rgba"] for L in layers], still, own=[reach.get(L["name"]) for L in layers])
     zc = info["border"]
     z_all = np.where(things, z_things, np.inf)
     info = dict(info, erased=erased)
     info["border"] = {s: [min(a1, b1) for a1, b1 in zip(zc[s], _border(np.where(np.isfinite(z_all), z_all, far))[s])] for s in zc}
+    info["footprint"] = {n: int((cores[n] & ~sam[n]).sum()) for n in fpl}
+    if soft:
+        info["matte"] = sorted(n for n in soft if n in cores)
+    info["checks"] = scorecard(layers, still, info)
     return layers, info
 
 
@@ -1023,6 +1357,186 @@ def rest_exact(rgba, still, min_w=0.3, own=None, reach=0.003):
             res[m] -= (new - old) * w[i][m, None]
             touched.add(i)
     return touched
+
+
+# ---- checks: naive pixel tests that say what a set will do on a move before anyone looks (and before a GPU retry)
+
+# a name for something big by nature: taking much of the frame is what it should do
+BROAD_OK = re.compile(r"\b(sky|skies|clouds?|sea|ocean|water|waves|lake|river|ground|floor|desert|dunes?|field|plains?|sand|"
+                      r"grass|land|landscape|terrain|meadow|snow|ice|road|street|city|forest|jungle|wall|walls|room|"
+                      r"background|horizon|mountains|hills|valley|fog|mist|smoke|rest)\b", re.I)
+
+
+def broad_name(name, m, z, far, area=0.35, spread=0.5):
+    """A name SAM read as much more than one thing ("the red desert ridge" became the whole desert): it took over a
+    third of the frame, or runs through half the scene's depth, and it isn't a name for something big by nature.
+    Returns a warning (dict) or None."""
+    words = re.findall(r"[a-z]+", name.lower())
+    head = words[-1] if words else ""                         # "the red desert ridge" is a ridge, not a desert
+    if SKY.search(name) or CELESTIAL.search(name) or BROAD_OK.fullmatch(head):
+        return None
+    a = float(m.mean())
+    zz = z[m]
+    if zz.size < 64:
+        return None
+    n = (1.0 / zz - 1.0 / far) / (1.0 - 1.0 / far)              # nearness again, 0 = farthest, 1 = nearest
+    sp = float(np.percentile(n, 95) - np.percentile(n, 5))
+    if a <= area and sp <= spread:
+        return None
+    why = f"took {round(100 * a)}% of the frame" if a > area else f"runs through {round(100 * sp)}% of the scene's depth"
+    return {"name": name, "area": round(a, 3), "depth_spread": round(sp, 3),
+            "why": f"{why}: SAM may have read it as more than one thing. Name one thing in it, like \"the rock in front\"."}
+
+
+def _edt(m):
+    """distance of every pixel of m to the nearest pixel outside it (0 outside): scipy's edt, faster"""
+    return cv2.distanceTransform(np.asarray(m, bool).astype(np.uint8), cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
+
+
+def _over_suffix(rgba):
+    """premultiplied composites of layers i.. (near ones over far ones), for every i: (colour, alpha)"""
+    n = len(rgba)
+    H, W = rgba[0].shape[:2]
+    C = [None] * (n + 1)
+    A = [None] * (n + 1)
+    C[n], A[n] = np.zeros((H, W, 3), np.float32), np.zeros((H, W), np.float32)
+    for i in range(n - 1, -1, -1):
+        a = rgba[i][..., 3]
+        C[i] = C[i + 1] + (1 - A[i + 1])[..., None] * rgba[i][..., :3] * a[..., None]
+        A[i] = A[i + 1] + (1 - A[i + 1]) * a
+    return C, A
+
+
+def scorecard(layers, still, info, step=4, out_h=1080, tear=0.08):
+    """Six naive checks on a finished set (all pixels, no model). Each: {id, name, ok, value, note, ...}.
+    1 first_frame: at rest the set composites back to the still.
+    2 ghost: hide each thing; its outline must not be left painted on what is behind it (the ghost astronaut).
+    3 names: a name that matched much more than one thing (a broad name), or nothing.
+    4 erase: each erased thing really went (from the erase report), and how much the edit took past SAM's mask.
+    5 tears: how much of what shows at rest sits on a depth jump the studio's renderer tears (fwidth(z)/z > 0.08 at
+      1080p), where the layer behind shows through.
+    6 guessed: of the paint a move can uncover next to the things (not a sky behind the ground), how much is a guess
+      (smeared from around it) rather than real paint (the erased picture, a clean plate)."""
+    rgba = [L["rgba"] for L in layers]
+    H, W = still.shape[:2]
+    out = []
+    try:
+        comp = composite(layers)
+        err = np.abs(comp - still).max(-1)
+        p99, mx = float(np.percentile(err, 99)) * 255, float(err.max()) * 255
+        out.append({"id": "first_frame", "name": "First frame is the still", "ok": p99 < 2.0, "value": round(p99, 2),
+                    "note": f"99% of pixels within {p99:.1f}/255 of the still (worst {mx:.0f})"})
+    except Exception as e:
+        out.append({"id": "first_frame", "name": "First frame is the still", "ok": None, "note": f"not checked: {e}"})
+    # 2 ghost energy along each thing's outline, in the picture with that thing hidden
+    try:
+        C, A = _over_suffix(rgba)
+        below = rgba[0][..., :3].copy()
+        ghosts, worst = [], 0.0
+        for k in range(1, len(rgba)):
+            L = layers[k]
+            a = rgba[k][..., 3]
+            if not L.get("backdrop") and (a > 0.5).sum() >= 64:
+                wo = C[k + 1] + (1 - A[k + 1])[..., None] * below          # every layer but this one
+                sil = a > 0.5
+                sdf = _edt(~sil) - _edt(sil)
+                gy, gx = np.gradient(cv2.GaussianBlur(sdf.astype(np.float32), (0, 0), 1.5))
+                nrm = np.maximum(np.hypot(gx, gy), 1e-6)
+                g = cv2.GaussianBlur(cv2.cvtColor(wo.astype(np.float32), cv2.COLOR_RGB2GRAY), (0, 0), 1.0)
+                iy, ix = np.gradient(g)
+                e = np.abs(ix * gx / nrm + iy * gy / nrm)                    # edge across the outline's normal
+                # not where a nearer layer stands at the outline: that edge is real
+                front = cv2.dilate((A[k + 1] > 0.1).astype(np.uint8), np.ones((9, 9), np.uint8)) > 0
+                ring = (np.abs(sdf) <= 1.5) & ~front
+                ctrl = (((sdf >= -12) & (sdf <= -7)) | ((sdf >= 7) & (sdf <= 12))) & ~front
+                if ring.sum() >= 40 and ctrl.sum() >= 40:
+                    ratio = float(e[ring].mean() / max(e[ctrl].mean(), 2e-3))
+                    ghosts.append({"layer": L["name"], "ratio": round(ratio, 2)})
+                    worst = max(worst, ratio)
+            ak = rgba[k][..., 3:]
+            below = below * (1 - ak) + rgba[k][..., :3] * ak
+        bad = [g["layer"] for g in ghosts if g["ratio"] > 1.6]
+        out.append({"id": "ghost", "name": "No ghost outlines", "ok": not bad, "value": round(worst, 2), "layers": ghosts,
+                    "note": ("edges along the hidden outline of " + ", ".join(bad) + " (an outline left behind, or the scenery cut off where it stood)") if bad else
+                            (f"edge energy along hidden outlines at most {worst:.2f}x the surroundings" if ghosts else "no things to hide")})
+    except Exception as e:
+        out.append({"id": "ghost", "name": "No ghost outlines", "ok": None, "note": f"not checked: {e}"})
+    # 3 names
+    warns, dropped = info.get("warnings", []), info.get("dropped", [])
+    out.append({"id": "names", "name": "Names found one thing each", "ok": not warns and not dropped,
+                "value": len(warns) + len(dropped), "warnings": warns, "dropped": dropped,
+                "note": "; ".join([f"\"{w['name']}\" {w['why']}" for w in warns] + [f"\"{d['name']}\" dropped: {d['why']}" for d in dropped]) or "every name found its own thing"})
+    # 4 erase (only for a set made erase first)
+    rep = info.get("erase")
+    if rep:
+        kept = rep.get("kept", [])
+        fp = rep.get("footprint_px", {})
+        extra = ", ".join(f"{n} +{v} px" for n, v in fp.items() if v)
+        out.append({"id": "erase", "name": "The things were erased", "ok": not kept, "value": len(kept),
+                    "kept": kept, "source": rep.get("source", {}), "plates": rep.get("plates", []),
+                    "note": (f"left standing (split as scenery): {', '.join(kept)}" if kept else
+                             f"erased: {', '.join(rep.get('erased', [])) or 'nothing to erase'}") +
+                            (f" · the edit took more than SAM's mask: {extra}" if extra else "")})
+    # 5 tears at rest
+    try:
+        cell = step * out_h / H                                   # one mesh cell in output px at rest
+        trans = np.ones((H, W), np.float32)
+        torn_px, shown_px, per = 0.0, 0.0, []
+        for i in range(len(layers) - 1, -1, -1):
+            L = layers[i]
+            a = rgba[i][..., 3]
+            vis = trans * a
+            trans = trans * (1 - a)
+            z = L["z"]
+            zm = float(L.get("z_med", np.median(z)))
+            rel = L.get("relief") if L.get("relief") is not None else (1.0 if L.get("backdrop") else 0.35)
+            zd = zm + (z - zm) * rel
+            g = zd[::step, ::step]
+            dx = np.abs(np.diff(g, axis=1))[:-1, :]
+            dy = np.abs(np.diff(g, axis=0))[:, :-1]
+            t = ((dx + dy) / cell / np.maximum(g[:-1, :-1], 1e-3)) > tear
+            tm = cv2.resize(t.astype(np.uint8), (W, H), interpolation=cv2.INTER_NEAREST)[:H, :W] > 0
+            v = vis > 0.5
+            tp, sp = float((tm & v).sum()), float(v.sum())
+            torn_px += tp
+            shown_px += sp
+            if sp > 0 and tp / sp > 0.01:
+                per.append({"layer": L["name"], "share": round(tp / sp, 3)})
+        share = torn_px / max(1.0, shown_px)
+        out.append({"id": "tears", "name": "Few torn triangles", "ok": share < 0.01, "value": round(share, 4), "layers": per,
+                    "note": f"{100 * share:.2f}% of what shows at rest sits on a depth jump the renderer tears" +
+                            (" (" + ", ".join(f"{p['layer']} {100 * p['share']:.1f}%" for p in per) + ")" if per else "")})
+    except Exception as e:
+        out.append({"id": "tears", "name": "Few torn triangles", "ok": None, "note": f"not checked: {e}"})
+    # 6 guessed paint near the edges a move uncovers
+    try:
+        reach = max(4, int(0.03 * W))
+        trans = np.ones((H, W), np.float32)
+        tobj = np.ones((H, W), np.float32)                        # what only the things (not backdrops) let through
+        things = set(info.get("erased") or [])                   # erase first: the cutouts; else every non-backdrop
+        hidden_px, guess_px = 0.0, 0.0
+        for i in range(len(layers) - 1, -1, -1):
+            L = layers[i]
+            a = rgba[i][..., 3]
+            hidden = (a > 0.5) & (trans < 0.5) & (tobj < 0.5)
+            if hidden.any():
+                seen = trans >= 0.5
+                close = _edt(~seen) <= reach    # within a move's reach of where it shows
+                h_ = hidden & close
+                hidden_px += float(h_.sum())
+                hole = L.get("hole")
+                if hole is not None and np.any(hole):
+                    guess_px += float((h_ & hole).sum())
+            trans = trans * (1 - a)
+            if (L["name"] in things) if things else not L.get("backdrop"):
+                tobj = tobj * (1 - a)
+        ratio = guess_px / max(1.0, hidden_px)
+        out.append({"id": "guessed", "name": "Real paint behind the things", "ok": ratio < 0.5, "value": round(ratio, 3),
+                    "note": (f"{100 * ratio:.0f}% of the paint a move uncovers next to the things is guessed (smeared), the rest is real"
+                             if hidden_px else "nothing hidden behind a thing")})
+    except Exception as e:
+        out.append({"id": "guessed", "name": "Real paint behind the things", "ok": None, "note": f"not checked: {e}"})
+    return out
 
 
 def composite(layers):
