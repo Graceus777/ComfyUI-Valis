@@ -28,6 +28,8 @@ SKY = re.compile(r"\b(sky|skies|heaven|heavens|night sky|clouds? and sky)\b", re
 # a moon, a sun, a planet: depth maps read a bright disc as near, and on a move it slid across the sky like a lamp.
 # Such a thing is as far as the sky (just in front of it).
 CELESTIAL = re.compile(r"\b(moons?|suns?|planets?|comets?|galax(?:y|ies)|nebulae?)\b", re.I)
+# soft, see-through things in front of the scenery: erased and put back as cutouts even where they leave the frame
+GAS = re.compile(r"\b(smoke|steam|vapou?r|mist|fog|haze|dust|plume|exhaust|fire|flames?|embers|sparks)\b", re.I)
 
 
 def _replay_dir():
@@ -976,10 +978,15 @@ def erase_plan(masks, names, w, h, threshold=0.5, min_area=0.0003, backdrop_area
         if a < min_area or a > backdrop_area:
             continue
         ys, xs = np.nonzero(b)
-        if xs.min() <= 2 or ys.min() <= 2 or xs.max() >= w - 3:
+        # smoke, steam, dust, flames: in front of the scenery even when they drift out of the frame. Left in the
+        # scenery, a smoke trail sat at the ground's depth and slid like ground, uncovering guessed sky as streaks;
+        # erased and put back, it is a see-through cutout whose edge is solved against the clean plate.
+        if not GAS.search(n) and (xs.min() <= 2 or ys.min() <= 2 or xs.max() >= w - 3):
             continue
         out.append(n); areas[n] = a
-    main = max(out, key=lambda n: areas[n]) if out else ""
+    # the biggest solid thing gets the edit of its own (a smoke trail is easy to remove with the rest)
+    solid = [n for n in out if not GAS.search(n)] or out
+    main = max(solid, key=lambda n: areas[n]) if solid else ""
     rest = [n for n in out if n != main]
     keep_all = "Keep the picture exactly as it is."
     return {"erase": out, "main": main, "rest": rest, "prompt_all": plate_prompt(out) or keep_all,
