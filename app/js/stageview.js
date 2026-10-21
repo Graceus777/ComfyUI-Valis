@@ -213,6 +213,9 @@ export class StageView {
     el.replaceChildren(...opts.map(([id, n]) => h("button", {class: id === this.S.domeEngine ? "on" : "", "data-id": id,
       disabled: id === "krea" && !caps.kreaDome, title: id === "krea" && !caps.kreaDome ? "needs the Krea 2 AnyPaint nodes and LoRA, and a ComfyUI restart" : "",
       onclick: () => set(id)}, n)));
+    // Krea 2 when it can (Oct 21 A/B on the astronaut and the lighthouse: as coherent as Qwen, a little faster, Krea's
+    // licence, and Krea is already loaded for the erase); Qwen stays one click away
+    set(caps.kreaDome ? "krea" : "qwen");
   }
 
   async split() {
@@ -345,9 +348,10 @@ export class StageView {
     if (!cs.length) { el.replaceChildren(); return; }
     const mark = (ok) => ok === true ? "✓" : ok === false ? "!" : "·";
     const color = (ok) => ok === true ? "var(--muted, #8d8d9b)" : ok === false ? "var(--ember, #ff8a4c)" : "var(--muted, #8d8d9b)";
+    const short = {first_frame: "first frame", ghost: "outlines", names: "names", erase: "erase", tears: "tears", guessed: "guessed paint"};
     el.replaceChildren(h("details", {open: cs.some(c => c.ok === false)},
       h("summary", {class: "hint", style: "cursor:pointer;margin:6px 0"}, `Checks: ${cs.filter(c => c.ok === true).length} of ${cs.length} pass` +
-        (cs.some(c => c.ok === false) ? ` · ${cs.filter(c => c.ok === false).map(c => c.name.toLowerCase()).join(", ")}` : "")),
+        (cs.some(c => c.ok === false) ? ` · look at: ${cs.filter(c => c.ok === false).map(c => short[c.id] || c.id).join(", ")}` : "")),
       ...cs.map(c => h("div", {class: "hint", style: `margin:2px 0;color:${color(c.ok)}`}, h("b", {}, `${mark(c.ok)} ${c.name}`), ` · ${c.note || ""}`))));
     const warn = cs.find(c => c.id === "names" && c.ok === false);
     if (warn) this.toast(`Names: ${warn.note}`, true);

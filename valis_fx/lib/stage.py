@@ -543,6 +543,7 @@ def _border(z):
 
 
 DOME = {"yaw": 80.0, "pitch": 60.0, "step": 0.4, "fov": 50.0}
+DOME_PAINTED_STEP = 0.2          # degrees a texel when the world past the frame is painted (800 x 600)
 
 
 def dome_map(still, back, fov=50.0, step=0.3, yaw=80.0, pitch=60.0, surround=None, rect=None):
@@ -649,14 +650,37 @@ def surround_for(still, sur):
     return surround_canvas(still, float(sur.get("megapixels", 1.03)))
 
 
-def match_colour(painted, ref, rect):
-    """an edit model drifts the colours a little: match the painted canvas to the still where both show the still"""
+def match_colour(painted, ref, rect, reach=0.12):
+    """An outpainting model drifts the colours a little, and it redraws a band just inside the old edge (Krea 2
+    AnyPaint: 32 px, its sky there darker than the still's), so the dome, which shows the still itself inside the frame
+    and the painting outside, had a step all round the frame: a lighter box in the sky on a wide move. So: match the
+    painting to the still globally where both show the still, then carry the smooth difference at the edge (the still
+    minus the painting, just inside the frame) out into the painted margin, fading over `reach` of the canvas width,
+    and put the still itself back inside the frame."""
     x0, y0, rw, rh = rect
     m = 4
     a = painted[y0 + m:y0 + rh - m, x0 + m:x0 + rw - m].reshape(-1, 3)
     b = ref[y0 + m:y0 + rh - m, x0 + m:x0 + rw - m].reshape(-1, 3)
     out = (painted - a.mean(0)) / np.maximum(a.std(0), 1e-3) * b.std(0) + b.mean(0)
-    return np.clip(out, 0, 1).astype(np.float32)
+    out = np.clip(out, 0, 1).astype(np.float32)
+    Hc, Wc = out.shape[:2]
+    inside = np.zeros((Hc, Wc), bool)
+    inside[y0:y0 + rh, x0:x0 + rw] = True
+    if inside.all() or not inside.any():
+        return out
+    sc = 4
+    small = (max(8, Wc // sc), max(8, Hc // sc))
+    # the edge band only (a few % of the frame), where the step is: the difference deep inside is the still's detail
+    band = inside & ~(_edt(inside) > max(6, int(0.04 * rw)))
+    kb = cv2.resize(band.astype(np.float32), small, interpolation=cv2.INTER_AREA) > 0.5
+    diff = cv2.resize(cv2.GaussianBlur(ref - out, (0, 0), 3), small, interpolation=cv2.INTER_AREA)
+    if kb.sum() < 8:
+        return out
+    corr = np.stack([_pushpull(np.where(kb, diff[..., c], 0), kb, smooth=0.01) for c in range(3)], -1)
+    corr = cv2.resize(corr, (Wc, Hc), interpolation=cv2.INTER_CUBIC)
+    fade = np.exp(-_edt(~inside) / max(1.0, reach * Wc))[..., None]
+    out = np.where(inside[..., None], ref, np.clip(out + corr * fade, 0, 1))
+    return out.astype(np.float32)
 
 
 def load_layers(folder, meta):
@@ -668,10 +692,13 @@ def load_layers(folder, meta):
 def write_dome(folder, meta, rgba, surround=None, rect=None):
     """(re)write a stage's dome.png from its layers, with an optional painted surround; updates meta (not saved)"""
     still = composite([{"rgba": x} for x in rgba])
-    tex = dome_map(still, rgba[0], **{k: DOME[k] for k in ("fov", "step", "yaw", "pitch")}, surround=surround, rect=rect)
+    # a painted world past the frame is worth more texels: at 0.4 deg a texel is ~15 px of a 1080p frame, and a painted
+    # butte past the edge came out as a blurry block on a wide arc. The blur fallback doesn't need them.
+    d = dict(DOME, step=DOME_PAINTED_STEP if surround is not None else DOME["step"])
+    tex = dome_map(still, rgba[0], **{k: d[k] for k in ("fov", "step", "yaw", "pitch")}, surround=surround, rect=rect)
     cv2.imwrite(os.path.join(folder, "dome.png"), cv2.cvtColor(np.clip(tex * 255 + .5, 0, 255).astype(np.uint8), cv2.COLOR_RGB2BGR))
     import time
-    meta["dome"] = dict(DOME, image="dome.png", painted=surround is not None, rev=int(time.time()))   # rev: a cache-buster for viewers
+    meta["dome"] = dict(d, image="dome.png", painted=surround is not None, rev=int(time.time()))   # rev: a cache-buster for viewers
     return tex
 
 

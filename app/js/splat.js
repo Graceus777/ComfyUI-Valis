@@ -110,11 +110,13 @@ async function domeSplats(stage, cx) {
   const du = stage._url(d.image), dv = d.rev ? `${du}${du.includes("?") ? "&" : "?"}v=${d.rev}` : du;
   const im = await loadImage(dv).catch(() => null);
   if (!im) return null;
-  const nx = im.naturalWidth, ny = im.naturalHeight;
+  // a painted dome has 4x the texels (0.2 deg): keep ~120-150k splats, each as wide as the texels it stands for
+  const k = Math.max(1, Math.ceil(Math.sqrt(im.naturalWidth * im.naturalHeight / 150000)));
+  const nx = Math.floor(im.naturalWidth / k), ny = Math.floor(im.naturalHeight / k);
   cx.canvas.width = Math.max(cx.canvas.width, nx); cx.canvas.height = Math.max(cx.canvas.height, ny);
-  cx.clearRect(0, 0, nx, ny); cx.drawImage(im, 0, 0);
+  cx.clearRect(0, 0, nx, ny); cx.imageSmoothingQuality = "high"; cx.drawImage(im, 0, 0, nx, ny);
   const px = cx.getImageData(0, 0, nx, ny).data;
-  const R = 3 * m.far, w = R * d.step * Math.PI / 180, rad = Math.PI / 180;
+  const R = 3 * m.far, w = R * d.step * k * Math.PI / 180, rad = Math.PI / 180;
   const out = new Float32Array(nx * ny * F), q = [0, 0, 0, 0];
   for (let j = 0; j < ny; j++) {
     const pa = (d.pitch - 2 * d.pitch * j / (ny - 1)) * rad, cp = Math.cos(pa), sp = Math.sin(pa);

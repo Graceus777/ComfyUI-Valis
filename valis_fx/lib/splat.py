@@ -126,6 +126,11 @@ def dome_points(folder, meta, radius=None):
     """The dome as splats on a sphere around the original camera, three times as far as the set's farthest point:
     a camera moving through the set barely moves against it, the way a sky or a painted cyclorama behaves."""
     tex, d = dome_texture(folder, meta)
+    d = dict(d)
+    k = int(np.ceil(np.sqrt(tex.shape[0] * tex.shape[1] / 150000)))     # a painted dome has 4x the texels: keep ~120-150k splats
+    if k > 1:
+        tex = cv2.resize(tex, (tex.shape[1] // k, tex.shape[0] // k), interpolation=cv2.INTER_AREA)
+        d["step"] = d["step"] * k
     ny, nx = tex.shape[:2]
     ya = np.radians(np.linspace(-d["yaw"], d["yaw"], nx))[None, :].repeat(ny, 0)
     pa = np.radians(np.linspace(d["pitch"], -d["pitch"], ny))[:, None].repeat(nx, 1)
