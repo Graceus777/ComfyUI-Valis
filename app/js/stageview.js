@@ -299,7 +299,7 @@ export class StageView {
       const keep = Object.fromEntries(this.stage.layers.map(l => [l.name, {visible: l.visible, zoff: l.zoff}]));
       const meta = await fetch(this.file(this.S.sub, "stage.json") + `&t=${Date.now()}`).then(r => r.json());
       const rev = meta.dome?.rev || Date.now();
-      await this.stage.load(f => this.file(this.S.sub, f) + (/^(layer|dome)/.test(f) ? `&v=${rev}` : ""), meta);
+      await this.stage.load(f => this.file(this.S.sub, f) + (/^(layer|dome|outer)/.test(f) ? `&v=${rev}` : ""), meta);
       this.S.meta = meta;
       for (const l of this.stage.layers) Object.assign(l, keep[l.name] || {});
       this.refit();

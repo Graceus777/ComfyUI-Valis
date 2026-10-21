@@ -69,7 +69,7 @@ async function layerSplats(stage, L, stride, orient, snap, cx, feather = 0) {
     const i = y * W + x;
     let a = rgba[i * 4 + 3] / 255;
     if (a <= 0.35) continue;
-    if (feather > 0) {     // the set fades out at the frame's edge, into the dome, instead of ending on a hard cut
+    if (feather > 0 && !L.outer) {     // the set fades out at the frame's edge, into the dome, instead of ending on a hard cut
       const e = Math.min(1, Math.min(x + 0.5, W - 0.5 - x, y + 0.5, H - 0.5 - y) / (feather * W));
       a *= e * e * (3 - 2 * e);
       if (a <= 0.01) continue;
@@ -98,7 +98,42 @@ async function layerSplats(stage, L, stride, orient, snap, cx, feather = 0) {
     }
     out.set([p[0], p[1], p[2], rgba[i * 4] / 255, rgba[i * 4 + 1] / 255, rgba[i * 4 + 2] / 255, a, s0, s1, s2, q[0], q[1], q[2], q[3]], n * F); n++;
   }
-  return out.subarray(0, n * F);
+  const more = L.outer && m.outer?.margin ? await outerSplats(stage, L, stride, rgba, z) : null;
+  if (!more || !more.length) return out.subarray(0, n * F);
+  const res = new Float32Array(n * F + more.length);
+  res.set(out.subarray(0, n * F)); res.set(more, n * F);
+  return res;
+}
+
+// With a painted dome, a backdrop goes on past the frame in real paint (outer_XX.png, as the studio draws it): its
+// margin becomes splats too, at the layer's depth at the nearest frame-edge pixel, fading out over the margin's last
+// stretch into the dome. Only where this layer (or one nearer) is what the camera sees at that edge: what is hidden
+// behind is left out. The in-frame splats of such a layer don't fade at the frame edge, the margin carries on.
+async function outerSplats(stage, L, stride, rgba, z) {
+  const m = stage.meta, W = m.width, H = m.height, f0 = stage.f0, M = m.outer.margin, k = 1 + 2 * M;
+  const oi = await loadImage(stage._url(L.outer)).catch(() => null);
+  if (!oi) return null;
+  const ow = oi.naturalWidth, oh = oi.naturalHeight;
+  const oc = document.createElement("canvas"); oc.width = ow; oc.height = oh;
+  const ox = oc.getContext("2d", {willReadFrequently: true}); ox.drawImage(oi, 0, 0);
+  const op = ox.getImageData(0, 0, ow, oh).data;
+  const os = Math.max(2, Math.round(stride * ow / (W * k)));
+  const out = [];
+  for (let j = 0; j < oh; j += os) for (let i = 0; i < ow; i += os) {
+    const u = -M + (i + 0.5) / ow * k, v = -M + (j + 0.5) / oh * k;
+    if (u >= 0 && u <= 1 && v >= 0 && v <= 1) continue;
+    const q = (j * ow + i) * 4;
+    if (op[q + 3] < 128) continue;
+    const d = Math.max(-u, u - 1, -v, v - 1, 0);
+    const e = 1 - Math.min(1, Math.max(0, (d - (M - 0.04)) / 0.04)), a = e * e * (3 - 2 * e);
+    if (a <= 0.01) continue;
+    const ex = Math.min(W - 1, Math.max(0, Math.floor(u * W))), ey = Math.min(H - 1, Math.max(0, Math.floor(v * H)));
+    if (rgba[(ey * W + ex) * 4 + 3] <= 89) continue;           // no paint of this layer at that edge pixel
+    const zz = z[ey * W + ex], X = u * W, Y = v * H, foot = os * (W * k / ow) * zz / f0;
+    out.push((X - W / 2) / f0 * zz, (Y - H / 2) / f0 * zz, zz, op[q] / 255, op[q + 1] / 255, op[q + 2] / 255, a,
+      foot * 0.62, foot * 0.62, foot * 0.15, 1, 0, 0, 0);
+  }
+  return new Float32Array(out);
 }
 
 // The dome (dome.png, an angular map Valis writes when it splits a still: the farthest backdrop inside the frame, the

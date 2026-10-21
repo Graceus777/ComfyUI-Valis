@@ -55,16 +55,26 @@ uniform vec4 u_tint;      // rgb multiply, a = add glow
 uniform float u_glow;     // glow pass: how much of this layer's light blooms (0 = it only occludes)
 uniform int u_pass;       // 0 = picture, 1 = glow
 uniform float u_feather;  // > 0: past the frame edge a layer's stretched edge fades out over this fraction of the width, into the dome
+uniform float u_fstart;   // ... starting this far past the edge
 uniform float u_aspect;   // H / W of the source
+uniform sampler2D u_outer; // the painted world past the frame for this layer (outer_XX.png, written with a painted dome)
+uniform float u_outer_on, u_margin;
 out vec4 o;
 void main() {
   // a triangle stretched across a depth jump inside one layer is a rubber sheet: drop it
   if (fwidth(v_z) / v_z > u_tear) discard;
   if (u_clip > 0.5 && (v_raw.x < 0.0 || v_raw.y < 0.0 || v_raw.x > 1.0 || v_raw.y > 1.0)) discard;
   vec4 c = texture(u_color, v_uv);
+  float ox = max(max(-v_raw.x, v_raw.x - 1.0), 0.0), oyr = max(max(-v_raw.y, v_raw.y - 1.0), 0.0);
+  float d = u_outer_on > 0.5 ? max(ox, oyr) : max(ox, oyr * u_aspect);
+  if (u_outer_on > 0.5 && d > 0.0) {
+    // past the frame: the painted world instead of the stretched edge, where this layer is what the camera sees at
+    // the edge (outer alpha), and everywhere in the last stretch where it fades into the dome
+    vec4 q = texture(u_outer, (v_raw + u_margin) / (1.0 + 2.0 * u_margin));
+    c.rgb = mix(c.rgb, q.rgb, max(q.a, smoothstep(u_fstart - 0.02, u_fstart, d)));
+  }
   if (u_feather > 0.0) {      // inside the frame nothing changes: at rest the picture is exactly the still
-    float ox = max(max(-v_raw.x, v_raw.x - 1.0), 0.0), oy = max(max(-v_raw.y, v_raw.y - 1.0), 0.0) * u_aspect;
-    float e = 1.0 - clamp(max(ox, oy) / u_feather, 0.0, 1.0);
+    float e = 1.0 - clamp((d - u_fstart) / u_feather, 0.0, 1.0);
     c.a *= e * e * (3.0 - 2.0 * e);
   }
   c.rgb = c.rgb * u_tint.rgb + u_tint.a * c.rgb;
@@ -192,7 +202,9 @@ export class Stage {
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
     this.prog = p;
     this.loc = {};
-    for (const n of ["u_depth", "u_color", "u_size", "u_f0", "u_f", "u_out", "u_cam", "u_rot", "u_far", "u_relief", "u_zmed", "u_zoff", "u_opacity", "u_tear", "u_tint", "u_off", "u_scale", "u_sway", "u_swayh", "u_glow", "u_pass", "u_clip", "u_feather", "u_aspect"]) this.loc[n] = gl.getUniformLocation(p, n);
+    for (const n of ["u_depth", "u_color", "u_size", "u_f0", "u_f", "u_out", "u_cam", "u_rot", "u_far", "u_relief", "u_zmed", "u_zoff", "u_opacity", "u_tear", "u_tint", "u_off", "u_scale", "u_sway", "u_swayh", "u_glow", "u_pass", "u_clip", "u_feather", "u_aspect", "u_fstart", "u_outer", "u_outer_on", "u_margin"]) this.loc[n] = gl.getUniformLocation(p, n);
+    this.blank = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, this.blank);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
     this.blur = prog(gl, QVS, BLUR); this.add = prog(gl, QVS, ADD); this.pts = prog(gl, PVS, PFS); this.domeProg = prog(gl, QVS, DFS);
     this.dome = null;
     this.pbuf = gl.createBuffer(); this.pvao = gl.createVertexArray();
@@ -303,8 +315,20 @@ export class Stage {
       const backdrop = L.backdrop ?? (L.area >= 0.12 || L === meta.layers[0]);
       // a layer cut by the frame (a cliff, a table) reaches past the edge too, so a wide move sees it go on and fade
       const b = L.bbox || [0, 0, W - 1, H - 1], cut = b[0] <= 2 || b[1] <= 2 || b[2] >= W - 3 || b[3] >= H - 3;
-      const grid = this._grid(W, H, backdrop || cut ? 0.12 : 0);
-      this.layers.push({ ...L, ct, dt, grid, backdrop, visible: true, relief: L.relief ?? (backdrop ? 1 : 0.35), zoff: 1, opacity: 1, tint: [1, 1, 1, 0], _img: ci });
+      const margin = meta.outer?.margin ?? 0.12;
+      const grid = this._grid(W, H, backdrop || cut ? margin : 0);
+      // with a painted dome, the painted world past the frame for this layer (Valis Stage Dome writes it)
+      let ot = null;
+      if (L.outer && (backdrop || cut)) {
+        const oi = await loadImage(url(L.outer)).catch(() => null);
+        if (oi) {
+          ot = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, ot);
+          gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, oi);
+          for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+        }
+      }
+      this.layers.push({ ...L, ct, dt, ot, margin, grid, backdrop, visible: true, relief: L.relief ?? (backdrop ? 1 : 0.35), zoff: 1, opacity: 1, tint: [1, 1, 1, 0], _img: ci });
     }
   }
 
@@ -339,6 +363,12 @@ export class Stage {
       const spread = explode ? 1 + explode * 0.9 * (n - 1 - rank) / Math.max(1, n - 1) : 1;
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, l.ct); gl.uniform1i(L.u_color, 0);
       gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, l.dt); gl.uniform1i(L.u_depth, 1);
+      gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, l.ot || this.blank); gl.uniform1i(L.u_outer, 2);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.uniform1f(L.u_outer_on, l.ot ? 1 : 0); gl.uniform1f(L.u_margin, l.margin ?? 0.12);
+      // painted past the frame: it goes on in real paint and fades into the dome only over the mesh's last stretch
+      if (this._feather > 0 && l.ot) { gl.uniform1f(L.u_fstart, (l.margin ?? 0.12) - 0.04); gl.uniform1f(L.u_feather, 0.04); }
+      else { gl.uniform1f(L.u_fstart, 0); gl.uniform1f(L.u_feather, this._feather || 0); }
       gl.uniform1f(L.u_relief, l.relief * (1 - 0.6 * explode)); gl.uniform1f(L.u_zmed, l.z_med); gl.uniform1f(L.u_zoff, l.zoff * (lfx.zoff ?? 1) * spread);
       gl.uniform1f(L.u_opacity, l.opacity * (lfx.opacity ?? 1));
       gl.uniform1f(L.u_glow, lfx.glow ?? 0);
@@ -391,7 +421,8 @@ export class Stage {
     gl.uniform2f(L.u_size, m.width, m.height); gl.uniform1f(L.u_f0, this.f0); gl.uniform1f(L.u_f, f);
     gl.uniform2f(L.u_out, c.width, c.height); gl.uniform3fv(L.u_cam, cam.pos); gl.uniformMatrix3fv(L.u_rot, false, cam.rot);
     gl.uniform1f(L.u_far, m.far); gl.uniform1f(L.u_tear, fx.tear ?? 0.08);
-    gl.uniform1f(L.u_feather, fx.wide && this.dome && !(cam.explode > 0.02) ? 0.06 : 0); gl.uniform1f(L.u_aspect, m.height / m.width);
+    this._feather = fx.wide && this.dome && !(cam.explode > 0.02) ? 0.06 : 0;
+    gl.uniform1f(L.u_feather, this._feather); gl.uniform1f(L.u_aspect, m.height / m.width);
     this._layers(0, fx, cam.explode || 0);
     const parts = fx.particles && fx.particles.length ? fx.particles : null;
     if (parts) this._points(cam, f, parts);

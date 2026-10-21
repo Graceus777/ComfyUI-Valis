@@ -66,9 +66,9 @@ def layer_points(folder, meta, L, stride, f0, orient=True, snap=True, feather=0.
     ys, xs = np.mgrid[0:H:stride, 0:W:stride]
     a = rgba[ys, xs, 3].astype(np.float32) / 255.0
     keep = a > 0.35
-    if feather > 0:
+    if feather > 0 and not L.get("outer"):
         # the set fades out over the last few % at the frame's edge, into the dome behind it, instead of ending on a
-        # cut a moving camera would see as a hard wall edge
+        # cut a moving camera would see as a hard wall edge (a layer painted past the frame carries on instead)
         e = np.minimum(np.minimum(xs + 0.5, W - 0.5 - xs), np.minimum(ys + 0.5, H - 0.5 - ys)) / (feather * W)
         e = np.clip(e, 0, 1)
         a = a * (e * e * (3 - 2 * e))
@@ -104,7 +104,46 @@ def layer_points(folder, meta, L, stride, f0, orient=True, snap=True, feather=0.
         S[ok, 0] = stride * lu[ok] * 0.62
         S[ok, 1] = stride * np.maximum(s2[ok], 0.25 * lv[ok]) * 0.62
         S[ok, 2] = foot[ok] * 0.08
+    more = outer_points(folder, meta, L, stride, f0, rgba, z) if L.get("outer") and (meta.get("outer") or {}).get("margin") else None
+    if more is not None:
+        pos = np.concatenate([pos, more[0]]); col = np.concatenate([col, more[1]]); a = np.concatenate([a, more[2]])
+        S = np.concatenate([S, more[3]]); rot = np.concatenate([rot, more[4]])
     return pos.astype(np.float32), col, a, S.astype(np.float32), rot
+
+
+def outer_points(folder, meta, L, stride, f0, rgba, z):
+    """a backdrop's painted margin past the frame (outer_XX.png) as splats, as splat.js writes them: at the layer's
+    depth at the nearest frame-edge pixel, only where this layer (or one nearer) is what the camera sees there, fading
+    out over the margin's last stretch into the dome"""
+    path = os.path.join(folder, L["outer"])
+    if not os.path.exists(path):
+        return None
+    op = cv2.cvtColor(cv2.imread(path, cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2RGBA)
+    H, W = z.shape
+    M = float(meta["outer"]["margin"]); k = 1 + 2 * M
+    oh, ow = op.shape[:2]
+    os_ = max(2, int(round(stride * ow / (W * k))))
+    jj, ii = np.mgrid[0:oh:os_, 0:ow:os_]
+    u = -M + (ii + 0.5) / ow * k
+    v = -M + (jj + 0.5) / oh * k
+    out = (u < 0) | (u > 1) | (v < 0) | (v > 1)
+    keep = out & (op[jj, ii, 3] >= 128)
+    d = np.maximum.reduce([-u, u - 1, -v, v - 1, np.zeros_like(u)])
+    e = 1 - np.clip((d - (M - 0.04)) / 0.04, 0, 1)
+    a = (e * e * (3 - 2 * e)).astype(np.float32)
+    keep &= a > 0.01
+    ex = np.clip(np.floor(u * W).astype(int), 0, W - 1)
+    ey = np.clip(np.floor(v * H).astype(int), 0, H - 1)
+    keep &= rgba[ey, ex, 3] > 89
+    u, v, a, ex, ey, jj, ii = u[keep], v[keep], a[keep], ex[keep], ey[keep], jj[keep], ii[keep]
+    zz = z[ey, ex]
+    X, Y = u * W, v * H
+    P = np.stack([(X - W / 2) / f0 * zz, (Y - H / 2) / f0 * zz, zz], 1).astype(np.float32)
+    C = op[jj, ii, :3].astype(np.float32) / 255.0
+    foot = os_ * (W * k / ow) * zz / f0
+    S = np.stack([foot * 0.62, foot * 0.62, foot * 0.15], 1).astype(np.float32)
+    Q = np.zeros((len(P), 4), np.float32); Q[:, 0] = 1.0
+    return P, C, a, S, Q
 
 
 def dome_texture(folder, meta):

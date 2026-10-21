@@ -699,7 +699,96 @@ def write_dome(folder, meta, rgba, surround=None, rect=None):
     cv2.imwrite(os.path.join(folder, "dome.png"), cv2.cvtColor(np.clip(tex * 255 + .5, 0, 255).astype(np.uint8), cv2.COLOR_RGB2BGR))
     import time
     meta["dome"] = dict(d, image="dome.png", painted=surround is not None, rev=int(time.time()))   # rev: a cache-buster for viewers
+    if surround is not None and rect is not None:
+        write_outer(folder, meta, rgba, surround, rect)
     return tex
+
+
+OUTER_MARGIN = 0.12               # how far past the frame a backdrop's mesh reaches (the studio's grid margin)
+
+
+def _reaches_out(L, W, H):
+    """a layer the studio draws past the frame edge: a backdrop, or anything cut by the frame (a cliff, a table)"""
+    b = L.get("bbox") or [0, 0, W - 1, H - 1]
+    return bool(L.get("backdrop")) or b[0] <= 2 or b[1] <= 2 or b[2] >= W - 3 or b[3] >= H - 3
+
+
+def write_outer(folder, meta, rgba, surround, rect, margin=OUTER_MARGIN):
+    """The set going on past the frame, in real paint. Past the frame edge the studio draws a backdrop (or a layer cut
+    by the frame) with its edge texels stretched outward (streaks), fading into the far dome, and on a wide arc the
+    painted world showed there as a soft block at the dome's distance with a hard edge where the layer faded. With a
+    painted surround (Valis Stage Dome), each such layer gets outer_XX.png: the painting itself, for the margin the
+    mesh reaches past the frame (`margin` of the frame on each side), at the layer's own (edge) depth. Its alpha says
+    where to use it: where this layer, or one behind it, is what the camera sees at the nearest frame-edge pixel. Behind
+    the layer the camera sees, a layer keeps its stretched completion (hidden; the painting there is the other's).
+    Inside the frame nothing changes: at rest the picture is still the still. Updates meta (not saved)."""
+    H, W = rgba[0].shape[:2]
+    x0, y0, rw, rh = (float(v) for v in rect)
+    k = 1 + 2 * margin
+    ow, oh = int(round(rw * k)), int(round(rh * k))
+    u = (-margin + (np.arange(ow) + 0.5) / ow * k).astype(np.float32)
+    v = (-margin + (np.arange(oh) + 0.5) / oh * k).astype(np.float32)
+    cu, cv_ = np.meshgrid(x0 + u * rw - 0.5, y0 + v * rh - 0.5)
+    paint = cv2.remap(surround.astype(np.float32), cu.astype(np.float32), cv_.astype(np.float32), cv2.INTER_LINEAR,
+                      borderMode=cv2.BORDER_REFLECT_101)
+    # seamless at the frame edge: the painting continues the model's own version of the still, not the still (the
+    # surround has the still pasted back inside the frame), and a faint step showed along the edge (the lighthouse's
+    # sky). At each edge pixel, the still (a little blurred) minus the painting just outside it (2-6 px out) is added
+    # to the painting past it, fading out over ~2% of the frame.
+    iw, ih = int(round(rw)), int(round(rh))
+    still_s = cv2.GaussianBlur(cv2.resize(composite([{"rgba": x} for x in rgba]), (iw, ih), interpolation=cv2.INTER_AREA), (0, 0), 1.5)
+    sur_b = cv2.GaussianBlur(surround.astype(np.float32), (0, 0), 1.0)
+    bx = np.clip(np.floor(u * iw).astype(int), 0, iw - 1)
+    by = np.clip(np.floor(v * ih).astype(int), 0, ih - 1)
+    sx = np.where(u < 0, -1, np.where(u > 1, 1, 0))
+    sy = np.where(v < 0, -1, np.where(v > 1, 1, 0))
+    Hc, Wc = surround.shape[:2]
+    acc = np.zeros((oh, ow, 3), np.float32)
+    for o in (2, 4, 6):
+        X = np.clip(x0 + bx[None, :] + sx[None, :] * o + 0 * by[:, None], 0, Wc - 1).astype(int)
+        Y = np.clip(y0 + by[:, None] + sy[:, None] * o + 0 * bx[None, :], 0, Hc - 1).astype(int)
+        acc += sur_b[Y, X]
+    D = still_s[by[:, None], bx[None, :]] - acc / 3
+    D = cv2.GaussianBlur(D, (0, 0), 2.0)
+    dist = np.maximum(np.maximum(-u, u - 1)[None, :] * iw, np.maximum(-v, v - 1)[:, None] * ih)
+    fade = np.exp(-np.maximum(dist, 0) / max(1.0, 0.02 * iw))[..., None]
+    paint = np.clip(paint + D * fade, 0, 1)
+    # the still's frame-edge pixel nearest to each margin pixel (the studio clamps there too)
+    ex = np.clip((u * W).astype(int), 0, W - 1)
+    ey = np.clip((v * H).astype(int), 0, H - 1)
+    outside = (u[None, :] < 0) | (u[None, :] > 1) | (v[:, None] < 0) | (v[:, None] > 1)
+    # which layer the camera sees most of at each pixel, at rest (a smoke trail half over the sky: whichever shows more)
+    trans = np.ones((H, W), np.float32)
+    best, owner = np.zeros((H, W), np.float32), np.full((H, W), -1, np.int32)
+    for i in range(len(rgba) - 1, -1, -1):
+        a = rgba[i][..., 3]
+        vi = trans * a
+        owner[vi > best] = i
+        best = np.maximum(best, vi)
+        trans = trans * (1 - a)
+    sig = max(1.0, 0.004 * ow)
+    done = []
+    for i, L in enumerate(meta["layers"]):
+        if not _reaches_out(L, W, H):
+            L.pop("outer", None)
+            continue
+        # the painting for the layer the camera sees there and for anything drawn nearer (a smoke trail half over the
+        # sky: stretched, its edge drew streaks over the painted sky); a layer behind it keeps its stretched
+        # completion, which only a move's parallax uncovers
+        own = ((owner <= i) & (owner >= 0)).astype(np.float32)
+        a = own[ey[:, None], ex[None, :]] * outside
+        a = np.clip(cv2.GaussianBlur(a.astype(np.float32), (0, 0), sig) * outside, 0, 1)
+        if a.max() < 0.05:
+            L.pop("outer", None)
+            continue
+        out = np.dstack([paint, a]).astype(np.float32)
+        img = np.clip(out * 255 + .5, 0, 255).astype(np.uint8)
+        f = f"outer_{i:02d}.png"
+        cv2.imwrite(os.path.join(folder, f), cv2.cvtColor(img, cv2.COLOR_RGBA2BGRA))
+        L["outer"] = f
+        done.append(L["name"])
+    meta["outer"] = {"margin": margin, "layers": done}
+    return done
 
 
 def plate_targets(meta):
