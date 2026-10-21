@@ -14,6 +14,7 @@ export const MODELS = {
   h3AVAE: "minimax_h3_audio_vae_fp32.safetensors", pdd: "MiniMax-H3-FL2VA-Acc-8Step.safetensors",
   qwen: "qwen_image_2.1-Q6_K.gguf", qwenTE: "qwen3vl_8b_w4a8.safetensors", qwenVAE: "qwen_image_2.1_vae_bf16.safetensors",
   sam: "sam3.1_multiplex_fp16.safetensors",
+  llm: "qwen3vl_8b_w4a8.safetensors",                 // the film planner: ComfyUI's text generation on Qwen Image's own encoder
   funCN: "minimax_h3_fun_controlnet_union_pruned_int8_convrot.safetensors",
   funCN2: "minimax_h3_fun_controlnet_union_2.0_pruned_int8_convrot.safetensors",   // 10 control blocks; inpaint holes at mid-grey
   sdpose: "sdpose_wholebody_fp16.safetensors", detr: "rt_detr_v4-x-hgnet_fp16.safetensors",
@@ -504,13 +505,15 @@ export function song({style, lyrics, seconds = 30, seed = 1843, base = 500, pref
 
 // The FX tab: a clip (+ another clip, a subject), cues from a song / a written song / a cue sheet / a score, a stack of
 // library layers, and every layer's own sound mixed with the music.
-export function fx({clip, other = null, subject = "", source = "sheet", audio = null, songSpec = null, cueSheet = "", score = null,
+export function fx({clip, other = null, subject = "", source = "sheet", audio = null, abc = "", songSpec = null, cueSheet = "", score = null,
                     layers = [], beds = [], sound = true, seconds = 4.46, start = 0, prefix = "valis/fx"}) {
   const g = {
     "16": N("LoadVideo", {file: clip}),
     "17": N("GetVideoComponents", {video: ["16", 0]}),
   };
-  const cues = {cue_sheet: source === "sheet" ? cueSheet : "", duration: 0, offset: 0, bpm_hint: 0};
+  // start: where this clip begins in the song. The cues are shifted so the clip's own clock starts at 0, and the sound
+  // design gets the song from there, so a film's shots can each take their place in one song.
+  const cues = {cue_sheet: source === "sheet" ? cueSheet : "", duration: 0, offset: -start, bpm_hint: 0, ...(abc ? {abc} : {})};
   let music = null;
   if (source === "song" && audio) { g["45"] = N("LoadAudio", {audio}); music = ["45", 0]; }
   if (source === "write" && songSpec) { const s = song({...songSpec, prefix: prefix + "_song"}); Object.assign(g, s.graph); music = s.audio; cues.abc = s.abc; }
@@ -523,14 +526,16 @@ export function fx({clip, other = null, subject = "", source = "sheet", audio = 
     g[id] = N("ValisLayer", {effect: l.effect, on: l.on || "", by: l.by || "", params: JSON.stringify(l.params || {}), ...(prev ? {stack: [prev, 0]} : {})});
     prev = id;
   });
-  const r = {images: ["17", 0], cues: ["50", 0], stack: [prev, 0], fps: 24, start};
+  const r = {images: ["17", 0], cues: ["50", 0], stack: [prev, 0], fps: 24, start: 0};
   if (other) { g["40"] = N("LoadVideo", {file: other}); g["41"] = N("GetVideoComponents", {video: ["40", 0]}); r.other = ["41", 0]; }
   if (subject) { Object.assign(g, personMatte(["17", 0], subject, 30, 10)); r.subject = ["33", 0]; }
   g["80"] = N("ValisRender", r);
   const vid = {images: ["80", 0], fps: 24};
   if (sound || music) {
+    let seg = music;
+    if (music && start) { g["46"] = N("TrimAudioDuration", {audio: music, start_index: start, duration: seconds}); seg = ["46", 0]; }
     g["85"] = N("ValisSoundDesign", {cues: ["50", 0], duration: seconds, beds: beds.map(b => `${b}:.45`).join(", "), hits: "", music_gain: 0.9, duck: 0.3, seed: 1,
-      ...(sound ? {stack: [prev, 0]} : {}), ...(music ? {music} : {})});
+      ...(sound ? {stack: [prev, 0]} : {}), ...(seg ? {music: seg} : {})});
     vid.audio = ["85", 0];
   }
   g["81"] = N("CreateVideo", vid);
@@ -713,4 +718,70 @@ export function upscale({video, resolution = 1080, batch = 9, seed = 42, prefix 
     "out": N("CreateVideo", {images: ["up", 0], fps: ["vc", 2], audio: ["vc", 1]}),
     "save": N("SaveVideo", {video: ["out", 0], filename_prefix: prefix, format: "auto", codec: "auto"}),
   };
+}
+
+// ---------------------------------------------------------------- Film: one line in, a scored and cut short film out
+// The planner is ComfyUI's own text generation on the Qwen3-VL 8B encoder Qwen Image already uses (open weights, on
+// disk): it writes the shot list and the song brief as JSON. film.js runs the rest: YuE2 writes and performs the song,
+// Krea 2 frames every shot, H3 shoots it, SAM 3 tracks the subject, the library fires one effect per shot on the song's
+// lanes, the sound design is synthesized in its key, and the cut lands every shot on the song's bar lines.
+export const FILM_EFFECTS = ["Shockwave", "Rays", "Echo", "Glitch", "Punch", "Frost", "Datamosh", "SlitScan", "Projector", "Lens", "Vertigo", "none"];
+export const FILM_LANES = ["kick", "snare", "hat", "beat", "downbeat", "bar", "melody", "bass"];
+
+export function filmPlanPrompt({idea, shots = 6, genre = null}) {
+  return `You are the writer and director of a ${Math.round(shots * 4.5)}-second film with no dialogue. Idea: "${idea}".` +
+    (genre ? ` Genre look: ${genre.name}. ${genre.style}` : "") + `
+Write the plan as one JSON object and nothing else: no prose before or after it, no code fences.
+{"title": "two or three words",
+ "logline": "one sentence",
+ "cast": "one sentence describing each main character's look (age, hair, clothes), to be repeated under every shot",
+ "place": "one sentence describing the setting and its light",
+ "song": {"style": "the music in at most twelve words: genre, instruments, mood, ending with the tempo, 108 BPM", "lyrics": "[Instrumental]"},
+ "shots": [exactly ${shots} objects in story order, each
+   {"keyframe": "one sentence: what the still frame shows, who and where, the framing (wide, medium or close) and the light",
+    "motion": "one sentence: what moves during these four seconds",
+    "subject": "two or three words naming the main thing in frame, for a tracker, e.g. the woman, the lantern",
+    "effect": one of ${JSON.stringify(FILM_EFFECTS)},
+    "on": one of ${JSON.stringify(FILM_LANES)}}]}
+Rules: every shot is rendered on its own, so describe the cast the same way each time; vary the framing from shot to shot; build to an impact in the last third. Effects: Shockwave or Punch on downbeat for an impact, Rays on beat for a light source, Echo on beat for a moving body, Frost or Datamosh on kick for dread, Projector on bar for a memory, Lens on downbeat for the uncanny, Glitch on hat for machines, Vertigo on bar for a realisation, SlitScan on melody for time passing; "none" for a quiet shot.`;
+}
+
+export function filmPlan({idea, shots = 6, genre = null, prefix = "valis/film_plan"}) {
+  return {
+    "1": N("CLIPLoader", {clip_name: MODELS.llm, type: "qwen_image", device: "default"}),
+    "2": N("TextGenerate", {clip: ["1", 0], prompt: filmPlanPrompt({idea, shots, genre}), max_length: 2200, sampling_mode: "off", thinking: false, use_default_template: true}),
+    "3": N("SaveText", {text: ["2", 0], filename_prefix: prefix, format: "txt"}),
+  };
+}
+
+// every shot's keyframe in one graph: Krea 2 loads once
+export function filmKeyframes({prompts, seed = 7101, width = 768, height = 1344, prefix = "valis/film_key"}) {
+  const g = {
+    "1": N("UNETLoader", {unet_name: MODELS.krea, weight_dtype: "default"}),
+    "2": N("CLIPLoader", {clip_name: MODELS.kreaTE, type: "krea2", device: "default"}),
+    "3": N("VAELoader", {vae_name: MODELS.kreaVAE}),
+    "4": N("EmptySD3LatentImage", {width, height, batch_size: 1}),
+  };
+  prompts.forEach((prompt, k) => {
+    const b = 100 + 10 * k, i = (j) => String(b + j);
+    g[i(0)] = N("CLIPTextEncode", {text: prompt, clip: ["2", 0]});
+    g[i(1)] = N("ConditioningZeroOut", {conditioning: [i(0), 0]});
+    g[i(2)] = N("KSampler", {model: ["1", 0], positive: [i(0), 0], negative: [i(1), 0], latent_image: ["4", 0], seed: seed + k, steps: 10, cfg: 1.0, sampler_name: "euler", scheduler: "simple", denoise: 1.0});
+    g[i(3)] = N("VAEDecode", {samples: [i(2), 0], vae: ["3", 0]});
+    g[i(4)] = N("SaveImage", {images: [i(3), 0], filename_prefix: `${prefix}_${k + 1}`});
+  });
+  return g;
+}
+
+// the cut: every shot trimmed to its bars and joined; each shot carries its own slice of the song and its sounds
+export function filmCut({shots, prefix = "valis/film"}) {
+  const g = {}, vids = {};
+  shots.forEach((s, k) => {
+    g[`v${k}`] = N("LoadVideo", {file: s.file});
+    g[`s${k}`] = N("Video Slice", {video: [`v${k}`, 0], start_time: 0, duration: s.seconds, strict_duration: false});
+    vids[`videos.video${k}`] = [`s${k}`, 0];
+  });
+  g["cat"] = N("ConcatenateVideo", {...vids, codec: "auto"});
+  g["save"] = N("SaveVideo", {video: ["cat", 0], filename_prefix: prefix, format: "auto", codec: "auto"});
+  return g;
 }

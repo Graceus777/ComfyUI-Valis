@@ -195,3 +195,13 @@ details.prompt pre { margin: 0; padding: 0 12px 12px; white-space: pre-wrap; col
 .gj-report .lanes { font-size: 11px; color: var(--dim); }
 .gj-report .btn { margin-top: 10px; }
 
+/* ---------- film: the plan, editable */
+.plan h2 { margin: 0 0 2px; }
+.plan .maprow { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.plan .maprow label { min-width: 44px; color: var(--muted); font-size: 12px; }
+.plan .maprow input { flex: 1; }
+.plan .shot { display: grid; grid-template-columns: 22px 1.6fr 1fr 130px 118px 108px; gap: 6px; align-items: start; margin: 6px 0; }
+.plan .shot b { color: var(--muted); font-size: 12px; padding-top: 8px; }
+.plan .shot textarea { min-height: 54px; }
+.plan .shot select, .plan .shot input { padding: 6px; font-size: 12px; }
+#m-progress .empty { padding: 10px 0 0; }

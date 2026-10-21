@@ -5,6 +5,7 @@ import {PALETTES} from "./palettes.js";
 import {ScoreView} from "./score.js";
 import {FxView} from "./fx.js";
 import {checkSetup} from "./check.js";
+import {planFilm, makeFilm} from "./film.js";
 import * as R from "./refengine.js";
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -39,7 +40,7 @@ function show(view) {
 $$(".tab").forEach(b => b.addEventListener("click", () => show(b.dataset.view)));
 addEventListener("keydown", (e) => {
   if (e.target.matches("input, textarea, select")) return;
-  const v = {"1": "create", "2": "edit", "3": "score", "4": "fx", "5": "renders", "6": "genjutsu"}[e.key];
+  const v = {"0": "film", "1": "create", "2": "edit", "3": "score", "4": "fx", "5": "renders", "6": "genjutsu"}[e.key];
   if (v) show(v);
 });
 
@@ -638,8 +639,69 @@ $("#r-engine-get").addEventListener("click", async () => {
 engineUI();
 
 api.connect();
+// ------------------------------------------------------------------ FILM: one line, one film (film.js runs the chain)
+const M = {genre: null, shots: 6, plan: null, busy: false};
+cards($("#m-genre"), P.GENRES, (g) => { M.genre = g; }, "gothic");
+seg($("#m-shots"), [{id: "4", name: "4 shots"}, {id: "6", name: "6 shots"}, {id: "8", name: "8 shots"}], (x) => { M.shots = Number(x.id); }, "6");
+// the chain's view of the studio: submit a graph and wait for its results, read a saved text, name a result for a loader
+const filmIO = {
+  run: (graph, label) => new Promise((res, rej) => {
+    api.submit(graph, label, "film").then((job) => {
+      const upd = progressFor(job, $("#m-progress"));
+      waiters.set(job.id, (j) => {
+        upd(j);
+        if (j.status === "done") { waiters.delete(j.id); res({outputs: j.outputs}); }
+        if (j.status === "error") { waiters.delete(j.id); rej(new Error(`${label} failed: ${j.error}`)); }
+      });
+    }).catch(rej);
+  }),
+  text: async (f) => (await fetch(api.viewUrl(f))).text(),
+  ref: (f) => api.outputRef(f),
+  free: () => api.free(),
+};
+function drawPlan() {
+  const p = M.plan, box = $("#m-planbox");
+  if (!p) { box.replaceChildren(); return; }
+  const field = (label, get, set) => h("div", {class: "maprow"}, h("label", {}, label), h("input", {type: "text", value: get(), oninput: (e) => set(e.target.value)}));
+  box.replaceChildren(h("h2", {}, p.title), h("p", {class: "hint"}, p.logline),
+    field("cast", () => p.cast, (v) => { p.cast = v; }), field("place", () => p.place, (v) => { p.place = v; }), field("song", () => p.song.style, (v) => { p.song.style = v; }),
+    ...p.shots.map((sh, k) => h("div", {class: "shot"}, h("b", {}, String(k + 1)),
+      h("textarea", {rows: 2, title: "the still frame", oninput: (e) => { sh.keyframe = e.target.value; }}, sh.keyframe),
+      h("input", {type: "text", value: sh.motion, placeholder: "what moves", title: "what moves in the shot", oninput: (e) => { sh.motion = e.target.value; }}),
+      h("input", {type: "text", value: sh.subject, placeholder: "subject", title: "what SAM 3 tracks", oninput: (e) => { sh.subject = e.target.value; }}),
+      h("select", {title: "the effect", onchange: (e) => { sh.effect = e.target.value; }}, ...G.FILM_EFFECTS.map(x => h("option", {value: x, selected: x === sh.effect}, x))),
+      h("select", {title: "the lane that fires it", onchange: (e) => { sh.on = e.target.value; }}, ...G.FILM_LANES.map(x => h("option", {value: x, selected: x === sh.on}, `on ${x}`))))));
+}
+$("#m-plan").addEventListener("click", async () => {
+  const idea = $("#m-idea").value.trim();
+  if (!idea) return toast("Say what the film is about first", true);
+  if (M.busy) return;
+  M.busy = true; $("#m-plan").disabled = true;
+  try {
+    $("#m-status").textContent = "Qwen3 is writing the shot list and the song brief (about two minutes with the model load)";
+    M.plan = await planFilm({idea, shots: M.shots, genre: M.genre}, filmIO);
+    drawPlan(); $("#m-make").disabled = false; $("#m-progress").replaceChildren();
+    $("#m-status").textContent = `Planned: ${M.plan.title}. Edit anything above, then make the film.`;
+  } catch (e) { toast(e.message, true); $("#m-status").textContent = e.message; }
+  finally { M.busy = false; $("#m-plan").disabled = false; }
+});
+$("#m-make").addEventListener("click", async () => {
+  if (!M.plan || M.busy) return;
+  M.busy = true; $("#m-make").disabled = true; $("#m-plan").disabled = true;
+  const t0 = Date.now();
+  try {
+    const r = await makeFilm(M.plan, filmIO, {genre: M.genre, onStage: (stage, msg) => { $("#m-status").textContent = msg; }});
+    $("#m-progress").replaceChildren();
+    $("#m-viewer").replaceChildren(media(r.film)); finishBar($("#m-finish"), r.film, $("#m-viewer"), $("#m-strip"));
+    $("#m-strip").replaceChildren(...r.fxed.map((v, k) => { const t = h("div", {class: "thumb"}, media(v, {controls: false}), h("div", {class: "meta"}, `shot ${k + 1}`)); t.onclick = () => $("#m-viewer").replaceChildren(media(v)); return t; }));
+    $("#m-status").textContent = `${M.plan.title}: ${r.fxed.length} shots of ${r.cut.bars} bar${r.cut.bars > 1 ? "s" : ""} at ${r.bar.bpm} BPM, ${Math.round((Date.now() - t0) / 60000)} min. Saved ${r.film.subfolder}/${r.film.filename}`;
+    toast(`Film saved: ${r.film.filename}`);
+  } catch (e) { toast(e.message, true); $("#m-status").textContent = e.message; }
+  finally { M.busy = false; $("#m-make").disabled = false; $("#m-plan").disabled = false; }
+});
+
 machine(); setInterval(machine, 8000);
 setup();
-show((location.hash || "#create").slice(1));
+show((location.hash || "#film").slice(1));
 promptsPreview();
 refreshPrompt();

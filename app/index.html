@@ -12,7 +12,8 @@
 <header class="top">
   <div class="brand"><span class="mark">VALIS</span><span class="sub">studio</span></div>
   <nav class="tabs">
-    <button class="tab on" data-view="create">Create<span class="k">1</span></button>
+    <button class="tab on" data-view="film">Film<span class="k">0</span></button>
+    <button class="tab" data-view="create">Create<span class="k">1</span></button>
     <button class="tab" data-view="edit">Edit<span class="k">2</span></button>
     <button class="tab" data-view="genjutsu">Genjutsu<span class="k">6</span></button>
     <button class="tab" data-view="score">Score<span class="k">3</span></button>
@@ -28,6 +29,33 @@
 </header>
 
 <main>
+  <!-- ======================= FILM ======================= -->
+  <section class="view" id="view-film">
+    <aside class="panel">
+      <h2>The film</h2>
+      <textarea id="m-idea" rows="4" placeholder="One line. e.g. a lighthouse keeper rows out into the storm to bring back the woman the sea took"></textarea>
+      <h2>Genre</h2>
+      <div class="cards" id="m-genre"></div>
+      <h2>Shots</h2>
+      <div class="seg" id="m-shots"></div>
+      <p class="hint">Each shot is one MiniMax H3 clip of about four and a half seconds, cut to the song's bars. Six shots is about 25 seconds of film and an hour of rendering on a 12 GB card.</p>
+      <div class="cta"><button class="btn" id="m-plan" style="flex:1">Plan it<span class="sub">Qwen3 writes the shot list and the song brief · ~2 min</span></button></div>
+      <div class="cta"><button class="btn primary" id="m-make" style="flex:1" disabled>Make the film<span class="sub">song · keyframes · shots · effects · cut</span></button></div>
+    </aside>
+    <div class="stage">
+      <div>
+        <h1>One line, one film</h1>
+        <p class="lede">Say what the film is about. A local Qwen3 writes the shot list and the song brief; YuE2 writes the sheet music and performs it; Krea 2 frames every shot and MiniMax H3 shoots it; SAM 3 tracks the subject and the library fires one effect per shot on the song's own lanes; the sound is synthesized in the song's key; the cut lands on the bars. Open weights, this machine, no prompt-writing. Edit the plan before you make it.</p>
+      </div>
+      <div class="plan" id="m-planbox"></div>
+      <div id="m-progress"></div>
+      <p class="hint" id="m-status"></p>
+      <div class="viewer" id="m-viewer"><div class="empty"><b>No film yet</b>Describe it and press Plan it.</div></div>
+      <div class="finish" id="m-finish"></div>
+      <div class="strip" id="m-strip"></div>
+    </div>
+  </section>
+
   <!-- ======================= CREATE ======================= -->
   <section class="view" id="view-create">
     <aside class="panel">

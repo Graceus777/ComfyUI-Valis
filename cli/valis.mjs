@@ -22,6 +22,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const HELP = `valis <command> [options]
 
 commands
+  film       --idea "..." [--genre gothic --shots 6 --plan-only | --plan plan.json]                        one line -> a scored, cut short film
   frame      --prompt "..." [--genre gothic --framing close --lens 85 --light candle --grade teal]   two Krea 2 keyframes
   cast       --keyframe k.png --character c.png [--prompt "..."]                                      put a character into a keyframe
   shoot      --image k.png --motion "..." [--move push --seconds 4.5]                                   H3 image-to-video
@@ -115,6 +116,41 @@ async function build() {
   console.error(`unknown command: ${cmd}\n\n${HELP}`); process.exit(2);
 }
 if (cmd === "run") opt._1 = opt._[1];
+
+if (cmd === "film") {
+  // the whole film through the same SDK: film.js runs the chain, this is its view of the client
+  const {planFilm, makeFilm} = await import("../app/js/film.js");
+  const genre = P.GENRES.find(g => g.id === (opt.genre || "gothic")) || P.GENRES[0];
+  const saves = (graph) => new Set(Object.entries(graph).filter(([, n]) => /^Save/.test(n.class_type)).map(([id]) => id));
+  const io = {
+    run: async (graph, label) => {
+      const t = Date.now(), job = await sdk.submit(sdk.workflows.fromJson(graph));
+      console.error(`${label}: job ${job.id}`);
+      await job.wait();
+      if (job.status !== "succeeded") { const e = job.error; throw new Error(`${label} failed: ${e ? `${e.class_type || ""} ${e.message || e.code}` : job.status}`); }
+      console.error(`${label}: done in ${((Date.now() - t) / 1000).toFixed(0)}s`);
+      const ok = saves(graph);
+      return {outputs: job.outputs.filter(o => !o.nodeId || ok.has(o.nodeId)).map(o => ({filename: o.name, subfolder: "valis", type: "output", nodeId: o.nodeId, _o: o}))};
+    },
+    text: async (f) => Buffer.from(await f._o.toBytes()).toString("utf8"),
+    ref: (f) => `${f.subfolder}/${f.filename} [output]`,
+    free: () => fetch(`${process.env.COMFY_BASE_URL}/free`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({unload_models: true, free_memory: true})}),
+  };
+  let plan;
+  if (opt.plan && fs.existsSync(opt.plan)) plan = JSON.parse(fs.readFileSync(opt.plan, "utf8"));       // a plan edited by hand
+  else {
+    plan = await planFilm({idea: need("idea"), shots: Number(opt.shots || 6), genre}, io);
+    if (opt["plan-only"]) { console.log(JSON.stringify(plan, null, 2)); process.exit(0); }
+  }
+  console.error(`plan: ${plan.title}, ${plan.shots.length} shots`);
+  const r = await makeFilm(plan, io, {genre, onStage: (stage, msg) => console.error(`${stage}: ${msg}`)});
+  const out = opt.out || "valis_out";
+  fs.mkdirSync(out, {recursive: true});
+  const dest = path.join(out, r.film.filename);
+  fs.writeFileSync(dest, await r.film._o.toBytes());
+  console.log(JSON.stringify({plan, film: dest, song: r.song.filename, bpm: r.bar.bpm, bars_per_shot: r.cut.bars, shots: r.fxed.map(v => v.filename)}, null, 2));
+  process.exit(0);
+}
 
 const graph = await build();
 if (opt.json) { console.log(JSON.stringify(graph, (k, v) => (v && v.filePath !== undefined && v.commit ? `<asset ${v.filePath}>` : v), 2)); process.exit(0); }

@@ -19,6 +19,9 @@ const norm = (v) => String(v).replace(/\\/g, "/");
 export function features() {
   const e = {video: "x.mp4", target: "x", anchorPrompt: "x", desc: "x"};
   return {
+    "Film · plan (Qwen3 text generation)": G.filmPlan({idea: "x", shots: 2}),
+    "Film · keyframes": G.filmKeyframes({prompts: ["x", "y"]}),
+    "Film · cut": G.filmCut({shots: [{file: "a.mp4", seconds: 4}, {file: "b.mp4", seconds: 4}]}),
     "Create · Frame it": G.keyframes({prompt: "x"}),
     "Create · cast a character": G.castCharacter({keyframe: "a.png", character: "b.png", prompt: "x"}),
     "Create · Shoot it": G.shot({image: "a.png", motion: "x"}),
