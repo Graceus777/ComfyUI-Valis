@@ -61,8 +61,17 @@ export async function planFilm({idea, shots = 6, genre = null}, io) {
   return {...plan, tag, idea, genre: genre?.id || null};
 }
 
+// A run stopped halfway resumes: a stage whose files are already in ComfyUI's output (same plan, same tag) is not run
+// again. io.exists says whether a saved file is there; without it every stage runs.
 export async function makeFilm(plan, io, {genre = null, onStage = () => {}} = {}) {
   const tag = plan.tag || Date.now().toString(36), n = plan.shots.length, pre = `valis/film_${tag}`;
+  const saved = async (names) => {
+    if (!io.exists) return null;
+    const files = names.map(name => ({filename: name, subfolder: "valis", type: "output"}));
+    for (const f of files) if (!(await io.exists(f))) return null;
+    return {outputs: files};
+  };
+  const stage = async (names, label, graph) => (await saved(names)) || await io.run(graph(), label);
   // a shot's still: the genre's look, the shot, the looks of the cast who are in it (all of them when the plan doesn't say), the place
   const inShot = (s) => (plan.cast || []).filter(c => !s.who || !c.name || s.who.some(w => w.toLowerCase().includes(c.name.toLowerCase()) || c.name.toLowerCase().includes(w.toLowerCase())));
   const still = (s) => [genre?.style || "", s.keyframe, ...inShot(s).map(c => c.look), plan.place].filter(Boolean).join(" ");
@@ -70,14 +79,17 @@ export async function makeFilm(plan, io, {genre = null, onStage = () => {}} = {}
   const free = async () => { if (io.free) await io.free().catch(() => {}); };
   await free();
   onStage("song", "YuE2 writes the sheet music and performs it");
-  const song = await io.run(G.song({style: plan.song.style, lyrics: plan.song.lyrics, seconds: Math.min(60, Math.ceil(n * SHOT_SECONDS + 2)), seed: 1843, prefix: `${pre}_song`}).graph, "Film · song");
+  const base = pre.slice("valis/".length);
+  const song = await stage([`${base}_song_00001.flac`, `${base}_song_abc_00001.txt`], "Film · song",
+    () => G.song({style: plan.song.style, lyrics: plan.song.lyrics, seconds: Math.min(60, Math.ceil(n * SHOT_SECONDS + 2)), seed: 1843, prefix: `${pre}_song`}).graph);
   const audio = song.outputs.find(o => /\.(flac|wav|mp3)$/i.test(o.filename)), abcFile = song.outputs.find(isText);
   if (!audio) throw new Error("YuE2 saved no audio");
   const abc = abcFile ? await io.text(abcFile) : "";
   const bar = barSeconds(abc), cut = shotSeconds(bar.seconds);
   await free();
   onStage("keyframes", `Krea 2 frames ${n} shots`);
-  const keys = await io.run(G.filmKeyframes({prompts: plan.shots.map(still), seed: 7101, prefix: `${pre}_key`}), "Film · keyframes");
+  const keys = await stage(plan.shots.map((_, k) => `${base}_key_${k + 1}_00001_.png`), "Film · keyframes",
+    () => G.filmKeyframes({prompts: plan.shots.map(still), seed: 7101, prefix: `${pre}_key`}));
   const keyOf = (k) => keys.outputs.find(o => new RegExp(`_key_${k + 1}_\\d+_\\.png$`).test(o.filename));
   const clips = [];
   for (let k = 0; k < n; k++) {
@@ -85,7 +97,8 @@ export async function makeFilm(plan, io, {genre = null, onStage = () => {}} = {}
     onStage("shots", `MiniMax H3 shoots shot ${k + 1} of ${n}`, k);
     const key = keyOf(k);
     if (!key) throw new Error(`no keyframe for shot ${k + 1}`);
-    const r = await io.run(G.shot({image: io.ref(key), motion: P.motionPrompt({genre, move: push, action: plan.shots[k].motion}), seconds: SHOT_SECONDS, seed: 51101 + k, prefix: `${pre}_shot_${k + 1}`}), `Film · shot ${k + 1}`);
+    const r = await stage([`${base}_shot_${k + 1}_00001_.mp4`], `Film · shot ${k + 1}`,
+      () => G.shot({image: io.ref(key), motion: P.motionPrompt({genre, move: push, action: plan.shots[k].motion}), seconds: SHOT_SECONDS, seed: 51101 + k, prefix: `${pre}_shot_${k + 1}`}));
     const v = r.outputs.find(isVideo);
     if (!v) throw new Error(`shot ${k + 1} saved no video`);
     clips.push(v);
@@ -97,8 +110,9 @@ export async function makeFilm(plan, io, {genre = null, onStage = () => {}} = {}
     onStage("effects", `effects and sound on shot ${k + 1} of ${n}`, k);
     const layers = lib ? [{effect: lib.id, on: s.on, params: lib.params || {}}] : [];
     const subject = lib && ((lib.needs || []).includes("subject") || lib.params?.at === "subject") ? s.subject : "";
-    const r = await io.run(G.fx({clip: io.ref(clips[k]), subject, source: "song", audio: io.ref(audio), abc, layers, sound: true, seconds: SHOT_SECONDS,
-                                 start: k * cut.seconds, prefix: `${pre}_fx_${k + 1}`}), `Film · effects ${k + 1}`);
+    const r = await stage([`${base}_fx_${k + 1}_00001_.mp4`], `Film · effects ${k + 1}`,
+      () => G.fx({clip: io.ref(clips[k]), subject, source: "song", audio: io.ref(audio), abc, layers, sound: true, seconds: SHOT_SECONDS,
+                  start: k * cut.seconds, prefix: `${pre}_fx_${k + 1}`}));
     const v = r.outputs.find(isVideo);
     if (!v) throw new Error(`effects on shot ${k + 1} saved no video`);
     fxed.push(v);

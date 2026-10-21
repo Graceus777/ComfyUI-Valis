@@ -122,6 +122,7 @@ if (cmd === "film") {
   const {planFilm, makeFilm} = await import("../app/js/film.js");
   const genre = P.GENRES.find(g => g.id === (opt.genre || "gothic")) || P.GENRES[0];
   const saves = (graph) => new Set(Object.entries(graph).filter(([, n]) => /^Save/.test(n.class_type)).map(([id]) => id));
+  const view = (f) => `${process.env.COMFY_BASE_URL}/view?filename=${encodeURIComponent(f.filename)}&subfolder=${encodeURIComponent(f.subfolder || "")}&type=${f.type || "output"}`;
   const io = {
     run: async (graph, label) => {
       const t = Date.now(), job = await sdk.submit(sdk.workflows.fromJson(graph));
@@ -132,8 +133,9 @@ if (cmd === "film") {
       const ok = saves(graph);
       return {outputs: job.outputs.filter(o => !o.nodeId || ok.has(o.nodeId)).map(o => ({filename: o.name, subfolder: "valis", type: "output", nodeId: o.nodeId, _o: o}))};
     },
-    text: async (f) => Buffer.from(await f._o.toBytes()).toString("utf8"),
+    text: async (f) => f._o ? Buffer.from(await f._o.toBytes()).toString("utf8") : await fetch(view(f)).then(r => r.text()),
     ref: (f) => `${f.subfolder}/${f.filename} [output]`,
+    exists: async (f) => (await fetch(view(f), {method: "HEAD"})).ok,
     free: () => fetch(`${process.env.COMFY_BASE_URL}/free`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({unload_models: true, free_memory: true})}),
     has: async (node) => !!(await fetch(`${process.env.COMFY_BASE_URL}/object_info/${node}`).then(r => r.json()).catch(() => ({})))[node],
   };
@@ -148,7 +150,7 @@ if (cmd === "film") {
   const out = opt.out || "valis_out";
   fs.mkdirSync(out, {recursive: true});
   const dest = path.join(out, r.film.filename);
-  fs.writeFileSync(dest, await r.film._o.toBytes());
+  fs.writeFileSync(dest, r.film._o ? await r.film._o.toBytes() : Buffer.from(await fetch(view(r.film)).then(x => x.arrayBuffer())));
   console.log(JSON.stringify({plan, film: dest, song: r.song.filename, bpm: r.bar.bpm, bars_per_shot: r.cut.bars, shots: r.fxed.map(v => v.filename)}, null, 2));
   process.exit(0);
 }

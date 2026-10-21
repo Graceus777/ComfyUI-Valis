@@ -659,6 +659,7 @@ const filmIO = {
   ref: (f) => api.outputRef(f),
   free: () => api.free(),
   has: async (node) => !!(await api.objectInfo(node))[node],
+  exists: async (f) => (await fetch(api.viewUrl(f), {method: "HEAD"})).ok,
 };
 function drawPlan() {
   const p = M.plan, box = $("#m-planbox");
