@@ -71,16 +71,22 @@ score-driven pass can be played without generating anything.
 
 ## Films made with Valis
 
-Each was made on the same laptop: Krea 2 keyframes, MiniMax H3 shots and SAM 3.1 masks, then a short spec per film that
-says which library effects each shot gets and which lane fires them. Valis cuts on the music's bars, renders every
-shot's stack, and builds one sound design over the whole film.
+Every one of these was made on the same 12 GB laptop with the tools above: Krea 2 keyframes, MiniMax H3 shots, SAM 3.1
+masks, a Valis score or a YuE2 song written from Valis's own sheet music, then a short spec per film that says which
+library effects each shot gets and which lane fires them. Valis cuts on the music's bars, renders every shot's stack and
+builds one sound design over the whole film. They are in `ComfyUI/output/finished` on the author's machine and in the demo.
 
 | Film | What drives it |
 |---|---|
-| **DANSE MACABRE** (83 s) | A Valis score. Version 4 adds the ballroom of 1843: H3 re-renders of the same shots in that year, bleeding through on the strings and cutting in on every *oom* of the waltz. |
+| **DANSE MACABRE** (83 s) | A Valis score. The reveal burns across the dancers on the kicks; version 4 adds the ballroom of 1843, bleeding through on the strings and cutting in on every *oom* of the waltz. |
+| **BURN SEASON: trailer** (71 s) | Cinema Studio end to end: every trained move (crane, push-in, FPV, crash zoom, arc, bullet time), dolly zoom, whip pan, relight, object swap and extend, on Krea 2, MiniMax H3, Wan 2.2 and Qwen Image, to a YuE2 song from Valis's sheet music. |
+| **BURN SEASON** (44 s) | The film: double exposures of the two leads over the burning cane and the swamp, a photograph that burns through on the hits. |
+| **BLACK SUN** (43 s) | An eclipse over a desert procession: the gravity lens on the sun, shockwaves on the drops, the boy's eyes on the ring. YuE2 from Valis's sheet music. |
+| **THE UNDROWNED** (47 s) | *Wade in the Water* performed by YuE2: an underwater church, a ghost procession in the river, double exposures over the old photograph. |
+| **GLASS** (44 s) | YuE2 at 108 BPM. Glitch on the hats, datamosh on the kick, split time down the platform, and the station shatters on one cue. |
+| **LAST LIGHT OF ENROTH** (49 s) | A painted fantasy: light shafts, lightning and lantern glows fired by the track, a lich king and a bone dragon in oils. |
+| **SILENT** (44 s) | No music at all: a cue sheet is the score and every sound is synthesized by Valis. The keeper's logbook burns open onto 1843 and reality tears down the middle of the sea. |
 | **SILKSCREEN** (38 s) | A song YuE2 performed from Valis's own sheet music. Double exposures, burns and echoes fire on its melody and bass notes. |
-| **GLASS** (38 s) | YuE2 again, at 108 BPM. Glitch on the hats, datamosh on the kick, and the station shatters on one cue. |
-| **SILENT** (38 s) | No music at all: a cue sheet is the score, and every sound is synthesized by Valis. The keeper's logbook burns open onto 1843. |
 
 ## Install
 
