@@ -625,7 +625,9 @@ export function poseCheck({video, start = 0, seconds = 15, prefix = "valis/posec
     "chk": N("ValisPoseCheck", {keypoints: ["kp", 0], fps: ["vc", 2], score_threshold: 0.5}),
     "rep": N("SaveText", {text: ["chk", 0], filename_prefix: `${prefix}_report`, format: "json"}),
     "tl": N("SaveImage", {images: ["chk", 1], filename_prefix: `${prefix}_timeline`}),
-    "cv": N("CreateVideo", {images: ["ctl", 0], fps: ["vc", 2]}),
+    // the skeleton frames keep the clip's aspect at 1024 on the long side, which can be an odd width: h264 needs even sizes
+    "cte": N("ResizeImageMaskNode", {input: ["ctl", 0], resize_type: "scale to multiple", "resize_type.multiple": 2, scale_method: "lanczos"}),
+    "cv": N("CreateVideo", {images: ["cte", 0], fps: ["vc", 2]}),
     "save": N("SaveVideo", {video: ["cv", 0], filename_prefix: `${prefix}_skeleton`, format: "auto", codec: "auto"}),
   };
 }
