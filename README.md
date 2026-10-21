@@ -210,6 +210,7 @@ these graphs. `--api` / `--key` point the CLI at Comfy Cloud or a Comfy API depl
 | Trained camera move, H3 (4.5 s) / Wan 2.2 (5 s, 720p) | ~7 min / ~9 min |
 | Dolly zoom (trained push + SAM 3 + re-frame) | ~8 min |
 | Genjutsu, 5 s at 480p (motion transfer, restyle) | ~6 min |
+| Genjutsu source check (SDPose + Valis Pose Check, 10 s clip) | ~3–4 min |
 | Extend (5 s more) / Upscale to 1080p (5 s) | ~2.5 min / ~7 min |
 
 Run **Free memory** between big jobs on a 12–16 GB card: H3 image-to-video and H3 ref2va don't fit side by side.
