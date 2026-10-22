@@ -234,6 +234,10 @@ $("#c-shoot").addEventListener("click", async () => {
   const trained = tm && (!tm.lora || await api.hasLora(tm.lora)) ? tm : null;     // lora: null = H3 words + a post step (dolly lock, whip ramp)
   const who = $("#c-who").value.trim() || "the subject";
   const scene = [$("#c-subject").value.trim(), $("#c-action").value.trim()].filter(Boolean).join(" ");
+  // the 360 orbit: one 8.8 s shot pinned back to its first frame (a 4.5 s one swings out and back); graphs.js orbit360
+  if (trained?.orbit && trained.lora)
+    return run(G.orbit360({image, loras: [{name: trained.lora, strength: trained.strength}], raw: trained.raw({subject: who, scene}), width, height,
+                           look, prefix}), `Shot · ${C.move.name} (trained, full turn)`, $("#c-viewer"), {onDone});
   if (trained?.engine === "wan")
     return run(G.wanMove({image, move: trained, strength: trained.strength, subject: who, scene, width, height, look, prefix}),
                `Shot · ${C.move.name} (trained, Wan 2.2)`, $("#c-viewer"), {onDone});

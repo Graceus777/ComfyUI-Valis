@@ -65,6 +65,14 @@ export async function submit(graph, label = "job", kind = "render") {
   return job;
 }
 
+// A job a script built (work/<film>/build.mjs writes graphs to ComfyUI/input/valis_jobs/): queue it by file name, tracked
+// like any studio job. From the browser console: (await import("/valis/app/js/api.js")).submitJob("burn3_clip_s16.json")
+export async function submitJob(file, label = file.replace(/\.json$/, "")) {
+  const r = await fetch(`/api/view?filename=${encodeURIComponent(file)}&type=input&subfolder=valis_jobs&t=${Date.now()}`);
+  if (!r.ok) throw new Error(`no ${file} in ComfyUI/input/valis_jobs`);
+  return submit(await r.json(), label);
+}
+
 // o is a v2 Output as the job record lists it: {node_id, name, url, id, content_type}. Follow its url, don't build one.
 function addOutput(job, o) {
   if (!(o.node_id in job.subs) || job.outputs.some(f => f.id === o.id)) return;     // previews and temp files are not results
@@ -85,9 +93,21 @@ function weights(graph) {
 // Live progress from the job's event stream (the SDK's raw SSE layer: its high-level events() keeps progress
 // monotonic, which on a self-hosted ComfyUI swallows the sampler's step frames). The job's own state is the final word.
 const TERMINAL = new Set(["succeeded", "failed", "canceled", "expired"]);
+// A page keeps at most ~6 connections open to one host, and an event stream holds one for as long as its job lives:
+// with six jobs queued every other request (the next submit, /view, the queue pill) waited forever. A queued job is
+// polled instead, and its stream opens only when it starts running (ComfyUI runs one job at a time).
+async function untilRunning(j) {
+  for (let wait = 1000; ; wait = Math.min(wait * 1.5, 4000)) {
+    try { await j.refresh(); } catch (e) { console.warn(e); }
+    if (j.status !== "queued" && j.status !== "pending") return;
+    await new Promise(r => setTimeout(r, wait));
+  }
+}
 async function follow(job) {
   const j = job.sdkJob;
   const done = new Set(), total = Object.values(job.w).reduce((a, b) => a + b, 0) || 1;
+  await untilRunning(j);
+  if (TERMINAL.has(j.status)) { await finish(job); return; }
   try {
     for await (const raw of low.getJobEvents(j.urls?.events || j.id)) {
       const d = raw.data || {};
@@ -107,6 +127,10 @@ async function follow(job) {
       emit({type: "job", job});
     }
   } catch (e) { console.warn(`events for ${job.label} dropped; polling`, e); }
+  await finish(job);
+}
+async function finish(job) {
+  const j = job.sdkJob;
   try { await j.wait(); } catch (e) { console.warn(e); }
   if (j.status === "succeeded") {
     const rec = await low.getJob(j.id).catch(() => null);          // the raw record carries each output's link

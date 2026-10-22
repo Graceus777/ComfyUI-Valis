@@ -31,10 +31,10 @@
         "3",
         0
       ],
-      "prompt": "One frozen instant. Only the camera moves. In a continuous 360 orbit. Preserve every person and object in exactly the same world position, orientation, shape and pose throughout the shot. Airborne objects remain suspended at the captured height and angle: no wobbling, shaking, spinning, drifting, falling or continued action. Keep faces, hands, clothing, liquids and the background motionless while retaining their natural appearance. Camera parallax is the only source of apparent movement. No cuts, zoom, morphing or added objects.",
+      "prompt": "One frozen instant. Only the camera moves. In a continuous 360 orbit. Preserve every person and object in exactly the same world position, orientation, shape and pose throughout the shot. Airborne objects remain suspended at the captured height and angle: no wobbling, shaking, spinning, drifting, falling or continued action. Keep faces, hands, clothing, liquids and the background motionless while retaining their natural appearance. Camera parallax is the only source of apparent movement. No cuts, zoom, morphing or added objects.\n\noverall_soundscape:\nOnly the natural sound of the place in the picture.\n\nnon_diegetic_music:\nN/A",
       "width": 768,
       "height": 1344,
-      "length": 107,
+      "length": 209,
       "first_frame": [
         "fs",
         0
@@ -124,10 +124,14 @@
     "class_type": "CreateVideo",
     "inputs": {
       "images": [
-        "12",
+        "th",
         0
       ],
-      "fps": 24
+      "fps": 24,
+      "audio": [
+        "ad",
+        0
+      ]
     }
   },
   "14": {
@@ -137,7 +141,7 @@
         "13",
         0
       ],
-      "filename_prefix": "valis/shot",
+      "filename_prefix": "valis/orbit",
       "format": "auto",
       "codec": "auto"
     }
@@ -202,6 +206,36 @@
         "10",
         0
       ]
+    }
+  },
+  "av": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+    }
+  },
+  "ad": {
+    "class_type": "VAEDecodeAudio",
+    "inputs": {
+      "samples": [
+        "11",
+        0
+      ],
+      "vae": [
+        "av",
+        0
+      ]
+    }
+  },
+  "th": {
+    "class_type": "ValisTrimHold",
+    "inputs": {
+      "images": [
+        "12",
+        0
+      ],
+      "keep": 6,
+      "threshold": 1
     }
   }
 }

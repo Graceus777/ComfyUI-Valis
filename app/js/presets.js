@@ -282,7 +282,7 @@ export function genjutsuPrompt({mode = "motion", refs = [], text = "", style = n
 // engine "wan": Wan 2.2 I2V A14B with a high-noise camera LoRA (graphs.js wanMove), 16 fps.
 // Tested Oct 19 on the levee keyframe with tools/motion_check.py. Only installed LoRAs are used (api.hasLora).
 const ORBIT_FROZEN = "One frozen instant. Only the camera moves. In a continuous 360 orbit. Preserve every person and object in exactly the same world position, orientation, shape and pose throughout the shot. Airborne objects remain suspended at the captured height and angle: no wobbling, shaking, spinning, drifting, falling or continued action. Keep faces, hands, clothing, liquids and the background motionless while retaining their natural appearance. Camera parallax is the only source of apparent movement. No cuts, zoom, morphing or added objects.";
-const frozenOrbit = {engine: "h3", lora: "minimax_h3_flf2v_orbit360_lora_v1.safetensors", strength: 1.0, end: "loop", raw: () => ORBIT_FROZEN,
+const frozenOrbit = {engine: "h3", lora: "minimax_h3_flf2v_orbit360_lora_v1.safetensors", strength: 1.0, end: "loop", orbit: true, raw: () => ORBIT_FROZEN,   // orbit: one 8.8 s pinned shot (graphs.js orbit360)
   source: "pablodawson/MiniMax-H3-360-Orbit-LoRA (MiniMax H3 community licence)"};
 // Jojocodex multi-move H3 LoRA (Apache-2.0): trained captions read "camera motion, [subject], [scene], [move], [style], [quality]".
 const JOJO = "camera_motion_h3_lora_v1_3000_pruned.safetensors";
@@ -291,7 +291,7 @@ const jojo = (move) => ({engine: "h3", lora: JOJO, strength: 1.0, source: "Jojoc
 const wan = (lora, strength, phrase) => ({engine: "wan", lora, highOnly: true, strength, phrase,
   source: "Wan 2.2 high-noise camera LoRA (GhostInShell via UnifiedHorusRA; non-commercial licence)"});
 export const CAMERA_LORAS = {
-  orbit_360: frozenOrbit,          // works: a full 360 that lands back on the first frame (4.5 s, ~7 min)
+  orbit_360: frozenOrbit,          // a full 360 needs the 8.8 s shot and a figure standing clear (not at a table)
   bullet_time: frozenOrbit,        // the same LoRA: a frozen-time orbit
   push_in: jojo("slow push-in dolly to a tight close-up on {subject}'s face"),                                 // works: smooth push to a close-up
   super_dolly_in: jojo("slow push-in dolly to a tight close-up on {subject}'s face"),

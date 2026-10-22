@@ -60,12 +60,23 @@ export function shot(opts) {
   if (g["__last"]) { g["6"].inputs.last_frame = g["__last"]; delete g["__last"]; }
   return g;
 }
+// A keyframe with a flaw the shot would carry (a second pair of hands, a stray figure, a palm under a hot coffee pot) is
+// cleaned by a Qwen Image 2.1 edit in the shot's own job: the edit becomes the first frame, saved as `prefix` to check.
+export function fixKeyframe(g, {image, prompt, seed = 808, prefix = "valis/key_fix"}) {
+  const e = relightImage({image, prompt, seed, prefix});
+  for (const k of Object.keys(e)) if (g[k]) throw new Error(`fixKeyframe: node id ${k} is already in the shot`);
+  Object.assign(g, e);
+  g["fs"].inputs.image = ["303", 0];
+  return g;
+}
 // loras: [{name, strength}] on the H3 model (camera-move LoRAs); raw: the whole prompt as the LoRA was trained on it
 // (trigger word first, no H3 section headers).
 function shotGraph({image, motion, width = 768, height = 1344, seconds = 4.46, seed = 51101, prefix = "valis/shot", soundscape, look = null, end = null, last = null, trimHold = false,
                     loras = [], raw = null, dolly = null, whip = null}) {
   const head = "For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\n\nintegrated_multimodal_description:\n[Shot 1] ";
   const sound = `\n\noverall_soundscape:\n${soundscape || "Quiet room tone, soft natural ambience."}\n\nnon_diegetic_music:\nN/A`;
+  // a trained move's prompt (raw) has no sound direction, and H3 then invents a score under the shot: give it the place's sound
+  const rawSound = `\n\noverall_soundscape:\n${soundscape || "Only the natural sound of the place in the picture."}\n\nnon_diegetic_music:\nN/A`;
   // post steps in order: trim the anchored hold -> dolly lock -> whip ramp -> colour palette
   const th = trimHold ? ["th", 0] : ["12", 0], dz = dolly ? ["dz", 0] : th, wp = whip ? ["wp", 0] : dz, pal = look ? ["pal", 0] : wp;
   return {
@@ -74,7 +85,7 @@ function shotGraph({image, motion, width = 768, height = 1344, seconds = 4.46, s
     "3": N("VAELoader", {vae_name: MODELS.h3VAE}),
     "fa": N("LoadImage", {image}),
     "fs": N("ImageScale", {image: ["fa", 0], upscale_method: "lanczos", width, height, crop: "center"}),
-    "6": N("MiniMaxH3ImageToVideo", {clip: ["2", 0], vae: ["3", 0], prompt: raw || (head + motion + " One continuous shot, no cuts, no text." + sound), width, height, length: frames24(seconds), first_frame: ["fs", 0]}),
+    "6": N("MiniMaxH3ImageToVideo", {clip: ["2", 0], vae: ["3", 0], prompt: raw ? raw + rawSound : (head + motion + " One continuous shot, no cuts, no text." + sound), width, height, length: frames24(seconds), first_frame: ["fs", 0]}),
     ...Object.fromEntries(loras.map((l, i) => [`lo${i}`, N("LoraLoaderModelOnly", {model: i ? [`lo${i - 1}`, 0] : ["1", 0], lora_name: l.name, strength_model: l.strength ?? 1.0})])),
     "16": N("MiniMaxH3SigmaShift", {model: loras.length ? [`lo${loras.length - 1}`, 0] : ["1", 0], shift_video: 12.0, shift_audio: 3.0}),
     "10": N("BasicScheduler", {model: ["16", 0], scheduler: "simple", steps: 8, denoise: 1.0}),
@@ -84,7 +95,10 @@ function shotGraph({image, motion, width = 768, height = 1344, seconds = 4.46, s
     "9": N("KSamplerSelect", {sampler_name: "euler"}),
     "11": N("SamplerCustomAdvanced", {noise: ["8", 0], guider: ["7", 0], sampler: ["9", 0], sigmas: ["acc", 1], latent_image: ["6", 1]}),
     "12": N("VAEDecode", {samples: ["11", 0], vae: ["3", 0]}),
-    "13": N("CreateVideo", {images: pal, fps: 24.0}),
+    // H3 makes the sound in the same latent as the picture (voices, room, fire): decode it and keep it with the shot
+    "av": N("VAELoader", {vae_name: MODELS.h3AVAE}),
+    "ad": N("VAEDecodeAudio", {samples: ["11", 0], vae: ["av", 0]}),
+    "13": N("CreateVideo", {images: pal, fps: 24.0, audio: ["ad", 0]}),
     "14": N("SaveVideo", {video: ["13", 0], filename_prefix: prefix, format: "auto", codec: "auto"}),
     // a pinned end makes H3 arrive early and hold that still: keep a quarter second of the hold, cut the rest
     ...(trimHold ? {"th": N("ValisTrimHold", {images: ["12", 0], keep: 6, threshold: 1.0})} : {}),
@@ -94,6 +108,44 @@ function shotGraph({image, motion, width = 768, height = 1344, seconds = 4.46, s
     ...(look ? {"pal": N("ValisColorPalette", {images: wp, look, strength: 1.0})} : {}),
     ...endAnchor({end, last, width, height, prefix}),
   };
+}
+// A full 360 orbit with the orbit LoRA.
+// "loop" (default): one H3 shot pinned back to its own first frame, 8.8 s. At 4.5 s the LoRA swings a quarter turn out and
+//   comes back the same way (BURN SEASON 3, BLUE RIBBON, OCCUPIED, Oct 22); at 8 s it went all the way round (levee, Oct 19).
+// Every mode needs a figure standing clear in open space. With the subject leaning over a table (BLUE RIBBON b01) the 8.8 s
+//   shot arcs a quarter turn and then fades in a second copy of her to fake the rest; a room with a couch fails the same way.
+// "halves": keyframe -> the view from behind (Qwen Image 2.1 edit) -> keyframe, two shots joined. Went round on BURN SEASON
+//   s09 (a figure alone in a field); a half turn has two equal ways round, so the second half can come back the way it went.
+// Tried and dropped: four quarters through three Qwen side views. Qwen turns the subject round on the spot instead of moving
+//   the camera (and with something between camera and subject, barely changes the picture), so H3 spun the subject.
+// H3 eases into every pinned frame: an even pace through the whole turn is an edit (re-time by the measured camera motion).
+const ORBIT_KEEP = " Keep every person, their pose, face, clothes and everything they hold, and every object in the scene exactly the same; change only the viewpoint.";
+export const ORBIT_BEHIND = "Show this exact scene from directly behind the main subject: the camera has moved halfway round, so the subject is seen from the back, centred, with the scene beyond them." + ORBIT_KEEP;
+function ns(g, p) {
+  const ren = (k) => `${p}_${k}`, out = {};
+  const fix = (v) => Array.isArray(v) && v.length === 2 && typeof v[0] === "string" && v[0] in g ? [ren(v[0]), v[1]] : v;
+  for (const [k, n] of Object.entries(g)) out[ren(k)] = {class_type: n.class_type, inputs: Object.fromEntries(Object.entries(n.inputs).map(([a, v]) => [a, fix(v)]))};
+  return out;
+}
+export function orbit360({image, loras, raw, width = 768, height = 1344, mode = "loop", seconds = 8.8, seed = 51101, prefix = "valis/orbit", look = null}) {
+  if (mode === "loop")
+    return shot({image, motion: "", width, height, seconds, seed, prefix, loras, raw, look, end: "loop", trimHold: true});
+  const half = seconds / 2;
+  const a = ns(shot({image, motion: "", width, height, seconds: half, seed, prefix: `${prefix}_a`, loras, raw, end: {edit: ORBIT_BEHIND}, trimHold: true}), "a");
+  const b = ns(shot({image, motion: "", width, height, seconds: half, seed: seed + 1, prefix: `${prefix}_b`, loras, raw, last: image, trimHold: true}), "b");
+  b["b_6"].inputs.first_frame = ["a_ls", 0];                            // the second half starts on the view from behind
+  for (const n of ["fa", "fs", "13", "14", "1", "2", "3", "av"]) delete b[`b_${n}`];
+  delete a["a_13"]; delete a["a_14"];
+  const shared = {b_1: "a_1", b_2: "a_2", b_3: "a_3", b_av: "a_av"};   // one set of models for both halves
+  for (const n of Object.values(b)) for (const [k, v] of Object.entries(n.inputs)) if (Array.isArray(v) && shared[v[0]]) n.inputs[k] = [shared[v[0]], v[1]];
+  const g = {...a, ...b};
+  let img = ["cat", 0];
+  g["cat"] = N("ImageBatch", {image1: ["a_th", 0], image2: ["b_th", 0]});
+  g["acat"] = N("AudioConcat", {audio1: ["a_ad", 0], audio2: ["b_ad", 0], direction: "after"});
+  if (look) { g["pal"] = N("ValisColorPalette", {images: img, look, strength: 1.0}); img = ["pal", 0]; }
+  g["out"] = N("CreateVideo", {images: img, fps: 24.0, audio: ["acat", 0]});
+  g["save"] = N("SaveVideo", {video: ["out", 0], filename_prefix: prefix, format: "auto", codec: "auto"});
+  return g;
 }
 // Dolly zoom from a real move: the shot is a push-in (or pull-back) with true parallax; SAM 3 tracks the subject and
 // Valis Dolly Zoom re-frames every frame so the subject holds its size while the background's perspective keeps going.
@@ -451,7 +503,7 @@ export function valisShot({clip, score, startBar, mode = "auto", section = "", l
   }
   if (layer) { g["40"] = N("LoadVideo", {file: layer}); g["41"] = N("GetVideoComponents", {video: ["40", 0]}); fx.fx_images = ["41", 0]; }
   g["80"] = N("ValisFX", fx);
-  g["81"] = N("CreateVideo", {images: ["80", 0], fps: 24});
+  g["81"] = N("CreateVideo", {images: ["80", 0], fps: 24, audio: ["17", 1]});     // the pass keeps the shot's own sound
   g["82"] = N("SaveVideo", {video: ["81", 0], filename_prefix: prefix, format: "auto", codec: "auto"});
   return g;
 }

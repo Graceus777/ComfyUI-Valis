@@ -123,7 +123,11 @@
         "wp",
         0
       ],
-      "fps": 24
+      "fps": 24,
+      "audio": [
+        "ad",
+        0
+      ]
     }
   },
   "14": {
@@ -185,6 +189,25 @@
       "partition_check": "error",
       "bypass_sigmas": [
         "10",
+        0
+      ]
+    }
+  },
+  "av": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+    }
+  },
+  "ad": {
+    "class_type": "VAEDecodeAudio",
+    "inputs": {
+      "samples": [
+        "11",
+        0
+      ],
+      "vae": [
+        "av",
         0
       ]
     }

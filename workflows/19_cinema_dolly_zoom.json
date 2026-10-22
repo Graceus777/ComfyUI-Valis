@@ -31,7 +31,7 @@
         "3",
         0
       ],
-      "prompt": "camera motion, the woman, slow steady push-in dolly toward the woman from a full shot to a medium shot, the woman stays centered, cinematic, 4k, high quality",
+      "prompt": "camera motion, the woman, slow steady push-in dolly toward the woman from a full shot to a medium shot, the woman stays centered, cinematic, 4k, high quality\n\noverall_soundscape:\nOnly the natural sound of the place in the picture.\n\nnon_diegetic_music:\nN/A",
       "width": 768,
       "height": 1344,
       "length": 107,
@@ -123,7 +123,11 @@
         "dz",
         0
       ],
-      "fps": 24
+      "fps": 24,
+      "audio": [
+        "ad",
+        0
+      ]
     }
   },
   "14": {
@@ -196,6 +200,25 @@
       "partition_check": "error",
       "bypass_sigmas": [
         "10",
+        0
+      ]
+    }
+  },
+  "av": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+    }
+  },
+  "ad": {
+    "class_type": "VAEDecodeAudio",
+    "inputs": {
+      "samples": [
+        "11",
+        0
+      ],
+      "vae": [
+        "av",
         0
       ]
     }

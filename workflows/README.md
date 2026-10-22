@@ -22,7 +22,7 @@ them in `app/js/graphs.js`). Drag one onto the ComfyUI canvas, point its Load no
 | `14_genjutsu_motion_transfer.json` | Genjutsu · Motion transfer: SDPose skeletons of the source drive H3 ref2va through the Fun ControlNet Union; the references are the new cast and place; the source audio is kept. | `valis/performance.mp4`, `valis/new_character.png`, `valis/new_place.png` |
 | `15_genjutsu_restyle.json` | Genjutsu · Restyle: Canny edges keep the motion, the whole clip is re-rendered in a new look. | `valis/clip.mp4` |
 | `16_genjutsu_object_swap.json` | Genjutsu · Object swap: SAM 3 finds the named object, the Fun ControlNet Union 2.0 inpaints only it, and Valis Swap Match puts it back on the untouched plate. | `valis/clip.mp4` |
-| `17_cinema_trained_orbit_h3.json` | Cinema Studio · 360 orbit: H3 with a camera LoRA trained on the move (first frame = last frame), no anchors. | `valis/keyframe.png` |
+| `17_cinema_trained_orbit_h3.json` | Cinema Studio · 360 orbit: H3 with a camera LoRA trained on the move, one 8.8 s shot pinned back to its own first frame (shorter, it swings out and back), the arrival hold trimmed. | `valis/keyframe.png` |
 | `18_cinema_trained_crash_zoom_wan.json` | Cinema Studio · crash zoom: Wan 2.2 I2V A14B, lightx2v 4-step, the crash-zoom LoRA on the high-noise expert. | `valis/keyframe.png` |
 | `19_cinema_dolly_zoom.json` | Cinema Studio · dolly zoom: a trained push-in, SAM 3 tracks the subject, Valis Dolly Zoom re-frames every frame so the subject holds its size. | `valis/keyframe.png` |
 | `20_cinema_extend.json` | Cinema Studio · Extend: the clip's last frames anchor a new H3 shot (MiniMaxH3AddGuide); picture and sound are joined. | `valis/shot.mp4` |
