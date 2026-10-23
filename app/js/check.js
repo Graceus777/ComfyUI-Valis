@@ -35,6 +35,7 @@ export function features() {
     "FX · library stack": G.fx({clip: "x.mp4", other: "y.mp4", subject: "the man", source: "song", audio: "a.flac",
       layers: [{effect: "DoubleExposure", on: "beat"}, {effect: "Shatter", on: "downbeat"}], beds: ["rain"]}),
     "FX · write a song (YuE2)": G.fx({clip: "x.mp4", source: "write", songSpec: {style: "x", lyrics: "x", seconds: 20}, layers: [{effect: "Punch", on: "kick"}]}),
+    "FX · write an instrumental (YuE2)": G.fx({clip: "x.mp4", source: "write", songSpec: {style: "x", lyrics: "[Instrumental]", seconds: 20}, layers: [{effect: "Punch", on: "kick"}]}),
     "Create · Shoot it, graded (Color Palette)": G.shot({image: "a.png", motion: "x", look: "film_colors"}),
     "Genjutsu · Motion transfer": G.genjutsu({video: "x.mp4", refs: ["a.png", "b.png"], prompt: "x", mode: "motion"}),
     "Genjutsu · Restyle": G.genjutsu({video: "x.mp4", prompt: "x", mode: "restyle"}),

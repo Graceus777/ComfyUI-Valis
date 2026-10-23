@@ -560,20 +560,32 @@ every 1 beat from 1:1 to 3:1 beat
 ramp loud 0 0 4.4 1`;
 
 // YuE2 writes the sheet music (ABC), then sings and plays it. Returns the graph and where its audio and ABC come out.
-export function song({style, lyrics, seconds = 30, seed = 1843, base = 500, prefix = "valis/song"}) {
+// An instrumental (lyrics "[Instrumental]", or instrumental: true): "[Instrumental]" alone is not enough. YuE2's own
+// sheet music still has a Vocal line in every verse and chorus, and it sings it (THE MAN IN THE SUIT, Oct 23: all three
+// seeds came back with a voice). So, as the Plenio pack's cover path does it: the instrumental adapter (an AR LoRA on the
+// CLIP slot, ar_lora_inst_v3abc, CC BY-NC 4.0), the lyrics as the adapter was trained ("[instrumental]"), and the score's
+// Vocal melody moved to the instrument voice before the music is rendered (Plenio Score Tools), so the tune is played.
+export const INSTRUMENTAL_LORA = "ar_lora_inst_v3abc_comfyui.safetensors";
+export function song({style, lyrics, seconds = 30, seed = 1843, base = 500, prefix = "valis/song", instrumental = /^\s*\[instrumental\]\s*$/i.test(lyrics || "")}) {
   const i = (k) => String(base + k);
+  const clip = instrumental ? [i(9), 1] : [i(0), 1];
+  const words = instrumental ? "[instrumental]" : lyrics;
   const g = {
     [i(0)]: N("CheckpointLoaderSimple", {ckpt_name: "yue2_3b_bf16.safetensors"}),
-    [i(1)]: N("YuE2GenerateABC", {clip: [i(0), 1], style, lyrics, seed, mode: "full", max_abc_tokens: 8192, temperature: 0.7, top_p: 0.9, top_k: 30, repetition_penalty: 1.005, penalty_window: 100}),
-    [i(2)]: N("YuE2GenerateMusic", {clip: [i(0), 1], style, lyrics, abc: [i(1), 0], seed, mode: "full", max_duration: seconds, temperature: 1, top_p: 0.95, top_k: 100, repetition_penalty: 1.2, cfg_scale: 1}),
+    [i(1)]: N("YuE2GenerateABC", {clip, style, lyrics: words, seed, mode: "full", max_abc_tokens: 8192, temperature: 0.7, top_p: 0.9, top_k: 30, repetition_penalty: 1.005, penalty_window: 100}),
+    [i(2)]: N("YuE2GenerateMusic", {clip, style, lyrics: words, abc: instrumental ? [i(10), 0] : [i(1), 0], seed, mode: "full", max_duration: seconds, temperature: 1, top_p: 0.95, top_k: 100, repetition_penalty: 1.2, cfg_scale: 1}),
     [i(3)]: N("ConditioningZeroOut", {conditioning: [i(2), 0]}),
     [i(4)]: N("EmptyYuE2LatentAudio", {seconds: [i(2), 1], batch_size: 1}),
     [i(5)]: N("KSampler", {model: [i(0), 0], positive: [i(2), 0], negative: [i(3), 0], latent_image: [i(4), 0], seed, steps: 32, cfg: 1, sampler_name: "dpm_2", scheduler: "sgm_uniform", denoise: 1}),
     [i(6)]: N("VAEDecodeAudio", {samples: [i(5), 0], vae: [i(0), 2]}),
     [i(7)]: N("SaveAudio", {audio: [i(6), 0], filename_prefix: prefix}),
-    [i(8)]: N("SaveText", {text: [i(1), 0], filename_prefix: prefix + "_abc", format: "txt"}),
+    [i(8)]: N("SaveText", {text: instrumental ? [i(10), 0] : [i(1), 0], filename_prefix: prefix + "_abc", format: "txt"}),
+    ...(instrumental ? {
+      [i(9)]: N("LoraLoader", {model: [i(0), 0], clip: [i(0), 1], lora_name: INSTRUMENTAL_LORA, strength_model: 0.0, strength_clip: 1.0}),
+      [i(10)]: N("PlenioScoreTools", {operation: "voices", "operation.vocal": "move Vocal melody to Ins", "operation.conflict": "replace Ins", score: [i(1), 0]}),
+    } : {}),
   };
-  return {graph: g, audio: [i(6), 0], abc: [i(1), 0]};
+  return {graph: g, audio: [i(6), 0], abc: instrumental ? [i(10), 0] : [i(1), 0]};
 }
 
 // The FX tab: a clip (+ another clip, a subject), cues from a song / a written song / a cue sheet / a score, a stack of
