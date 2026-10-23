@@ -31,6 +31,7 @@ export const MODELS = {
   h3AVAE: "minimax_h3_audio_vae_fp32.safetensors", pdd: "MiniMax-H3-FL2VA-Acc-8Step.safetensors",
   qwen: "qwen_image_2.1-Q6_K.gguf", qwenTE: "qwen3vl_8b_w4a8.safetensors", qwenVAE: "qwen_image_2.1_vae_bf16.safetensors",
   sam: "sam3.1_multiplex_fp16.safetensors",
+  da3: "depth_anything_3_small.safetensors",
   llm: "qwen3vl_8b_w4a8.safetensors",                 // the film planner: ComfyUI's text generation on Qwen Image's own encoder
   funCN: "minimax_h3_fun_controlnet_union_pruned_int8_convrot.safetensors",
   funCN2: "minimax_h3_fun_controlnet_union_2.0_pruned_int8_convrot.safetensors",   // 10 control blocks; inpaint holes at mid-grey
@@ -247,9 +248,12 @@ function endAnchor({end, last, width, height, prefix}) {
 // join is denoised like any other frame. No pinned last frame, no crossfade. The keyframe goes in as a reference
 // (<Picture 1>), not as a first frame: H3 reads a pinned frame as a shot start and the loop point can jump.
 // Lengths are 17k+5 frames for a 17k-frame loop (107 -> 102 frames, 4.25 s).
-// engine "fast": FastH3 OmniRef, 8 steps (drafts, slow subjects; can judder on fast motion). "full": H3 ref2va, 25 steps
-// (finals; smoothest on fast motion, about 3x the time). views 2 also samples the loop turned half round and takes the sound
-// near the loop point from it (H3 garbles the sound next to the wrap otherwise); about 1.8x the sampling time.
+// engine "fast": FastH3 OmniRef, 8 steps (drafts: ~85 s at 384x672 on an RTX 4080 Laptop). "full": H3 ref2va, 25 steps
+// (~54 min at 768x1344 with views 2 on the same laptop). Both show H3 ref2va's own stall on moving subjects (one frame in
+// four barely moves; the same prompt without the loop does it too, Oct 23). fl2va with the keyframe pinned as the first
+// frame has no stall in plain shots, but with the loop its join jumped (5x an ordinary step), so loops stay on ref2va.
+// views 2 also samples the loop turned half round and takes the sound near the loop point from it (H3 garbles the sound
+// next to the wrap otherwise); about 1.8x the sampling time.
 export const LOOP_LENGTHS = [{frames: 107, s: 4.25}, {frames: 158, s: 6.4}, {frames: 209, s: 8.5}, {frames: 260, s: 10.6}];
 export const loopLength = (seconds) => LOOP_LENGTHS.reduce((a, b) => Math.abs(b.s - seconds) < Math.abs(a.s - seconds) ? b : a).frames;
 // a loop is a state that keeps going: a locked-off camera, one subject doing one continuous or cyclic thing, nothing that
@@ -935,4 +939,39 @@ export function filmCut({shots, title = null, prefix = "valis/film"}) {
   g["cat"] = N("ConcatenateVideo", {...vids, codec: "auto"});
   g["save"] = N("SaveVideo", {video: ["cat", 0], filename_prefix: prefix, format: "auto", codec: "auto"});
   return g;
+}
+
+// ---------------------------------------------------------------- stereo: pictures hidden in noise (nodes_stereo.py)
+// SAM 3 finds the thing and Depth Anything 3 gives its relief; Valis Mask Depth rounds the silhouette; a spinning solid
+// joins it (Valis Depth Shape / Place); Valis Stereogram hides it all in a field of dots that you free-view; Valis
+// Kinetogram makes the motion-only version; Valis Stereo Decode reads the depth back after an H.264 round trip (check).
+export function stereo({video, target = "person", maxObjects = 2, viewing = "parallel", shape = "torus", shapeFrames = 96,
+                        kind = "dots", dotSize = 4, refresh = 0, mbps = 4, prefix = "valis/stereo"}) {
+  return {
+    "1": N("LoadVideo", {file: video}),
+    "2": N("GetVideoComponents", {video: ["1", 0]}),
+    "3": N("CheckpointLoaderSimple", {ckpt_name: MODELS.sam}),
+    "4": N("CLIPTextEncode", {text: target, clip: ["3", 1]}),
+    "5": N("SAM3_VideoTrack", {images: ["2", 0], model: ["3", 0], conditioning: ["4", 0], detection_threshold: 0.45, max_objects: maxObjects, detect_interval: 5}),
+    "6": N("SAM3_TrackToMask", {track_data: ["5", 0], object_indices: ""}),
+    "7": N("LoadDA3Model", {model_name: MODELS.da3, weight_dtype: "default"}),
+    "8": N("DA3Inference", {da3_model: ["7", 0], image: ["2", 0], resolution: 504, resize_method: "upper_bound_resize", mode: "mono"}),
+    "9": N("DA3Render", {da3_geometry: ["8", 0], output: "depth", "output.normalization": "min_max", "output.apply_sky_clip": false}),
+    "10": N("ValisMaskDepth", {mask: ["6", 0], relief: ["9", 0], thickness: 0.06, profile: "dome", edge: 0.4, near: 1.0, smooth: 2.0, temporal: 0.0,
+      relief_amount: 0.35, relief_far_is_white: false}),
+    "11": N("ValisDepthShape", {shape, frames: shapeFrames, width: 512, height: 512, size: 0.85, spin_x: 0.5, spin_y: 1.0, spin_z: 0.0, tilt_x: 20, edge: 0.35, near: 0.9}),
+    "12": N("ValisDepthPlace", {depth: ["11", 0], mask: ["11", 1], scene: ["10", 0], width: 0, height: 0, x: 0.2, y: 0.32, scale: 0.42, x_end: 0.32, y_end: 0.28,
+      scale_end: 0, depth_gain: 1.0, depth_offset: 0.0, start_frame: 0, when_shorter: "loop", field: "flat", field_depth: 0.0, field_amount: 0.15}),
+    "13": N("ValisStereogram", {depth: ["12", 0], period: 0, strength: 0.18, viewing, anchor: "center", kind, dot_size: dotSize, refresh_every: refresh, drift: 0.0,
+      guide_dots: true, seed: 0, width: 0, height: 0, depth_far_is_white: false}),
+    "14": N("CreateVideo", {images: ["13", 0], fps: ["2", 2]}),
+    "15": N("SaveVideo", {video: ["14", 0], filename_prefix: `${prefix}_${viewing}`, format: "auto", codec: "auto"}),
+    "16": N("ValisStereoDecode", {frames: ["13", 0], depth: ["12", 0], period: 0, strength: 0.18, viewing, window: 9, codec: "h264", bitrate_mbps: mbps, fps: 24}),
+    "17": N("CreateVideo", {images: ["16", 0], fps: ["2", 2]}),
+    "18": N("SaveVideo", {video: ["17", 0], filename_prefix: `${prefix}_decoded`, format: "auto", codec: "auto"}),
+    "19": N("PreviewAny", {source: ["16", 2]}),
+    "20": N("ValisKinetogram", {mask: ["6", 0], motion: "follow", drift_x: 0.0, drift_y: 1.5, kind: "dots", dot_size: 4, field_drift_x: 0.0, field_drift_y: 0.0, seed: 0}),
+    "21": N("CreateVideo", {images: ["20", 0], fps: ["2", 2]}),
+    "22": N("SaveVideo", {video: ["21", 0], filename_prefix: `${prefix}_kinetogram`, format: "auto", codec: "auto"}),
+  };
 }
