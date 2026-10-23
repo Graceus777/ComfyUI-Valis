@@ -27,7 +27,9 @@ const frames24 = (sec) => { const n = Math.round(sec * 24); return Math.max(22, 
 export { frames24 };
 
 // ---------------------------------------------------------------- keyframes
-export function keyframes({prompt, width = 768, height = 1344, seeds = [7101, 7202], prefix = "valis/key"}) {
+// loras: [{name, strength}] style LoRAs on Krea 2 (THE FOURTEENTH SHELL's look: Krea2\\V1 at 0.8, prompts that start
+// "Graphic novel panel." and say nothing else about style)
+export function keyframes({prompt, width = 768, height = 1344, seeds = [7101, 7202], prefix = "valis/key", loras = []}) {
   const g = {
     "1": N("UNETLoader", {unet_name: MODELS.krea, weight_dtype: "default"}),
     "2": N("CLIPLoader", {clip_name: MODELS.kreaTE, type: "krea2", device: "default"}),
@@ -36,9 +38,11 @@ export function keyframes({prompt, width = 768, height = 1344, seeds = [7101, 72
     "10": N("CLIPTextEncode", {text: prompt, clip: ["2", 0]}),
     "11": N("ConditioningZeroOut", {conditioning: ["10", 0]}),
   };
+  loras.forEach((l, k) => { g[`lo${k}`] = N("LoraLoaderModelOnly", {model: k ? [`lo${k - 1}`, 0] : ["1", 0], lora_name: l.name, strength_model: l.strength ?? 1.0}); });
+  const model = loras.length ? [`lo${loras.length - 1}`, 0] : ["1", 0];
   seeds.forEach((seed, k) => {
     const b = 100 + 10 * k, i = (j) => String(b + j);
-    g[i(0)] = N("KSampler", {model: ["1", 0], positive: ["10", 0], negative: ["11", 0], latent_image: ["4", 0], seed, steps: 10, cfg: 1.0, sampler_name: "euler", scheduler: "simple", denoise: 1.0});
+    g[i(0)] = N("KSampler", {model, positive: ["10", 0], negative: ["11", 0], latent_image: ["4", 0], seed, steps: 10, cfg: 1.0, sampler_name: "euler", scheduler: "simple", denoise: 1.0});
     g[i(1)] = N("VAEDecode", {samples: [i(0), 0], vae: ["3", 0]});
     g[i(2)] = N("SaveImage", {images: [i(1), 0], filename_prefix: `${prefix}_${seed}`});
   });
