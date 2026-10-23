@@ -635,8 +635,9 @@ def _glyph_frame(w, h, cell, pal, gen):
 # ------------------------------------------------------------------------------------------------ stereogram node
 
 def render_stereogram(z, P, D, viewing="parallel", anchor="center", kind="snow", dot_size=3, refresh_every=1,
-                      drift=0.0, guide=True, seed=0, pattern=None, chunk=8, device=None):
-    """z [B,H,W] (CPU, 0..1, 1 = near) -> frames [B,H,W,3] (CPU)."""
+                      drift=0.0, guide=True, seed=0, pattern=None, chunk=8, device=None, frame_offset=0):
+    """z [B,H,W] (CPU, 0..1, 1 = near) -> frames [B,H,W,3] (CPU). frame_offset: where this batch sits in a longer
+    video, so refresh and drift carry on across pieces rendered separately."""
     dev = device or _device()
     B, H, W = z.shape
     out = torch.empty(B, H, W, 3)
@@ -669,7 +670,7 @@ def render_stereogram(z, P, D, viewing="parallel", anchor="center", kind="snow",
         b1 = min(B, b0 + chunk)
         zc = z[b0:b1].to(dev).float().clamp(0, 1)
         u = stereo_coords(zc, P, D, viewing, anchor)
-        st = torch.stack([strip_for(t) for t in range(b0, b1)]).to(dev)
+        st = torch.stack([strip_for(frame_offset + t) for t in range(b0, b1)]).to(dev)
         fr = sample_strip(st, u).clamp(0, 1)
         if guide:
             fr = _guide_dots(fr, P)
@@ -704,7 +705,8 @@ class ValisStereogram:
                     "height": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 2}),
                     "depth_far_is_white": ("BOOLEAN", {"default": False}),
                 },
-                "optional": {"pattern": ("IMAGE", {"tooltip": "any picture or clip as the dots (Valis Stereo Pattern, a render, glyphs)"})}}
+                "optional": {"pattern": ("IMAGE", {"tooltip": "any picture or clip as the dots (Valis Stereo Pattern, a render, glyphs)"}),
+                             "frame_offset": ("INT", {"default": 0, "min": 0, "max": 10000000, "tooltip": "the first frame's place in a longer video rendered in pieces: the dots carry on across the cut"})}}
 
     RETURN_TYPES = ("IMAGE",)
     RETURN_NAMES = ("frames",)
@@ -712,7 +714,7 @@ class ValisStereogram:
     CATEGORY = CAT
 
     def run(self, depth, period, strength, viewing, anchor, kind, dot_size, refresh_every, drift, guide_dots, seed,
-            width, height, depth_far_is_white, pattern=None):
+            width, height, depth_far_is_white, pattern=None, frame_offset=0):
         z = _depth_tensor(depth.cpu())
         if depth_far_is_white:
             z = 1.0 - z
@@ -723,7 +725,7 @@ class ValisStereogram:
         D = min(strength * P, P - 6)
         with torch.no_grad():
             fr = render_stereogram(z, P, D, viewing, anchor, kind, dot_size, refresh_every, drift, guide_dots, seed,
-                                   pattern.cpu() if pattern is not None else None)
+                                   pattern.cpu() if pattern is not None else None, frame_offset=frame_offset)
         return (fr,)
 
 
