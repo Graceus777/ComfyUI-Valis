@@ -41,6 +41,13 @@ try:
 except Exception as e:
     print(f"[valis] loop nodes not loaded: {e}")
 
+try:
+    from .nodes_stereo import NODE_CLASS_MAPPINGS as _NS, NODE_DISPLAY_NAME_MAPPINGS as _DS
+    NODE_CLASS_MAPPINGS.update(_NS)
+    NODE_DISPLAY_NAME_MAPPINGS.update(_DS)
+except Exception as e:
+    print(f"[valis] stereo nodes not loaded: {e}")
+
 if sys.platform == "win32":
     # Desktop Windows runs at most two TransmitFile (sendfile) transfers at once, system-wide; the rest wait. A
     # <video> that has buffered enough stops reading and keeps its transfer open, so two such players stall every

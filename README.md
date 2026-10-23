@@ -214,7 +214,9 @@ these graphs. `--api` / `--key` point the CLI at Comfy Cloud or a Comfy API depl
 - **The pack:** `__init__.py` serves the studio at `/valis` and mounts Comfy API v2 (`sdk_api.py`). `nodes.py` holds
   `Valis Score (load)`, `Valis Score (from a voice)` and `Valis FX (score-driven pass)`; `nodes_lib.py` exposes the
   library (cues, layers, render, sound design, swap check and match, voice turn, colour palette, trim hold, dolly zoom,
-  whip pan, batched Canny, pose check). `model_routes.py` fetches a missing model file from Hugging Face when you ask.
+  whip pan, batched Canny, pose check). `nodes_stereo.py` hides pictures in noise: SAM 3 masks, Depth Anything 3 or
+  spinning solids become a magic-eye stereogram or a kinetogram (motion-only), with a decoder that checks the depth
+  survives H.264 (`workflows/32`). `model_routes.py` fetches a missing model file from Hugging Face when you ask.
 - **The studio:** plain ES modules under `app/`, with no build step. `api.js` is the SDK client. `film.js` is the film
   chain, run by the Film tab and by `valis film` through the same SDK. `graphs.js` has every workflow as an API-format
   builder. `presets.js` holds the director's panel and the looks. `score.js` is the timeline.

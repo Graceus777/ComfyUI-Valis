@@ -1,0 +1,310 @@
+{
+  "1": {
+    "class_type": "LoadVideo",
+    "inputs": {
+      "file": "valis/clip.mp4"
+    }
+  },
+  "2": {
+    "class_type": "GetVideoComponents",
+    "inputs": {
+      "video": [
+        "1",
+        0
+      ]
+    }
+  },
+  "3": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "sam3.1_multiplex_fp16.safetensors"
+    }
+  },
+  "4": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "the dancers",
+      "clip": [
+        "3",
+        1
+      ]
+    }
+  },
+  "5": {
+    "class_type": "SAM3_VideoTrack",
+    "inputs": {
+      "images": [
+        "2",
+        0
+      ],
+      "model": [
+        "3",
+        0
+      ],
+      "conditioning": [
+        "4",
+        0
+      ],
+      "detection_threshold": 0.45,
+      "max_objects": 2,
+      "detect_interval": 5
+    }
+  },
+  "6": {
+    "class_type": "SAM3_TrackToMask",
+    "inputs": {
+      "track_data": [
+        "5",
+        0
+      ],
+      "object_indices": ""
+    }
+  },
+  "7": {
+    "class_type": "LoadDA3Model",
+    "inputs": {
+      "model_name": "depth_anything_3_small.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "8": {
+    "class_type": "DA3Inference",
+    "inputs": {
+      "da3_model": [
+        "7",
+        0
+      ],
+      "image": [
+        "2",
+        0
+      ],
+      "resolution": 504,
+      "resize_method": "upper_bound_resize",
+      "mode": "mono"
+    }
+  },
+  "9": {
+    "class_type": "DA3Render",
+    "inputs": {
+      "da3_geometry": [
+        "8",
+        0
+      ],
+      "output": "depth",
+      "output.normalization": "min_max",
+      "output.apply_sky_clip": false
+    }
+  },
+  "10": {
+    "class_type": "ValisMaskDepth",
+    "inputs": {
+      "mask": [
+        "6",
+        0
+      ],
+      "relief": [
+        "9",
+        0
+      ],
+      "thickness": 0.06,
+      "profile": "dome",
+      "edge": 0.4,
+      "near": 1,
+      "smooth": 2,
+      "temporal": 0,
+      "relief_amount": 0.35,
+      "relief_far_is_white": false
+    }
+  },
+  "11": {
+    "class_type": "ValisDepthShape",
+    "inputs": {
+      "shape": "torus",
+      "frames": 96,
+      "width": 512,
+      "height": 512,
+      "size": 0.85,
+      "spin_x": 0.5,
+      "spin_y": 1,
+      "spin_z": 0,
+      "tilt_x": 20,
+      "edge": 0.35,
+      "near": 0.9
+    }
+  },
+  "12": {
+    "class_type": "ValisDepthPlace",
+    "inputs": {
+      "depth": [
+        "11",
+        0
+      ],
+      "mask": [
+        "11",
+        1
+      ],
+      "scene": [
+        "10",
+        0
+      ],
+      "width": 0,
+      "height": 0,
+      "x": 0.2,
+      "y": 0.32,
+      "scale": 0.42,
+      "x_end": 0.32,
+      "y_end": 0.28,
+      "scale_end": 0,
+      "depth_gain": 1,
+      "depth_offset": 0,
+      "start_frame": 0,
+      "when_shorter": "loop",
+      "field": "flat",
+      "field_depth": 0,
+      "field_amount": 0.15
+    }
+  },
+  "13": {
+    "class_type": "ValisStereogram",
+    "inputs": {
+      "depth": [
+        "12",
+        0
+      ],
+      "period": 0,
+      "strength": 0.18,
+      "viewing": "parallel",
+      "anchor": "center",
+      "kind": "dots",
+      "dot_size": 4,
+      "refresh_every": 0,
+      "drift": 0,
+      "guide_dots": true,
+      "seed": 0,
+      "width": 0,
+      "height": 0,
+      "depth_far_is_white": false
+    }
+  },
+  "14": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "13",
+        0
+      ],
+      "fps": [
+        "2",
+        2
+      ]
+    }
+  },
+  "15": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "14",
+        0
+      ],
+      "filename_prefix": "valis/stereo_parallel",
+      "format": "auto",
+      "codec": "auto"
+    }
+  },
+  "16": {
+    "class_type": "ValisStereoDecode",
+    "inputs": {
+      "frames": [
+        "13",
+        0
+      ],
+      "depth": [
+        "12",
+        0
+      ],
+      "period": 0,
+      "strength": 0.18,
+      "viewing": "parallel",
+      "window": 9,
+      "codec": "h264",
+      "bitrate_mbps": 4,
+      "fps": 24
+    }
+  },
+  "17": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "16",
+        0
+      ],
+      "fps": [
+        "2",
+        2
+      ]
+    }
+  },
+  "18": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "17",
+        0
+      ],
+      "filename_prefix": "valis/stereo_decoded",
+      "format": "auto",
+      "codec": "auto"
+    }
+  },
+  "19": {
+    "class_type": "PreviewAny",
+    "inputs": {
+      "source": [
+        "16",
+        2
+      ]
+    }
+  },
+  "20": {
+    "class_type": "ValisKinetogram",
+    "inputs": {
+      "mask": [
+        "6",
+        0
+      ],
+      "motion": "follow",
+      "drift_x": 0,
+      "drift_y": 1.5,
+      "kind": "dots",
+      "dot_size": 4,
+      "field_drift_x": 0,
+      "field_drift_y": 0,
+      "seed": 0
+    }
+  },
+  "21": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "20",
+        0
+      ],
+      "fps": [
+        "2",
+        2
+      ]
+    }
+  },
+  "22": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "21",
+        0
+      ],
+      "filename_prefix": "valis/stereo_kinetogram",
+      "format": "auto",
+      "codec": "auto"
+    }
+  }
+}

@@ -96,6 +96,8 @@ const flows = {
     cueSheet: "bpm 112.94 4/4\nevery 1 beat from 0 to 20 kick\nevery 1/2 beat from 0 to 20 hat\nevery 1 bar from 0 to 20 downbeat",
     layers: [{effect: "Shockwave", on: "downbeat"}, {effect: "Punch", on: "kick"}, {effect: "Glitch", on: "hat"}, {effect: "Projector", on: "kick"}], prefix: "valis/fx_loop"}),
     "FX · on a loop: Valis Loop · Render plays the stack once round before the loop so every effect arrives at frame 0 as it would the second time, with the cues repeating every loop (2 bars at 112.94 BPM = one 4.25 s loop). MP4 and GIF."],
+  "32_stereo_hidden_in_noise": [G.stereo({video: "valis/clip.mp4", target: "the dancers", maxObjects: 2}),
+    "Stereo · hidden in noise (the Black Is Good magic-eye video, from any clip): SAM 3 + Depth Anything 3 give the dancers a rounded depth, a spinning torus joins them, Valis Stereogram hides both in a held dot field you free-view (parallel); Valis Kinetogram makes the version only motion shows; Valis Stereo Decode reads the depth back after H.264 at 4 Mb/s and scores it."],
 };
 
 const index = [];
@@ -110,6 +112,9 @@ fs.writeFileSync(path.join(out, "README.md"), `# Workflows
 Every graph the Valis studio sends, exported in ComfyUI **API format** by \`tools/export_workflows.mjs\` (the studio builds
 them in \`app/js/graphs.js\`). Drag one onto the ComfyUI canvas, point its Load nodes at your own files in
 \`ComfyUI/input\`, and queue it. Or run them headless with the Comfy SDK: \`node cli/valis.mjs\`.
+
+02, 05 and 26 name the Krea 2 identity-edit LoRA the way Windows lists it, \`Krea2\\krea2_identity_edit_v1_2_r64.safetensors\`;
+on Linux and macOS pick \`Krea2/...\` in its LoRA loader. The studio and the CLI do this for you.
 
 | File | What it does | Inputs to replace |
 |---|---|---|
