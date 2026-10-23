@@ -229,6 +229,15 @@ $("#c-shoot").addEventListener("click", async () => {
     if (v) { $("#c-viewer").replaceChildren(media(v)); finishBar($("#c-finish"), v, $("#c-viewer"), $("#c-strip"));
       const t = h("div", {class: "thumb"}, media(v, {controls: false}), h("div", {class: "meta"}, "shot")); t.onclick = () => { $("#c-viewer").replaceChildren(media(v)); finishBar($("#c-finish"), v, $("#c-viewer"), $("#c-strip")); }; $("#c-strip").prepend(t); }
   };
+  // Loop: H3 renders a shot that plays forever (MiniMax H3 Loop, a separate pack). No camera move; the keyframe is the reference.
+  if ($("#c-loop").checked) {
+    if (!(await api.hasNode("MiniMaxH3Loop")))
+      return toast("Loop needs the MiniMax H3 Loop pack: git clone https://github.com/pxl-pshr/ComfyUI-MiniMaxH3-Loop into custom_nodes, then restart ComfyUI", true);
+    const length = G.loopLength(C.seconds), engine = $("#c-loop-engine").value;
+    const prompt = G.loopPrompt({subject: $("#c-subject").value.trim(), action: $("#c-action").value.trim()});
+    return run(G.loopShot({image, prompt, width, height, length, engine, look, prefix: prefix.replace("/shot_", "/loop_")}),
+               `Loop · ${((length - 5) / 24).toFixed(2)} s (${engine === "full" ? "25 steps" : "FastH3"})`, $("#c-viewer"), {onDone});
+  }
   // a trained move (camera LoRA) when one is installed for this move; otherwise H3 from words, with an optional end anchor
   const tm = $("#c-trained").checked ? P.CAMERA_LORAS[C.move?.id] : null;
   const trained = tm && (!tm.lora || await api.hasLora(tm.lora)) ? tm : null;     // lora: null = H3 words + a post step (dolly lock, whip ramp)

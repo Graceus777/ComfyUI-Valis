@@ -241,6 +241,53 @@ function endAnchor({end, last, width, height, prefix}) {
   return {...g, "__last": ["ls", 0]};
 }
 
+// ---------------------------------------------------------------- loops (Create · Loop)
+// A shot that plays forever, made by H3 itself: pxl-pshr's MiniMax H3 Loop (github.com/pxl-pshr/ComfyUI-MiniMaxH3-Loop,
+// GPL-3.0, a separate pack) samples the latent with its end wrapped round to its start and decodes it the same way, so the
+// join is denoised like any other frame. No pinned last frame, no crossfade. The keyframe goes in as a reference
+// (<Picture 1>), not as a first frame: H3 reads a pinned frame as a shot start and the loop point can jump.
+// Lengths are 17k+5 frames for a 17k-frame loop (107 -> 102 frames, 4.25 s).
+// engine "fast": FastH3 OmniRef, 8 steps (drafts, slow subjects; can judder on fast motion). "full": H3 ref2va, 25 steps
+// (finals; smoothest on fast motion, about 3x the time). views 2 also samples the loop turned half round and takes the sound
+// near the loop point from it (H3 garbles the sound next to the wrap otherwise); about 1.8x the sampling time.
+export const LOOP_LENGTHS = [{frames: 107, s: 4.25}, {frames: 158, s: 6.4}, {frames: 209, s: 8.5}, {frames: 260, s: 10.6}];
+export const loopLength = (seconds) => LOOP_LENGTHS.reduce((a, b) => Math.abs(b.s - seconds) < Math.abs(a.s - seconds) ? b : a).frames;
+// a loop is a state that keeps going: a locked-off camera, one subject doing one continuous or cyclic thing, nothing that
+// starts, ends or piles up (pxl-pshr's PROMPTING.md)
+export function loopPrompt({subject = "", action = "", sound = "", ref = true}) {
+  const who = ref ? "The scene from <Picture 1>" : "";
+  const body = [who && subject ? `${who}: ${subject.replace(/\.$/, "")}.` : (subject || who + "."), action].filter(Boolean).join(" ").trim();
+  return "Locked-off static camera, no pan, no zoom. " + body + (/[.!?]$/.test(body) ? "" : ".") +
+    " Continuous, smooth, unbroken motion throughout.\n\noverall_soundscape: " + (sound || "a steady, quiet ambience of the place, nothing that happens once") +
+    "\n\nnon_diegetic_music: N/A";
+}
+export function loopShot({image = null, prompt, width = 768, height = 1344, length = 107, seed = 42, engine = "fast", views = 2, padClips = 1,
+                          look = null, gifWidth = 480, prefix = "valis/loop"}) {
+  const full = engine === "full";
+  const g = {
+    "1": N("UNETLoader", {unet_name: full ? MODELS.h3ref : MODELS.h3refFast, weight_dtype: "default"}),
+    "lp": N("MiniMaxH3Loop", {model: ["1", 0], pad_clips: padClips, views}),
+    "2": N("CLIPLoader", {clip_name: MODELS.h3TE, type: "minimax", device: "default"}),
+    "3": N("VAELoader", {vae_name: MODELS.h3VAE}),
+    "av": N("VAELoader", {vae_name: MODELS.h3AVAE}),
+    ...(image ? {"fa": N("LoadImage", {image})} : {}),
+    "r2v": N("MiniMaxH3ReferenceToVideo", {clip: ["2", 0], vae: ["3", 0], audio_vae: ["av", 0], prompt, width, height, length, ref_image_size: "match",
+                                           ...(image ? {"ref_images.ref_image_0": ["fa", 0]} : {})}),
+    "8": N("RandomNoise", {noise_seed: seed}),
+    "9": N("KSamplerSelect", {sampler_name: "res_multistep"}),
+    "10": N("BasicScheduler", {model: ["lp", 0], scheduler: "simple", steps: full ? 25 : 8, denoise: 1.0}),
+    "7": N("BasicGuider", {model: ["lp", 0], conditioning: ["r2v", 0]}),
+    "11": N("SamplerCustomAdvanced", {noise: ["8", 0], guider: ["7", 0], sampler: ["9", 0], sigmas: ["10", 0], latent_image: ["r2v", 1]}),
+    "ld": N("MiniMaxH3LoopDecode", {samples: ["11", 0], vae: ["3", 0], audio_vae: ["av", 0], pad_clips: padClips}),
+  };
+  let img = ["ld", 0];
+  if (look) { g["pal"] = N("ValisColorPalette", {images: img, look, strength: 1.0}); img = ["pal", 0]; }
+  g["13"] = N("CreateVideo", {images: img, fps: 24.0, audio: ["ld", 1]});
+  g["14"] = N("SaveVideo", {video: ["13", 0], filename_prefix: prefix, format: "auto", codec: "auto"});
+  g["gif"] = N("ValisLoopSave", {images: img, filename_prefix: prefix, format: "gif", fps: 24.0, gif_width: gifWidth});
+  return g;
+}
+
 // ---------------------------------------------------------------- masks
 // audio: a file in input/ to use as the track, or null to keep the clip's own sound (a talking head keeps its voice)
 function track(video, target, {audio = null, shrink = 2, grow = 10, maxObjects = 1, threshold = 0.45, maxSeconds = 15} = {}) {
@@ -591,7 +638,7 @@ export function song({style, lyrics, seconds = 30, seed = 1843, base = 500, pref
 // The FX tab: a clip (+ another clip, a subject), cues from a song / a written song / a cue sheet / a score, a stack of
 // library layers, and every layer's own sound mixed with the music.
 export function fx({clip, other = null, subject = "", source = "sheet", audio = null, abc = "", songSpec = null, cueSheet = "", score = null,
-                    layers = [], beds = [], sound = true, seconds = 4.46, start = 0, prefix = "valis/fx"}) {
+                    layers = [], beds = [], sound = true, seconds = 4.46, start = 0, prefix = "valis/fx", loop = false}) {
   const g = {
     "16": N("LoadVideo", {file: clip}),
     "17": N("GetVideoComponents", {video: ["16", 0]}),
@@ -614,6 +661,15 @@ export function fx({clip, other = null, subject = "", source = "sheet", audio = 
   const r = {images: ["17", 0], cues: ["50", 0], stack: [prev, 0], fps: 24, start: 0};
   if (other) { g["40"] = N("LoadVideo", {file: other}); g["41"] = N("GetVideoComponents", {video: ["40", 0]}); r.other = ["41", 0]; }
   if (subject) { Object.assign(g, personMatte(["17", 0], subject, 30, 10)); r.subject = ["33", 0]; }
+  // loop: the clip already loops (Create · Loop); the stack is rendered so it loops with it (Valis Loop · Render: the cues
+  // repeat, every effect is played once round first, what still differs is sealed), the clip keeps its own sound, plus a GIF
+  if (loop) {
+    g["80"] = N("ValisLoopRender", {...r, warmup: -1, seal: 12});
+    g["81"] = N("CreateVideo", {images: ["80", 0], fps: 24, audio: ["17", 1]});
+    g["82"] = N("SaveVideo", {video: ["81", 0], filename_prefix: prefix, format: "auto", codec: "auto"});
+    g["83"] = N("ValisLoopSave", {images: ["80", 0], filename_prefix: prefix, format: "gif", fps: 24, gif_width: 480});
+    return g;
+  }
   g["80"] = N("ValisRender", r);
   const vid = {images: ["80", 0], fps: 24};
   if (sound || music) {

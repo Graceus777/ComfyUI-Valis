@@ -1,0 +1,134 @@
+{
+  "16": {
+    "class_type": "LoadVideo",
+    "inputs": {
+      "file": "valis/loop.mp4"
+    }
+  },
+  "17": {
+    "class_type": "GetVideoComponents",
+    "inputs": {
+      "video": [
+        "16",
+        0
+      ]
+    }
+  },
+  "50": {
+    "class_type": "ValisCues",
+    "inputs": {
+      "cue_sheet": "bpm 112.94 4/4\nevery 1 beat from 0 to 20 kick\nevery 1/2 beat from 0 to 20 hat\nevery 1 bar from 0 to 20 downbeat",
+      "duration": 0,
+      "offset": 0,
+      "bpm_hint": 0
+    }
+  },
+  "60": {
+    "class_type": "ValisLayer",
+    "inputs": {
+      "effect": "Shockwave",
+      "on": "downbeat",
+      "by": "",
+      "params": "{}"
+    }
+  },
+  "61": {
+    "class_type": "ValisLayer",
+    "inputs": {
+      "effect": "Punch",
+      "on": "kick",
+      "by": "",
+      "params": "{}",
+      "stack": [
+        "60",
+        0
+      ]
+    }
+  },
+  "62": {
+    "class_type": "ValisLayer",
+    "inputs": {
+      "effect": "Glitch",
+      "on": "hat",
+      "by": "",
+      "params": "{}",
+      "stack": [
+        "61",
+        0
+      ]
+    }
+  },
+  "63": {
+    "class_type": "ValisLayer",
+    "inputs": {
+      "effect": "Projector",
+      "on": "kick",
+      "by": "",
+      "params": "{}",
+      "stack": [
+        "62",
+        0
+      ]
+    }
+  },
+  "80": {
+    "class_type": "ValisLoopRender",
+    "inputs": {
+      "images": [
+        "17",
+        0
+      ],
+      "cues": [
+        "50",
+        0
+      ],
+      "stack": [
+        "63",
+        0
+      ],
+      "fps": 24,
+      "start": 0,
+      "warmup": -1,
+      "seal": 12
+    }
+  },
+  "81": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "80",
+        0
+      ],
+      "fps": 24,
+      "audio": [
+        "17",
+        1
+      ]
+    }
+  },
+  "82": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "video": [
+        "81",
+        0
+      ],
+      "filename_prefix": "valis/fx_loop",
+      "format": "auto",
+      "codec": "auto"
+    }
+  },
+  "83": {
+    "class_type": "ValisLoopSave",
+    "inputs": {
+      "images": [
+        "80",
+        0
+      ],
+      "filename_prefix": "valis/fx_loop",
+      "format": "gif",
+      "fps": 24,
+      "gif_width": 480
+    }
+  }
+}

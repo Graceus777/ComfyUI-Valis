@@ -89,6 +89,13 @@ const flows = {
     "Film · keyframes: every shot's Krea 2 keyframe in one graph (the model loads once)."],
   "29_film_cut": [G.filmCut({shots: [{file: "valis/film_fx_1.mp4", seconds: 4.444}, {file: "valis/film_fx_2.mp4", seconds: 4.444}], prefix: "valis/film"}),
     "Film · cut: each shot trimmed to whole bars of the song and joined, carrying its own slice of the song and its sounds."],
+  "30_loop_h3": [G.loopShot({image: "valis/keyframe.png", prompt: G.loopPrompt({subject: "a lighthouse keeper stands at the lamp room window at night",
+    action: "The great lamp turns behind him in a slow, steady circle, its beam sweeping across the sea; rain streaks the glass evenly."})}),
+    "Create · Loop: a shot that plays forever. MiniMax H3 Loop (pxl-pshr's pack) has H3 join the clip's end to its start while it samples and decodes; the keyframe is the reference. MP4 with sound, and a GIF (Valis Loop · Save)."],
+  "31_fx_on_a_loop": [G.fx({clip: "valis/loop.mp4", source: "sheet", sound: false, loop: true,
+    cueSheet: "bpm 112.94 4/4\nevery 1 beat from 0 to 20 kick\nevery 1/2 beat from 0 to 20 hat\nevery 1 bar from 0 to 20 downbeat",
+    layers: [{effect: "Shockwave", on: "downbeat"}, {effect: "Punch", on: "kick"}, {effect: "Glitch", on: "hat"}, {effect: "Projector", on: "kick"}], prefix: "valis/fx_loop"}),
+    "FX · on a loop: Valis Loop · Render plays the stack once round before the loop so every effect arrives at frame 0 as it would the second time, with the cues repeating every loop (2 bars at 112.94 BPM = one 4.25 s loop). MP4 and GIF."],
 };
 
 const index = [];

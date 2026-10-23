@@ -219,7 +219,7 @@ class TimeSlip:
             return img * (1 - k[..., None]) + b * k[..., None]
         if self.mode == "burn":
             for th in ctx.cues.hits(self.on, ctx.t - 1 / ctx.fps + 1e-6, ctx.t + 1e-6):
-                r = np.random.default_rng(int(th * 1000) + self.seed)
+                r = np.random.default_rng((int(ctx.cues.key(th) * 1000) + self.seed) % 2 ** 32)
                 c = ctx.centroid(self.region) if self.region else None
                 cx, cy = (c if c else (W * r.uniform(.25, .75), H * r.uniform(.25, .75)))
                 cx += r.normal(0, W * .08); cy += r.normal(0, H * .06)
@@ -397,7 +397,7 @@ class Shatter:
 
     def _build(self, ctx, th, frame):
         H, W = ctx.H, ctx.W
-        r = np.random.default_rng(self.seed + int(th * 100))
+        r = np.random.default_rng((self.seed + int(ctx.cues.key(th) * 100)) % 2 ** 32)
         c = self.at if isinstance(self.at, tuple) else (ctx.centroid(self.at) if self.at else None) or (W * .5, H * .45)
         # glass breaks in spokes from the impact and rings around it: shards are the cells of a jittered polar grid
         h2, w2 = H // 2, W // 2
@@ -516,7 +516,7 @@ class Frost:
         H, W = ctx.H, ctx.W
         new = ctx.cues.hits(self.on, ctx.t - 1 / ctx.fps + 1e-6, ctx.t + 1e-6)
         for th in new:
-            r = np.random.default_rng(self.seed + int(th * 1000))
+            r = np.random.default_rng((self.seed + int(ctx.cues.key(th) * 1000)) % 2 ** 32)
             if isinstance(self.at, tuple):
                 x, y = self.at
             elif self.at:

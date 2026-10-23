@@ -83,6 +83,11 @@ class Cues:
             raise ValueError("bar:beat cues need a bpm line")
         return self.offset + ((bar - 1) * self.meter + (beat - 1)) * 60.0 / self.bpm
 
+    def key(self, t):
+        """What a hit at time t is called when an effect seeds its random pattern from it (a crack, a burn hole): the
+        time itself. Looping cues answer with the hit's place in the loop, so every pass draws the same pattern."""
+        return t
+
     # ------------------------------------------------------------------ combining
     def merge(self, other, prefix=""):
         out = Cues(dict(self.lanes), dict(self.vals), dict(self.curves), max(self.duration, other.duration), self.fps,

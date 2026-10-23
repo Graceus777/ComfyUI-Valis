@@ -76,6 +76,8 @@
       <label class="check" style="margin-top:8px"><input type="checkbox" id="c-trained" checked> trained moves: use a camera LoRA when one is installed for this move (orbit, bullet time, crash zoom, dolly zoom, arc…); it does the real move with no extra pass</label>
       <label class="check"><input type="checkbox" id="c-anchor"> end on the subject: pin the last frame so the move finishes on them (a full orbit comes back round; a crane or drone ends where it should)</label>
       <label class="check"><input type="checkbox" id="c-trim" checked> trim the hold: the model often reaches the pinned frame early and freezes on it; keep a quarter second of that and cut the rest</label>
+      <label class="check"><input type="checkbox" id="c-loop"> loop: the shot plays forever. H3 joins its end to its start while it renders (MiniMax H3 Loop). No camera move: describe one thing that keeps going (breathing, swaying, a beam turning, snow falling). Saved as MP4 and GIF</label>
+      <select id="c-loop-engine" style="margin-top:4px"><option value="fast">loop draft: FastH3, 8 steps</option><option value="full">loop final: H3 ref2va, 25 steps (about 3x longer, smoothest on fast motion)</option></select>
       <h2>Camera body</h2>
       <div class="chips" id="c-body"></div>
       <h2>Lens kit</h2>
@@ -292,6 +294,8 @@
       <h2>Layers</h2>
       <div class="map" id="f-layers"></div>
       <p class="hint" id="f-layers-hint">Add effects from the library on the right. Each listens to a lane: a hit lane fires it, a curve holds it.</p>
+      <h2>Loop</h2>
+      <label class="check"><input type="checkbox" id="f-loop"> the clip is a loop (Create · Loop): the effects loop with it. The cues repeat every loop, and each effect is played once round first so trails, echoes and frost carry across the join. Keeps the clip's own sound; saved as MP4 and GIF</label>
       <h2>Sound</h2>
       <label class="check"><input type="checkbox" id="f-sound" checked> every effect makes its own sound, on the same cue</label>
       <div class="chips" id="f-beds" style="margin-top:8px"></div>

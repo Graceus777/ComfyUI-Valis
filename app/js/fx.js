@@ -117,7 +117,7 @@ export class FxView {
     const g = G.fx({clip: F.clip, other: F.other, subject: $("#f-subject").value.trim(), source: F.source, audio: F.audio, songSpec,
       cueSheet: $("#f-cues").value, score: "valis/danse_v3_score.json",
       layers: F.layers.map(l => ({effect: l.effect, on: l.on, by: l.by, params: l.params})), beds: [...F.beds], sound: $("#f-sound").checked,
-      seconds: 4.46, prefix: `valis/fx_${Date.now().toString(36)}`});
+      seconds: 4.46, prefix: `valis/fx_${Date.now().toString(36)}`, loop: $("#f-loop").checked});
     run(g, `FX · ${F.layers.map(l => l.name).join(" + ")}`, $("#f-viewer"), {onDone: (j) => {
       const v = j.outputs.find(f => VID.test(f.filename));
       if (v) $("#f-viewer").replaceChildren(h("video", {src: api.viewUrl(v), controls: true, autoplay: true, loop: true, playsinline: true}));
