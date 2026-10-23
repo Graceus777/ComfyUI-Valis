@@ -176,8 +176,8 @@
       "viewing": "parallel",
       "anchor": "center",
       "kind": "dots",
-      "dot_size": 4,
-      "refresh_every": 0,
+      "dot_size": 6,
+      "refresh_every": 1,
       "drift": 0,
       "guide_dots": true,
       "seed": 0,
@@ -225,9 +225,9 @@
       "period": 0,
       "strength": 0.18,
       "viewing": "parallel",
-      "window": 9,
+      "window": 13,
       "codec": "h264",
-      "bitrate_mbps": 4,
+      "bitrate_mbps": 8,
       "fps": 24
     }
   },
@@ -279,7 +279,8 @@
       "dot_size": 4,
       "field_drift_x": 0,
       "field_drift_y": 0,
-      "seed": 0
+      "seed": 0,
+      "field_refresh": 1
     }
   },
   "21": {

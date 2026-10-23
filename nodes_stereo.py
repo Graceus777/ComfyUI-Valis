@@ -536,14 +536,13 @@ class ValisDepthPlace:
         if om.shape[-2:] != (ho, wo):
             om = _resize_bhw(om, ho, wo)
         if scene is not None:
-            sc = _depth_tensor(scene.cpu()).clone()
-            B, H, W = sc.shape
+            out = _depth_tensor(scene.cpu()).clone()
+            B, H, W = out.shape
         else:
             H = height or ho
             W = width or wo
             B = start_frame + Bo
-            sc = _background(field, B, H, W, field_depth, field_amount)
-        out = sc.clone()
+            out = _background(field, B, H, W, field_depth, field_amount)
         placed = torch.zeros(B, H, W)
         x1 = x if x_end < -8 else x_end
         y1 = y if y_end < -8 else y_end
@@ -682,10 +681,11 @@ def render_stereogram(z, P, D, viewing="parallel", anchor="center", kind="snow",
 class ValisStereogram:
     DESCRIPTION = ("The hidden picture: the depth becomes repeat distances in a field of dots. Free-view it "
                    "(relax your eyes through the screen for parallel, cross them for cross) until the two guide dots "
-                   "become three, and the thing stands out of the field. Held dots (refresh 0) survive upload "
-                   "compression: after H.264 at about 2.5 Mb/s on a 1216x704 clip the hidden shape still matched "
-                   "0.91 (Valis Stereo Decode), new dots every 3 frames 0.86, and fresh TV snow every frame "
-                   "(Black Is Good) only 0.23. Held dots show a moving thing as a ripple to anyone not fusing.")
+                   "become three, and the thing stands out of the field. Fresh dots every frame (the default) look "
+                   "like TV snow, as in Black Is Good, and show nothing to anyone not fusing. They cost bits: at "
+                   "1080p after H.264, 6 px dots kept a shape match of 0.62 at 13 Mb/s and 0.35 at 7 Mb/s (Valis "
+                   "Stereo Decode); new dots every 2 frames 0.70 at 10.6 Mb/s. Held dots (refresh 0) survive about "
+                   "2.5 Mb/s, but a moving thing then shows as copies repeating across the frame.")
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -696,8 +696,8 @@ class ValisStereogram:
                     "viewing": (["parallel", "cross"], {"default": "parallel"}),
                     "anchor": (["center", "left"], {"default": "center"}),
                     "kind": (KINDS, {"default": "dots", "tooltip": "the dots when no pattern is connected: black and white, grey TV snow, or colour (colour detail is the first thing a codec drops)"}),
-                    "dot_size": ("INT", {"default": 4, "min": 1, "max": 32, "tooltip": "px; 3-4 or more survives upload compression"}),
-                    "refresh_every": ("INT", {"default": 0, "min": 0, "max": 10000, "tooltip": "new dots every N frames: 0 = the same dots throughout (survives compression best), 1 = TV snow, 3 = a boil"}),
+                    "dot_size": ("INT", {"default": 6, "min": 1, "max": 32, "tooltip": "px; bigger dots survive upload compression better (6 at 1080p)"}),
+                    "refresh_every": ("INT", {"default": 1, "min": 0, "max": 10000, "tooltip": "new dots every N frames: 1 = TV snow, 2 = half the bits, 0 = the same dots throughout (cheapest to upload, but a moving thing shows as copies across the frame)"}),
                     "drift": ("FLOAT", {"default": 0.0, "min": -64.0, "max": 64.0, "step": 0.25, "tooltip": "slide the dots down (px per frame); keeps the depth, adds flow"}),
                     "guide_dots": ("BOOLEAN", {"default": True}),
                     "seed": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFF}),
@@ -769,7 +769,8 @@ def _flow_coords(images, H, W, drift):
 
 
 class ValisKinetogram:
-    DESCRIPTION = ("The thing is made of the same dots as the field; only its dots move. Pause on any frame and it "
+    DESCRIPTION = ("The thing is made of the same dots as the field, and you see it only because its dots move "
+                   "together while the field is live TV static (fresh dots every frame). Pause on any frame and it "
                    "is gone. 'follow' moves its dots with the mask, 'flow' with the footage's own motion (connect "
                    "the clip), and drift keeps a still thing visible. Chain: connect the last kinetogram as the field "
                    "to give each thing its own motion.")
@@ -790,6 +791,7 @@ class ValisKinetogram:
                 "optional": {
                     "images": ("IMAGE", {"tooltip": "the clip, for motion = flow"}),
                     "field": ("IMAGE", {"tooltip": "frames to use as the field (e.g. another kinetogram)"}),
+                    "field_refresh": ("INT", {"default": 1, "min": 0, "max": 10000, "tooltip": "new field dots every N frames: 1 = live TV static, 0 = a still field (then the thing shows as the only moving part)"}),
                 }}
 
     RETURN_TYPES = ("IMAGE",)
@@ -798,7 +800,7 @@ class ValisKinetogram:
     CATEGORY = CAT
 
     def run(self, mask, motion, drift_x, drift_y, kind, dot_size, field_drift_x, field_drift_y, seed, images=None,
-            field=None):
+            field=None, field_refresh=1):
         m = _mask_tensor(mask.cpu())
         B, H, W = m.shape
         if field is not None:
@@ -828,7 +830,14 @@ class ValisKinetogram:
         bar = _Progress(B)
         for t in range(B):
             mt = m[min(t, m.shape[0] - 1)] > 0.5
-            bg = fl[t % fl.shape[0]] if field is not None else look(bg_cells, gx - field_drift_x * t, gy - field_drift_y * t)
+            if field is not None:
+                bg = fl[t % fl.shape[0]]
+            else:
+                cells = bg_cells
+                if field_refresh > 0 and t // field_refresh > 0:        # live static: fresh field dots
+                    g2 = torch.Generator().manual_seed(int(seed) * 1000003 + 17 + t // field_refresh)
+                    cells = _cells(kind, hc, wc, g2)
+                bg = look(cells, gx - field_drift_x * t, gy - field_drift_y * t)
             if coords is not None:
                 c = torch.from_numpy(coords[min(t, coords.shape[0] - 1)])
                 ox, oy = c[..., 0], c[..., 1]
@@ -932,7 +941,7 @@ class ValisStereoDecode:
                     "period": ("INT", {"default": 0, "min": 0, "max": 2048, "tooltip": "the stereogram's period (0 = width / 9)"}),
                     "strength": ("FLOAT", {"default": 0.18, "min": 0.02, "max": 0.4, "step": 0.01}),
                     "viewing": (["parallel", "cross"], {"default": "parallel"}),
-                    "window": ("INT", {"default": 9, "min": 3, "max": 41, "step": 2}),
+                    "window": ("INT", {"default": 9, "min": 3, "max": 41, "step": 2, "tooltip": "matching window, px: about twice the dot size or more"}),
                     "codec": (["none", "h264"], {"default": "h264"}),
                     "bitrate_mbps": ("FLOAT", {"default": 8.0, "min": 0.2, "max": 200.0, "step": 0.1}),
                     "fps": ("INT", {"default": 24, "min": 1, "max": 120}),
