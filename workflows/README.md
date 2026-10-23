@@ -4,6 +4,9 @@ Every graph the Valis studio sends, exported in ComfyUI **API format** by `tools
 them in `app/js/graphs.js`). Drag one onto the ComfyUI canvas, point its Load nodes at your own files in
 `ComfyUI/input`, and queue it. Or run them headless with the Comfy SDK: `node cli/valis.mjs`.
 
+02, 05 and 26 name the Krea 2 identity-edit LoRA the way Windows lists it, `Krea2\krea2_identity_edit_v1_2_r64.safetensors`;
+on Linux and macOS pick `Krea2/...` in its LoRA loader. The studio and the CLI do this for you.
+
 | File | What it does | Inputs to replace |
 |---|---|---|
 | `01_keyframes_krea2.json` | Create · Frame it: two Krea 2 turbo keyframes from the director's panel prompt. | none |

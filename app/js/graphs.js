@@ -5,6 +5,23 @@
 //   remove    the same, with Qwen Image 2.1 edit anchors ("remove the man from the mirror")
 //   mask      SAM 3 track -> cleanup -> mask video + an overlay preview
 import {withRefEngine, FAST_REF} from "./refengine.js";   // the ref2va engine switch (base | fast)
+// A model file in a subfolder is spelled here with a Windows separator (Krea2\...); ComfyUI on Linux and macOS lists it
+// with "/". Before a graph goes out, a name the server only spells with the other slash takes the server's spelling.
+// inputsOf(node) resolves to that node's /object_info inputs.
+export async function respell(graph, inputsOf) {
+  for (const n of Object.values(graph)) {
+    for (const [k, v] of Object.entries(n.inputs || {})) {
+      if (typeof v !== "string" || !v.includes("\\")) continue;
+      const ins = await inputsOf(n.class_type);
+      const def = ins.required?.[k] || ins.optional?.[k];
+      const opts = Array.isArray(def?.[0]) ? def[0] : def?.[1]?.options || [];
+      const unix = v.replace(/\\/g, "/");
+      if (!opts.includes(v) && opts.includes(unix)) n.inputs[k] = unix;
+    }
+  }
+  return graph;
+}
+
 export const MODELS = {
   krea: "krea2_turbo_fp8_scaled.safetensors", kreaTE: "qwen3vl_4b_fp8_scaled.safetensors", kreaVAE: "qwen_image_vae.safetensors",
   kreaLora: "Krea2\\krea2_identity_edit_v1_2_r64.safetensors",

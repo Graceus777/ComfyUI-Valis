@@ -8,6 +8,7 @@
 // Machine controls that v2 doesn't cover (free memory, stop, VRAM, the node list for the setup check, and the
 // gallery of past renders) use ComfyUI's own endpoints.
 import {Comfy, ComfyLow} from "../vendor/comfy-sdk.js";
+import {respell} from "./graphs.js";
 
 // The SDK reads its base URL from COMFY_BASE_URL. A page has no environment, so give it one: this page's origin
 // (a self-hosted ComfyUI needs no key). ?api=<url>&key=<key> points the studio at another v2 surface.
@@ -53,9 +54,12 @@ function why(e) {
   return e?.message || String(e);
 }
 
+const INPUTS = {};
+const inputsOf = (node) => INPUTS[node] ??= objectInfo(node).then(i => i?.[node]?.input || {}, () => ({}));
+
 export async function submit(graph, label = "job", kind = "render") {
   let j;
-  try { j = await sdk.submit(sdk.workflows.fromJson(graph)); }
+  try { j = await sdk.submit(sdk.workflows.fromJson(await respell(graph, inputsOf))); }
   catch (e) { throw new Error(`ComfyUI refused the graph: ${why(e)}`); }
   const job = {id: j.id, label, kind, status: "queued", value: 0, max: 1, frac: 0, step: null, steps: null, node: null, outputs: [], error: null,
                t0: Date.now(), sdkJob: j, subs: subfolders(graph), w: weights(graph)};

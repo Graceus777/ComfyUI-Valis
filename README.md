@@ -124,8 +124,8 @@ Restart ComfyUI and open **http://127.0.0.1:8188/valis**, or click **VALIS** in 
 in the top bar says which features are ready; click it to see exactly what each one still needs. The FX and Score tabs
 need no model at all.
 
-`requirements.txt` installs `comfy-api-proxy` (the Comfy API v2 the SDK talks to) plus numpy, opencv-python and scipy
-for the Valis engine. The studio makes no request off this machine: its fonts and the SDK are bundled.
+`requirements.txt` installs `comfy-api-proxy` (the Comfy API v2 the SDK talks to) plus numpy, opencv-python, scipy and
+scikit-image for the Valis engine. The studio makes no request off this machine: its fonts and the SDK are bundled.
 
 ### Custom node packs
 

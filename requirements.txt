@@ -1,4 +1,5 @@
 numpy
 opencv-python
 scipy
+scikit-image
 comfy-api-proxy==0.1.6

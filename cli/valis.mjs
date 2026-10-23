@@ -60,6 +60,9 @@ if (!cmd || opt.help || cmd === "help") { process.stdout.write(HELP); process.ex
 process.env.COMFY_BASE_URL = (opt.api || process.env.COMFY_BASE_URL || "http://127.0.0.1:8188").replace(/\/+$/, "");
 const {Comfy} = await import("../app/vendor/comfy-sdk.js");
 const sdk = new Comfy({fetch: (...a) => globalThis.fetch(...a), ...(opt.key ? {apiKey: opt.key} : {})});
+const INPUTS = {};
+const inputsOf = (node) => INPUTS[node] ??= fetch(`${process.env.COMFY_BASE_URL}/object_info/${encodeURIComponent(node)}`)
+  .then(r => r.json()).then(i => i?.[node]?.input || {}, () => ({}));
 
 const MIME = {".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime", ".png": "image/png", ".jpg": "image/jpeg",
               ".jpeg": "image/jpeg", ".webp": "image/webp", ".wav": "audio/wav", ".flac": "audio/flac", ".mp3": "audio/mpeg", ".json": "application/json"};
@@ -125,7 +128,7 @@ if (cmd === "film") {
   const view = (f) => `${process.env.COMFY_BASE_URL}/view?filename=${encodeURIComponent(f.filename)}&subfolder=${encodeURIComponent(f.subfolder || "")}&type=${f.type || "output"}`;
   const io = {
     run: async (graph, label) => {
-      const t = Date.now(), job = await sdk.submit(sdk.workflows.fromJson(graph));
+      const t = Date.now(), job = await sdk.submit(sdk.workflows.fromJson(await G.respell(graph, inputsOf)));
       console.error(`${label}: job ${job.id}`);
       await job.wait();
       if (job.status !== "succeeded") { const e = job.error; throw new Error(`${label} failed: ${e ? `${e.class_type || ""} ${e.message || e.code}` : job.status}`); }
@@ -159,7 +162,7 @@ const graph = await build();
 if (opt.json) { console.log(JSON.stringify(graph, (k, v) => (v && v.filePath !== undefined && v.commit ? `<asset ${v.filePath}>` : v), 2)); process.exit(0); }
 
 const t0 = Date.now();
-const job = await sdk.submit(sdk.workflows.fromJson(graph));
+const job = await sdk.submit(sdk.workflows.fromJson(await G.respell(graph, inputsOf)));
 console.error(`job ${job.id} queued on ${process.env.COMFY_BASE_URL}`);
 let last = "";
 for await (const ev of job.events()) {
