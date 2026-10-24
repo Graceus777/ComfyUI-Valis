@@ -434,3 +434,20 @@ body.binopen .view { height: calc(100vh - 56px - 168px); }
 #r-grid .thumb .meta { font-size: 11.5px; }
 .rq-ctl { display: flex; gap: 6px; margin: 0 0 8px; }
 .rq-ctl .btn { flex: 1; padding: 7px 10px; font-size: 12px; }
+
+/* how it fits together */
+.helpov { position: fixed; inset: 0; background: rgba(5,5,8,.72); z-index: 80; display: grid; place-items: center; padding: 24px; }
+.helpbox { width: min(980px, 100%); max-height: 100%; overflow: auto; background: #111118; border: 1px solid var(--line2); border-radius: 16px; padding: 18px 22px 20px; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+.helpbox .hh { display: flex; align-items: center; }
+.helpbox h2 { font: 500 26px/1.1 var(--display); margin: 0; flex: 1; }
+.helpbox .x { background: none; border: 0; color: var(--muted); font-size: 24px; cursor: pointer; }
+.helpsvg { width: 100%; height: auto; display: block; margin: 8px 0 6px; }
+.helpsvg .hn rect, .helpsvg .hn circle { fill: #1a1a24; stroke: #3a3a4a; stroke-width: 1.2; }
+.helpsvg .hn.big circle { fill: #1f2433; stroke: #9cc2ff; }
+.helpsvg .hn { cursor: pointer; }
+.helpsvg .hn:hover rect, .helpsvg .hn:hover circle { stroke: #c9dcff; }
+.helpsvg .ht { fill: #ececf2; font: 500 19px "Cormorant Garamond", serif; }
+.helpsvg .hs { fill: #8d8d9b; font: 11.5px Inter, sans-serif; }
+.helpsvg .hl { fill: #7d8aa6; font: 10.5px Inter, sans-serif; }
+.helpbox ul { margin: 6px 0 0; padding-left: 18px; color: #c9c9d6; font-size: 13px; line-height: 1.55; display: grid; gap: 4px; }
+#helpBtn { font-weight: 700; width: 30px; padding: 4px 0; text-align: center; }

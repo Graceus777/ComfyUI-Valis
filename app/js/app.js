@@ -13,6 +13,7 @@ import {planFilm, makeFilm, makeSong, frameShots, shootShots, effectShots, cutFi
 import * as R from "./refengine.js";
 import {Bin} from "./bin.js";
 import * as MC from "./machine.js";
+import {showHelp} from "./help.js";
 import {$, $$, h, esc, toast, chips, cards, seg, slider, section, dropzone, fillDrop, media, initTips, ASSETS, VID} from "./ui.js";
 export {toast};
 
@@ -32,6 +33,8 @@ function show(view) {
 $$(".tab").forEach(b => b.addEventListener("click", () => show(b.dataset.view)));
 addEventListener("keydown", (e) => {
   if (e.target.matches("input, textarea, select")) return;
+  if (e.key === "?") return showHelp();
+  if (e.key === "Escape") document.querySelector(".helpov")?.remove();
   const v = {"0": "film", "1": "create", "2": "edit", "3": "score", "4": "fx", "5": "renders", "6": "genjutsu", "7": "extras"}[e.key];
   if (v) show(v);
 });
@@ -1200,6 +1203,7 @@ const TIPS = {
 };
 for (const [sel, tip] of Object.entries(TIPS)) { const el = $(sel); if (el && !el.dataset.tip) el.dataset.tip = tip; }
 
+$("#helpBtn").addEventListener("click", () => { const ov = showHelp(); ov.querySelectorAll(".hn").forEach(n => n.addEventListener("click", () => { const v = n.dataset.view; if (v !== "bin") { ov.remove(); show(v); } else { ov.remove(); document.body.classList.add("binopen"); } })); });
 buildCreate();
 show((location.hash || "#film").slice(1));
 refreshPrompt();
