@@ -14,6 +14,10 @@ const TURBO = "minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors";
 export const MODEL_SOURCES = {
   [FAST_REF]: {repo: "FastVideo/FastH3-Omni-Comfy", path: `diffusion_models/${FAST_REF}`, folder: "diffusion_models",
     size: 22213723064, sha256: "851b2dc9670ed864b7f1e951ac9da047d83b1c04ded9bfcc1a9e5bba0ee33f80"},
+  // Edit · Remove (Akatz Labs, MiniMax H3 community license: read its terms for your region)
+  "H3-Person-Remover-V1.safetensors": {repo: "akatz-ai/MiniMax-H3-Person-Remover-LoRA", path: "H3-Person-Remover-V1.safetensors", folder: "loras",
+    size: 155110584, sha256: "b01dc9fe888c2f4e455a8eb3b4878dfd4038ee0e2320a7b186c7935e65c93ba5",
+    license: "https://huggingface.co/akatz-ai/MiniMax-H3-Person-Remover-LoRA"},
 };
 
 export const REF_ENGINES = {base: "H3 ref2va (20 steps, or the turbo LoRA)", fast: "FastH3 OmniRef (8 steps, distilled)"};

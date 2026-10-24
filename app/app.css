@@ -149,6 +149,7 @@ details.prompt pre { margin: 0; padding: 0 12px 12px; white-space: pre-wrap; col
 .setrow { padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--card); }
 .setrow .t { font-weight: 600; font-size: 12.5px; display: flex; align-items: center; }
 .setrow .s { color: var(--muted); font-size: 12px; margin: 5px 0 0 14px; line-height: 1.35; }
+.setrow .s .btn { margin: 6px 0 2px; display: block; padding: 4px 10px; font-size: 12px; }
 .setrow.bad { border-color: rgba(255,107,107,.3); }
 .setok { border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--card); }
 .setok > summary { list-style: none; cursor: pointer; padding: 10px 12px; font-weight: 600; font-size: 12.5px; display: flex; align-items: center; }
@@ -224,7 +225,8 @@ details.prompt pre { margin: 0; padding: 0 12px 12px; white-space: pre-wrap; col
 .status > span:first-child { white-space: nowrap; }
 .pill { white-space: nowrap; background: none; color: inherit; font: inherit; }
 button.pill { cursor: pointer; }
-@media (max-width: 1180px) { .tab .k { display: none; } #connText { display: none; } .brand { min-width: 0; } }
+@media (max-width: 1180px) { .tab .k { display: none; } .brand { min-width: 0; } }
+@media (max-width: 1560px) { #connText { display: none; } }     /* the dot says it; the tabs keep their room */
 
 /* tooltips */
 .tipbox { position: fixed; left: 0; top: 0; z-index: 100; max-width: 340px; padding: 9px 11px; border-radius: 9px; background: #1f1f2a;

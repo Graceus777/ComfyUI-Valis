@@ -64,7 +64,7 @@ api.on((ev) => {
     }
     Renders.onJob(ev.job);
   }
-  if (ev.type === "connection") { $("#conn").classList.toggle("up", ev.up); $("#connText").textContent = ev.up ? "ComfyUI connected" : "ComfyUI offline"; }
+  if (ev.type === "connection") { $("#conn").classList.toggle("up", ev.up); $("#connText").textContent = ev.up ? "ComfyUI connected" : "ComfyUI offline"; $("#conn").parentElement.dataset.tip = ev.up ? "ComfyUI connected" : "ComfyUI offline: start it, the studio reconnects by itself"; }
   if (ev.type === "status") $("#queuePill").textContent = `queue ${ev.queue}`;
 });
 // the tab a job came from names it in the bin ("Edit", "Genjutsu"...)
@@ -826,8 +826,8 @@ async function machine() {
   if (!s?.devices) return;
   const d = s.devices[0];
   const free = (d.vram_free / 2 ** 30).toFixed(1), tot = (d.vram_total / 2 ** 30).toFixed(1);
-  $("#vramPill").textContent = `VRAM ${free}/${tot} GB free`;
-  $("#vramPill").dataset.tip = `GPU memory free right now. RAM ${(s.system.ram_free / 2 ** 30).toFixed(1)} of ${(s.system.ram_total / 2 ** 30).toFixed(1)} GB free.`;
+  $("#vramPill").textContent = `VRAM ${free}/${tot} GB`;
+  $("#vramPill").dataset.tip = `GPU memory free right now: ${free} of ${tot} GB. RAM ${(s.system.ram_free / 2 ** 30).toFixed(1)} of ${(s.system.ram_total / 2 ** 30).toFixed(1)} GB free.`;
 }
 async function detectMachine({apply = false} = {}) {
   const x = MACH = await MC.detect(), a = MC.advise(x);
@@ -904,19 +904,37 @@ async function setup() {
   const names = Object.keys(res).sort((a, b) => !res[a].length - !res[b].length), bad = names.filter(n => res[n].length), good = names.filter(n => !res[n].length);
   const row = (n) => {
     const issues = res[n], ok = !issues.length;
+    // a missing model the studio knows the home of gets a Download button (size and sha256 checked)
+    const get = (i) => { const f = i.kind === "model" ? i.msg.replace(/^model file not found:\s*/, "") : null, src = f && R.MODEL_SOURCES[f];
+      return src ? h("button", {class: "btn small", type: "button", tip: `From huggingface.co/${src.repo} into models/${src.folder} (${SZ(src.size)}), checked against its sha256${src.license ? ". Read its license first" : ""}`,
+        onclick: (e) => fetchModel(f, src, e.currentTarget)}, `Download (${SZ(src.size)})`) : null; };
     return h("div", {class: "setrow" + (ok ? " ok" : " bad")},
       h("div", {class: "t"}, h("i", {class: "dot" + (ok ? " up" : "")}), n),
-      ...issues.slice(0, 5).map(i => h("div", {class: "s"}, `${i.node}: ${i.msg}`)),
+      ...issues.slice(0, 5).map(i => h("div", {class: "s"}, `${i.node}: ${i.msg}`, get(i))),
       issues.length > 5 ? h("div", {class: "s"}, `and ${issues.length - 5} more`) : null);
   };
   // what needs work stays open; what is ready folds into one line
   $("#r-setup").replaceChildren(...bad.map(row), good.length ? h("details", {class: "setok"},
     h("summary", {}, h("i", {class: "dot up"}), bad.length ? `${good.length} more ready` : `All ${good.length} workflows ready`), ...good.map(row)) : "");
   pill.className = "pill link " + (bad.length ? "bad" : "ok");
-  pill.textContent = bad.length ? `setup: ${bad.length} of ${names.length} need work` : "setup ready";
+  pill.textContent = bad.length ? `setup: ${bad.length} to fix` : "setup ready";
+  pill.dataset.tip = bad.length ? `${bad.join(", ")}: missing pieces on this ComfyUI. Click for details.` : `All ${names.length} workflows the studio sends check out against this ComfyUI. Click for details.`;
   if (bad.length) toast(`${bad.join(", ")}: missing pieces on this ComfyUI. See Renders, Setup.`, true);
 }
 $("#setupPill").addEventListener("click", () => { show("renders"); $("#r-setup").scrollIntoView({block: "start", behavior: "smooth"}); });
+// a model from Hugging Face into ComfyUI's models folder, through the pack's own route (resumable, sha256-checked)
+async function fetchModel(name, src, btn) {
+  btn.disabled = true;
+  const r = await fetch("/valis/models/fetch", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(src)});
+  if (!r.ok) { toast(`Download refused: ${await r.text()}`, true); btn.disabled = false; return; }
+  const poll = setInterval(async () => {
+    const j = (await fetch("/valis/models/fetch").then(x => x.json()).catch(() => ({})))[name];
+    if (!j) return;
+    if (j.state === "downloading") btn.textContent = `${SZ(j.done)} of ${SZ(j.size || src.size)}`;
+    else if (j.state === "verifying") btn.textContent = "checking sha256";
+    else { clearInterval(poll); if (j.state === "done") { toast(`${name} downloaded and checked`); setup(); } else { btn.disabled = false; btn.textContent = `Download failed: ${j.error || j.state}`; } }
+  }, 2000);
+}
 $("#r-check").addEventListener("click", setup);
 
 // ---------------------------------------------------------------- ref2va engine (Renders -> Engine)
@@ -924,6 +942,7 @@ $("#r-check").addEventListener("click", setup);
 const ENGINE_KEY = "valis.refEngine";
 try { R.setRefEngine(localStorage.getItem(ENGINE_KEY) || "base"); } catch { /* storage off: default engine */ }
 const GB = (b) => (b / 1e9).toFixed(1);
+const SZ = (b) => b < 1e9 ? `${Math.round(b / 1e6)} MB` : `${GB(b)} GB`;
 async function engineUI() {
   const sel = $("#r-engine"), note = $("#r-engine-note"), get = $("#r-engine-get");
   const have = await api.hasUnet(R.FAST_REF);
