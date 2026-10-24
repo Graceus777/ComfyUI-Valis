@@ -946,7 +946,7 @@ export function filmCut({shots, title = null, prefix = "valis/film"}) {
 // joins it (Valis Depth Shape / Place); Valis Stereogram hides it all in a field of dots that you free-view; Valis
 // Kinetogram makes the motion-only version in live static; Valis Stereo Decode reads the depth back after H.264 (check).
 export function stereo({video, target = "person", maxObjects = 2, viewing = "parallel", shape = "torus", shapeFrames = 96,
-                        kind = "dots", dotSize = 6, refresh = 1, mbps = 8, prefix = "valis/stereo"}) {
+                        kind = "dots", dotSize = 6, refresh = 1, mbps = 4, prefix = "valis/stereo"}) {
   return {
     "1": N("LoadVideo", {file: video}),
     "2": N("GetVideoComponents", {video: ["1", 0]}),
@@ -966,7 +966,7 @@ export function stereo({video, target = "person", maxObjects = 2, viewing = "par
       guide_dots: true, seed: 0, width: 0, height: 0, depth_far_is_white: false}),
     "14": N("CreateVideo", {images: ["13", 0], fps: ["2", 2]}),
     "15": N("SaveVideo", {video: ["14", 0], filename_prefix: `${prefix}_${viewing}`, format: "auto", codec: "auto"}),
-    "16": N("ValisStereoDecode", {frames: ["13", 0], depth: ["12", 0], period: 0, strength: 0.18, viewing, window: 2 * dotSize + 1, codec: "h264", bitrate_mbps: mbps, fps: 24}),
+    "16": N("ValisStereoDecode", {frames: ["13", 0], depth: ["12", 0], period: 0, strength: 0.18, viewing, window: 3 * dotSize + 1, codec: "h264", bitrate_mbps: mbps, fps: 24}),
     "17": N("CreateVideo", {images: ["16", 0], fps: ["2", 2]}),
     "18": N("SaveVideo", {video: ["17", 0], filename_prefix: `${prefix}_decoded`, format: "auto", codec: "auto"}),
     "19": N("PreviewAny", {source: ["16", 2]}),

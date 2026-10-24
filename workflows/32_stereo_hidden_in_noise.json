@@ -225,9 +225,9 @@
       "period": 0,
       "strength": 0.18,
       "viewing": "parallel",
-      "window": 13,
+      "window": 19,
       "codec": "h264",
-      "bitrate_mbps": 8,
+      "bitrate_mbps": 4,
       "fps": 24
     }
   },

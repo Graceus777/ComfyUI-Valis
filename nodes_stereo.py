@@ -181,13 +181,36 @@ def _chain(u, sep, start, T, row_start=None, lo=0):
     return u
 
 
+def _chain_cells(u, sepq, start, T, row_start=None, lo=0):
+    """_chain on the dot grid: whole-cell separations, exact copies. Wherever the separation grows, the source would
+    repeat (a stretched dot, which traces the hidden thing); that pixel takes a fresh texel instead, and every copy
+    of it one period over inherits it exactly."""
+    N, W = u.shape
+    free = torch.zeros_like(sepq, dtype=torch.bool)
+    free[:, 1:] = sepq[:, 1:] > sepq[:, :-1]
+    m = max(1, int(sepq.min()))
+    cols = torch.arange(W, device=u.device)
+    x = start
+    while x < W:
+        x1 = min(W, x + m)
+        c = cols[x:x1][None, :]
+        src = (c - sepq[:, x:x1]).clamp(min=lo, max=W - 1)
+        new = torch.gather(u, 1, src)
+        new = torch.where(free[:, x:x1], (T + torch.remainder(c, T)).to(u.dtype), new)
+        if row_start is not None:
+            new = torch.where(c >= row_start[:, None], new, u[:, x:x1])
+        u[:, x:x1] = new
+        x = x1
+    return u
+
+
 def strip_width(P, D):
     """T: wider than any separation, so a seed strip never repeats inside itself. Strips are 2T wide: the seed
     texture, then the fresh texture for pixels only one eye sees."""
     return int(math.ceil(P + D)) + 2
 
 
-def stereo_coords(z, P, D, viewing="parallel", anchor="center"):
+def stereo_coords(z, P, D, viewing="parallel", anchor="center", cells=False):
     """Depth z [B,H,W] (1 = near) -> texture column u [B,H,W] in [0, 2 * strip_width(P, D)).
 
     Separation is P for the field (z = 0). Parallel viewing: near things repeat closer (P - D z);
@@ -214,6 +237,18 @@ def stereo_coords(z, P, D, viewing="parallel", anchor="center"):
     u = (cols[None, :] - a).clamp(min=0).expand(B * H, W).clone()                   # seed: u = x - a
     row_start = a + s_c
     T = strip_width(P, D)
+    if cells:
+        # whole-cell separations; each row rounds at its own random threshold, so rows dither the depth between
+        # cell steps (the eye averages them) while along a row the separation only steps where the depth does
+        rows = torch.arange(B * H, device=z.device, dtype=z.dtype) % H
+        th = torch.frac(torch.sin(rows * 78.233 + 1.0) * 43758.5453).abs()[:, None]
+        sq_r = torch.floor(sep_r + th).long()
+        sq_l = torch.floor(sep_l + th).long()
+        ul = u.long()
+        ul = _chain_cells(ul, sq_r, int(row_start.min()), T, row_start.long(), lo=a)
+        if a > 0:
+            ul = _chain_cells(ul.flip(1).contiguous(), sq_l.flip(1).contiguous(), W - a, T).flip(1)
+        return ul.to(z.dtype).reshape(B, H, W)
     u = _chain(u, sep_r, int(row_start.min()), T, row_start, lo=a)
     if a > 0:
         uf = _chain(u.flip(1).contiguous(), sep_l.flip(1).contiguous(), W - a, T)
@@ -634,13 +669,25 @@ def _glyph_frame(w, h, cell, pal, gen):
 # ------------------------------------------------------------------------------------------------ stereogram node
 
 def render_stereogram(z, P, D, viewing="parallel", anchor="center", kind="snow", dot_size=3, refresh_every=1,
-                      drift=0.0, guide=True, seed=0, pattern=None, chunk=8, device=None, frame_offset=0):
+                      drift=0.0, guide=True, seed=0, pattern=None, chunk=8, device=None, frame_offset=0, grid=True):
     """z [B,H,W] (CPU, 0..1, 1 = near) -> frames [B,H,W,3] (CPU). frame_offset: where this batch sits in a longer
-    video, so refresh and drift carry on across pieces rendered separately."""
+    video, so refresh and drift carry on across pieces rendered separately.
+
+    grid: with generated dots bigger than a pixel, the stereogram is drawn on the dot grid itself (one cell = one
+    dot) and blown up, so a depth edge falls between whole dots instead of slicing them into slivers; sliced and
+    stretched dots repeat once per period and show the hidden thing's outline to anyone not fusing. P must then be a
+    multiple of dot_size (Valis Stereogram rounds it)."""
     dev = device or _device()
     B, H, W = z.shape
+    g = dot_size if (grid and dot_size > 1 and pattern is None) else 1
+    if g > 1 and P % g:
+        P = max(8 * g, int(round(P / g)) * g)
+        D = min(D, P - 6)
+    Hl, Wl = -(-H // g), -(-W // g)
+    Pl, Dl = P / g, D / g
+    cell = 1 if g > 1 else dot_size
     out = torch.empty(B, H, W, 3)
-    T = strip_width(P, D)
+    T = strip_width(Pl, Dl)
     strips = {}
 
     def strip_for(t):
@@ -656,11 +703,11 @@ def render_stereogram(z, P, D, viewing="parallel", anchor="center", kind="snow",
                 if len(strips) > 64:
                     strips.clear()
                 gen = torch.Generator().manual_seed(int(seed) * 1000003 + r)
-                cells = _cells(kind, -(-H // dot_size), -(-2 * T // dot_size), gen)
-                strips[key] = _upsample_cells(cells, H, 2 * T, dot_size)
+                cells = _cells(kind, -(-Hl // cell), -(-2 * T // cell), gen)
+                strips[key] = _upsample_cells(cells, Hl, 2 * T, cell)
             s = strips[key]
         if drift:
-            s = torch.roll(s, shifts=int(math.floor(drift * t)) % H, dims=0)
+            s = torch.roll(s, shifts=int(math.floor(drift * t / g)) % s.shape[0], dims=0)
         return s
 
     bar = _Progress(B)
@@ -668,9 +715,17 @@ def render_stereogram(z, P, D, viewing="parallel", anchor="center", kind="snow",
         _check_interrupt()
         b1 = min(B, b0 + chunk)
         zc = z[b0:b1].to(dev).float().clamp(0, 1)
-        u = stereo_coords(zc, P, D, viewing, anchor)
+        if g > 1:
+            zc = F.interpolate(zc[:, None], size=(Hl, Wl), mode="area")[:, 0]
+        u = stereo_coords(zc, Pl, Dl, viewing, anchor, cells=g > 1)
         st = torch.stack([strip_for(frame_offset + t) for t in range(b0, b1)]).to(dev)
-        fr = sample_strip(st, u).clamp(0, 1)
+        if g > 1:
+            i = u.long() % st.shape[2]
+            fr = torch.gather(st, 2, i[..., None].expand(-1, -1, -1, st.shape[3]))
+            fr = fr.repeat_interleave(g, 1).repeat_interleave(g, 2)[:, :H, :W]
+        else:
+            fr = sample_strip(st, u)
+        fr = fr.clamp(0, 1).contiguous()
         if guide:
             fr = _guide_dots(fr, P)
         out[b0:b1] = fr.cpu()
@@ -682,10 +737,11 @@ class ValisStereogram:
     DESCRIPTION = ("The hidden picture: the depth becomes repeat distances in a field of dots. Free-view it "
                    "(relax your eyes through the screen for parallel, cross them for cross) until the two guide dots "
                    "become three, and the thing stands out of the field. Fresh dots every frame (the default) look "
-                   "like TV snow, as in Black Is Good, and show nothing to anyone not fusing. They cost bits: at "
-                   "1080p after H.264, 6 px dots kept a shape match of 0.62 at 13 Mb/s and 0.35 at 7 Mb/s (Valis "
-                   "Stereo Decode); new dots every 2 frames 0.70 at 10.6 Mb/s. Held dots (refresh 0) survive about "
-                   "2.5 Mb/s, but a moving thing then shows as copies repeating across the frame.")
+                   "like TV snow, as in Black Is Good. Generated dots are drawn on their own grid, so no dot is cut "
+                   "or stretched by the hidden thing: a still frame shows nothing to anyone not fusing, and the "
+                   "picture survives uploads (1080p, 6 px dots, H.264 capped at 3 Mb/s: the hidden dancers still "
+                   "matched 0.87 in Valis Stereo Decode). Held dots (refresh 0) show a moving thing as copies "
+                   "repeating across the frame.")
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -722,6 +778,8 @@ class ValisStereogram:
         W = width or z.shape[2]
         z = _resize_bhw(z, H, W)
         P = _auto_period(W, period)
+        if dot_size > 1 and pattern is None:                     # drawn on the dot grid: whole dots per period
+            P = max(8 * dot_size, int(round(P / dot_size)) * dot_size)
         D = min(strength * P, P - 6)
         with torch.no_grad():
             fr = render_stereogram(z, P, D, viewing, anchor, kind, dot_size, refresh_every, drift, guide_dots, seed,
@@ -867,8 +925,8 @@ def h264_roundtrip(frames, fps=24, mbps=8.0, preset="medium"):
     st = out.add_stream("h264", rate=int(fps))
     st.width, st.height, st.pix_fmt = We, He, "yuv420p"
     st.bit_rate = int(mbps * 1e6)
-    try:
-        st.options = {"preset": preset}
+    try:                                         # a hard cap, as a platform's transcode has (x264 alone overshoots)
+        st.options = {"preset": preset, "maxrate": str(int(mbps * 1e6)), "bufsize": str(int(2 * mbps * 1e6))}
     except Exception:
         pass
     for i in range(B):
@@ -887,6 +945,20 @@ def h264_roundtrip(frames, fps=24, mbps=8.0, preset="medium"):
                 break
             dec[i, :He, :We] = fr.to_ndarray(format="rgb24")
     return dec, nbytes * 8 / (B / float(fps)) / 1e6
+
+
+def estimate_period(frames, device=None):
+    """The field's repeat distance, read from the picture: the shift where the frame best matches itself (the
+    smallest one, so not a multiple of it)."""
+    dev = device or _device()
+    x = frames[: min(4, frames.shape[0])].to(dev)
+    g = _grey(x.float() / 255.0 if x.dtype == torch.uint8 else x)[:, ::4]
+    W = g.shape[-1]
+    ss = list(range(max(8, W // 24), max(9, W // 4)))
+    c = torch.stack([(g[:, :, s:] - g[:, :, :-s]).abs().mean() for s in ss])
+    lo = float(c.min())
+    ok = (c <= lo + 0.08 * (float(c.median()) - lo)).nonzero()
+    return ss[int(ok[0])]
 
 
 def decode_stereogram(frames, P, D, viewing="parallel", window=9, chunk=2, device=None):
@@ -938,12 +1010,12 @@ class ValisStereoDecode:
     def INPUT_TYPES(cls):
         return {"required": {
                     "frames": ("IMAGE",),
-                    "period": ("INT", {"default": 0, "min": 0, "max": 2048, "tooltip": "the stereogram's period (0 = width / 9)"}),
+                    "period": ("INT", {"default": 0, "min": 0, "max": 2048, "tooltip": "the stereogram's period, px (0 = read it from the frames)"}),
                     "strength": ("FLOAT", {"default": 0.18, "min": 0.02, "max": 0.4, "step": 0.01}),
                     "viewing": (["parallel", "cross"], {"default": "parallel"}),
-                    "window": ("INT", {"default": 9, "min": 3, "max": 41, "step": 2, "tooltip": "matching window, px: about twice the dot size or more"}),
+                    "window": ("INT", {"default": 19, "min": 3, "max": 61, "step": 2, "tooltip": "matching window, px: about three times the dot size"}),
                     "codec": (["none", "h264"], {"default": "h264"}),
-                    "bitrate_mbps": ("FLOAT", {"default": 8.0, "min": 0.2, "max": 200.0, "step": 0.1}),
+                    "bitrate_mbps": ("FLOAT", {"default": 4.0, "min": 0.2, "max": 200.0, "step": 0.1, "tooltip": "a hard cap, as a platform's transcode has"}),
                     "fps": ("INT", {"default": 24, "min": 1, "max": 120}),
                 },
                 "optional": {"depth": ("IMAGE", {"tooltip": "the depth that was hidden, for the score"})}}
@@ -956,9 +1028,9 @@ class ValisStereoDecode:
     def run(self, frames, period, strength, viewing, window, codec, bitrate_mbps, fps, depth=None):
         fr = frames.cpu()
         B, H, W = fr.shape[:3]
-        P = _auto_period(W, period)
+        P = int(period) if period and period > 0 else estimate_period(fr)
         D = min(strength * P, P - 6)
-        lines = [f"{B} frames {W}x{H}, period {P}px, depth {D:.1f}px, {viewing}"]
+        lines = [f"{B} frames {W}x{H}, period {P}px{'' if period else ' (read from the frames)'}, depth {D:.1f}px, {viewing}"]
         if codec == "h264":
             dec, real = h264_roundtrip(fr, fps, bitrate_mbps)
             fr = torch.from_numpy(dec)                               # uint8 until it leaves the node
