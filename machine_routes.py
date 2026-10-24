@@ -38,8 +38,25 @@ def _nvidia():
             gpus.append({"name": p[0], "driver": p[1], "memory_mb": _num(p[2]), "used_mb": _num(p[3]), "temp_c": _num(p[4]),
                          "power_limit_w": _num(p[5]), "pcie_gen": _num(p[6]), "pcie_width": _num(p[7])})
     head = _run([exe])
-    m = re.search(r"CUDA Version:\s*([\d.]+)", head)
-    return {"gpus": gpus, "driver_cuda": m.group(1) if m else None}
+    m = re.search(r"CUDA(?: Driver)? Version:\s*([\d.]+)", head)
+    return {"gpus": gpus, "driver_cuda": m.group(1) if m else _cuda_driver()}
+
+
+def _cuda_driver():
+    """The CUDA version the driver supports, straight from the driver (nvidia-smi's banner varies by release)."""
+    import ctypes
+    for name in ("nvcuda.dll", "libcuda.so.1", "libcuda.so"):
+        try:
+            lib = ctypes.CDLL(name)
+        except OSError:
+            continue
+        v = ctypes.c_int(0)
+        try:
+            if lib.cuDriverGetVersion(ctypes.byref(v)) == 0 and v.value:
+                return f"{v.value // 1000}.{(v.value % 1000) // 10}"
+        except Exception:
+            pass
+    return None
 
 
 def _num(x):

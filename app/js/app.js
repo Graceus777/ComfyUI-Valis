@@ -30,8 +30,21 @@ function show(view) {
   if (view === "score") Score.ensure();
   if (view === "fx") Fx.refreshClips();
   history.replaceState(null, "", `#${view}`);
+  $(".tab.on")?.scrollIntoView({inline: "nearest", block: "nearest"});
+  $(".tabs").dispatchEvent(new Event("scroll"));
 }
 $$(".tab").forEach(b => b.addEventListener("click", () => show(b.dataset.view)));
+// On a narrow window the tab row scrolls: fade the edge that has more tabs past it, and let the wheel scroll it.
+{
+  const row = $(".tabs");
+  const edges = () => {
+    row.classList.toggle("more-l", row.scrollLeft > 2);
+    row.classList.toggle("more-r", row.scrollLeft + row.clientWidth < row.scrollWidth - 2);
+  };
+  row.addEventListener("scroll", edges, {passive: true});
+  row.addEventListener("wheel", (e) => { if (row.scrollWidth > row.clientWidth && Math.abs(e.deltaY) > Math.abs(e.deltaX)) { row.scrollLeft += e.deltaY; e.preventDefault(); } }, {passive: false});
+  addEventListener("resize", edges); edges();
+}
 addEventListener("keydown", (e) => {
   if (e.target.matches("input, textarea, select")) return;
   if (e.key === "?") return showHelp();
@@ -837,7 +850,7 @@ async function detectMachine({apply = false} = {}) {
   $("#r-machine").replaceChildren(...[
     row("GPU", x.gpu), row("memory", x.vramGB && `${x.vramGB} GB${x.vramFreeGB != null ? ` (${x.vramFreeGB} free)` : ""}`),
     row("compute", x.capability && `${x.capability}${x.fp8 ? " · fp8" : ""}${x.bf16 ? " · bf16" : ""}`),
-    row("driver", x.driver && `${x.driver} · CUDA ${x.driverCuda}`), row("PyTorch", x.torch && `${x.torch}${x.cudnn ? " · cuDNN " + x.cudnn : ""}`),
+    row("driver", x.driver && `${x.driver}${x.driverCuda ? " · CUDA " + x.driverCuda : ""}`), row("PyTorch", x.torch && `${x.torch}${x.cudnn ? " · cuDNN " + x.cudnn : ""}`),
     row("attention", x.attention, "Which attention kernel ComfyUI uses for every model"), row("kernels", k, "Installed attention and compile packages"),
     row("memory mode", x.vramState), row("RAM", x.ramGB && `${x.ramGB} GB${x.ramFreeGB != null ? ` (${x.ramFreeGB} free)` : ""}`),
     row("ComfyUI", x.comfy && `${x.comfy} · Python ${x.python}`), row("launch", flags || "(defaults)", "ComfyUI's command-line flags"),

@@ -42,7 +42,7 @@ export function advise(x) {
     else notes.push({level: "tip", text: `Attention: ${x.attention || "pytorch"}. SageAttention (with Triton${tri ? ", which is installed" : ""}) usually speeds up video models.`});
   }
   if (x.driverCuda && x.torchCuda && vnum(x.driverCuda) < vnum(x.torchCuda)) notes.push({level: "warn", text: `The NVIDIA driver supports CUDA ${x.driverCuda} but PyTorch is built for ${x.torchCuda}: update the driver.`});
-  else if (x.driver) notes.push({level: "ok", text: `Driver ${x.driver} (CUDA ${x.driverCuda || "?"}) runs PyTorch ${x.torch} (CUDA ${x.torchCuda || "?"})`});
+  else if (x.driver) notes.push({level: "ok", text: `Driver ${x.driver}${x.driverCuda ? ` (CUDA ${x.driverCuda})` : ""} runs PyTorch ${x.torch}${x.torchCuda ? ` (CUDA ${x.torchCuda})` : ""}`});
   if (x.ramGB && x.ramGB < 24) notes.push({level: "warn", text: `${x.ramGB} GB of RAM: switching between models (Krea, H3, Qwen) reloads them from disk; expect slow first steps.`});
   if (x.vramState && /LOW|NO/.test(x.vramState)) notes.push({level: "tip", text: `ComfyUI is in ${x.vramState} mode: models are kept off the GPU between steps (slower, saves memory).`});
   if (x.temp && x.temp > 85) notes.push({level: "warn", text: `The GPU is at ${x.temp} °C.`});
