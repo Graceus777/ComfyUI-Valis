@@ -111,8 +111,21 @@ def machine():
     return out
 
 
+def _plain(v):
+    """ComfyUI's launch flags hold sets and enums (--fast's features): JSON gets lists and names."""
+    if isinstance(v, (set, frozenset)):
+        return sorted((_plain(x) for x in v), key=str)
+    if isinstance(v, (list, tuple)):
+        return [_plain(x) for x in v]
+    if isinstance(v, dict):
+        return {str(k): _plain(x) for k, x in v.items()}
+    if v is None or isinstance(v, (str, int, float, bool)):
+        return v
+    return getattr(v, "name", None) or str(v)
+
+
 def register(routes):
     @routes.get("/valis/machine")
     async def machine_route(request):
         import asyncio
-        return web.json_response(await asyncio.get_running_loop().run_in_executor(None, machine))
+        return web.json_response(_plain(await asyncio.get_running_loop().run_in_executor(None, machine)))
