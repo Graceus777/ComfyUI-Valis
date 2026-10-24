@@ -405,6 +405,13 @@
       <div class="rq-ctl"><button class="btn" id="r-free">Free memory</button><button class="btn" id="r-stop">Stop current</button></div>
       <div class="map" id="r-queue"></div>
       <p class="hint" id="r-queue-empty">Nothing running.</p>
+      <h2>Machine</h2>
+      <div id="r-machine" class="machine"></div>
+      <button class="btn" id="r-detect" style="margin-top:8px; width:100%" data-tip="Read the GPU, driver, CUDA, attention kernels and ComfyUI's launch flags, and set the studio's defaults to what this machine handles">Detect hardware</button>
+      <h2>End-to-end test</h2>
+      <p class="hint">Short, low-resolution renders through the studio's own buttons: every Create combination (bodies, lenses, eras, palettes, trained moves, loops, relight, a cast character), then the chains built on them (Edit, Genjutsu, FX, Extras, Score, Film). Each output is checked for size, length, motion, colour and sound.</p>
+      <div id="r-tests" class="map"></div>
+      <div class="row" style="margin-top:8px"><button class="btn" id="r-test-run">Run the test</button><button class="btn" id="r-test-stop">Stop after this one</button></div>
       <h2>Setup</h2>
       <p class="hint">Every workflow the studio sends, checked against this ComfyUI: node packs, model files, inputs.</p>
       <div class="map" id="r-setup"></div>
@@ -414,13 +421,6 @@
       <select id="r-engine"></select>
       <p class="hint" id="r-engine-note"></p>
       <button class="btn" id="r-engine-get" style="margin-top:6px; width:100%" hidden>Download FastH3 OmniRef (22.2 GB)</button>
-      <h2>Machine</h2>
-      <div id="r-machine" class="machine"></div>
-      <button class="btn" id="r-detect" style="margin-top:8px; width:100%" data-tip="Read the GPU, driver, CUDA, attention kernels and ComfyUI's launch flags, and set the studio's defaults to what this machine handles">Detect hardware</button>
-      <h2>End-to-end test</h2>
-      <p class="hint">Short, low-resolution renders through the studio's own buttons: every Create combination (bodies, lenses, eras, palettes, trained moves, loops, relight, a cast character), each output checked for size, length, motion, colour and sound.</p>
-      <div id="r-tests" class="map"></div>
-      <div class="row" style="margin-top:8px"><button class="btn" id="r-test-run">Run the test</button><button class="btn" id="r-test-stop">Stop after this one</button></div>
     </aside>
     <div class="stage">
       <div>

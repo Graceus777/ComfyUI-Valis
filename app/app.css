@@ -150,6 +150,14 @@ details.prompt pre { margin: 0; padding: 0 12px 12px; white-space: pre-wrap; col
 .setrow .t { font-weight: 600; font-size: 12.5px; display: flex; align-items: center; }
 .setrow .s { color: var(--muted); font-size: 12px; margin: 5px 0 0 14px; line-height: 1.35; }
 .setrow.bad { border-color: rgba(255,107,107,.3); }
+.setok { border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--card); }
+.setok > summary { list-style: none; cursor: pointer; padding: 10px 12px; font-weight: 600; font-size: 12.5px; display: flex; align-items: center; }
+.setok > summary::-webkit-details-marker { display: none; }
+.setok > summary::after { content: "show"; margin-left: auto; color: var(--muted); font-weight: 400; font-size: 11.5px; }
+.setok[open] > summary::after { content: "hide"; }
+.setok[open] { display: grid; gap: 6px; padding-bottom: 6px; }
+.setok .setrow { border: 0; background: transparent; padding: 2px 12px; }
+.setok .setrow .t { font-weight: 500; color: var(--muted); }
 
 #e-wave { width: 100%; height: 90px; display: block; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-sm); cursor: crosshair; }
 
@@ -334,7 +342,9 @@ body.binopen .view { height: calc(100vh - 56px - 168px); }
 .trow { display: flex; gap: 8px; font-size: 12px; color: var(--muted); align-items: baseline; }
 .trow .ti { width: 14px; text-align: center; }
 .trow.pass .ti { color: var(--ok); } .trow.fail .ti, .trow.error .ti { color: var(--bad); } .trow.running .ti { color: var(--accent); }
-.trow .tn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trow .tn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.trow { min-width: 0; overflow: hidden; }
+#r-tests { min-width: 0; max-width: 100%; }
 .tr-h { font: 600 12px/1 var(--font); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
 .tgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 10px; }
 .tcard { border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--card); padding: 10px; display: grid; gap: 8px; }

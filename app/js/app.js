@@ -852,17 +852,34 @@ $("#r-detect").addEventListener("click", () => detectMachine({apply: true}));
 })();
 
 // ---- the end-to-end test (selftest.js), shown under Renders
+// every test's latest result: this run's, then the runs before it (a run of a few tests leaves the others as they were)
+const pastRuns = new Map();
+async function testBoard(report) {
+  let list = [];
+  try { list = await (await fetch(`/api/userdata?dir=${encodeURIComponent("valis/selftest")}&recurse=false`)).json(); } catch { /* none */ }
+  const runs = (Array.isArray(list) ? list : []).map(f => String(f.path || f).replace(/^.*\//, "")).filter(n => /^\d{8}T\d{6}\.json$/.test(n)).sort().reverse().slice(0, 12);
+  const best = {};
+  const take = (rep) => { for (const t of rep?.tests || []) if (t.status && t.status !== "waiting" && !best[t.id]) best[t.id] = {...t, run: rep.run}; };
+  take(report);
+  for (const n of runs) {
+    if (report && n === `${report.run}.json`) continue;
+    if (!pastRuns.has(n)) pastRuns.set(n, await api.readUser(`valis/selftest/${n}`, null));
+    take(pastRuns.get(n));
+  }
+  return best;
+}
 async function testsUI(report) {
   report = report || await api.readUser("valis/selftest/latest.json", null);
   const T = await import("./selftest.js");
-  const byId = Object.fromEntries((report?.tests || []).map(t => [t.id, t]));
+  const byId = await testBoard(report);
   const icon = {pass: "✓", fail: "✗", error: "!", running: "…", waiting: "·"};
   $("#r-tests").replaceChildren(...T.TESTS.map(t => { const r = byId[t.id];
     return h("div", {class: `trow ${r?.status || ""}`, tip: esc(t.label)}, h("span", {class: "ti"}, icon[r?.status] || "·"), h("span", {class: "tn"}, `${t.id} ${t.label}`)); }));
-  const res = (report?.tests || []).filter(t => t.status && t.status !== "waiting");
-  $("#r-test-results").replaceChildren(...(res.length ? [h("h2", {class: "tr-h"}, `End-to-end test · ${report.run}${report.finished ? "" : " (running)"} · ${res.filter(t => t.status === "pass").length} of ${res.length} passed`),
+  const res = T.TESTS.map(t => byId[t.id]).filter(Boolean), runs = [...new Set(res.map(t => t.run))];
+  const when = (r) => r ? `${r.slice(9, 11)}:${r.slice(11, 13)} ${r.slice(6, 8)}/${r.slice(4, 6)}` : "";
+  $("#r-test-results").replaceChildren(...(res.length ? [h("h2", {class: "tr-h", tip: "Each test's latest result, from the runs listed"}, `End-to-end test · ${res.filter(t => t.status === "pass").length} of ${res.length} passed · ${T.TESTS.length - res.length} not run yet${report && !report.finished ? " · running now" : ""}`),
     h("div", {class: "tgrid"}, ...res.map(t => h("div", {class: `tcard ${t.status}`},
-      h("div", {class: "tt"}, h("b", {}, `${t.id} `), t.label, h("span", {class: "ts"}, ` ${t.status}${t.seconds ? ` · ${Math.round(t.seconds)} s` : ""}`)),
+      h("div", {class: "tt"}, h("b", {}, `${t.id} `), t.label, h("span", {class: "ts"}, ` ${t.status}${t.seconds ? ` · ${Math.round(t.seconds)} s` : ""}${runs.length > 1 ? ` · ${when(t.run)}` : ""}`)),
       t.strip ? h("img", {src: t.strip, alt: ""}) : t.keyframe ? h("img", {src: api.viewUrl(t.keyframe), alt: "", class: "tk"}) : null,
       h("div", {class: "tc"}, ...(t.checks || []).map(c => h("span", {class: c.pass ? "ok" : "bad", tip: esc(c.detail)}, `${c.pass ? "✓" : "✗"} ${c.name}`))),
       t.error ? h("div", {class: "terr"}, t.error) : null,
@@ -881,14 +898,17 @@ async function setup() {
   pill.className = "pill link"; pill.textContent = "checking setup";
   let res;
   try { res = await checkSetup(); } catch (e) { pill.textContent = "setup ?"; return; }
-  const names = Object.keys(res).sort((a, b) => !res[a].length - !res[b].length), bad = names.filter(n => res[n].length);
-  $("#r-setup").replaceChildren(...names.map(n => {
+  const names = Object.keys(res).sort((a, b) => !res[a].length - !res[b].length), bad = names.filter(n => res[n].length), good = names.filter(n => !res[n].length);
+  const row = (n) => {
     const issues = res[n], ok = !issues.length;
     return h("div", {class: "setrow" + (ok ? " ok" : " bad")},
       h("div", {class: "t"}, h("i", {class: "dot" + (ok ? " up" : "")}), n),
       ...issues.slice(0, 5).map(i => h("div", {class: "s"}, `${i.node}: ${i.msg}`)),
       issues.length > 5 ? h("div", {class: "s"}, `and ${issues.length - 5} more`) : null);
-  }));
+  };
+  // what needs work stays open; what is ready folds into one line
+  $("#r-setup").replaceChildren(...bad.map(row), good.length ? h("details", {class: "setok"},
+    h("summary", {}, h("i", {class: "dot up"}), bad.length ? `${good.length} more ready` : `All ${good.length} workflows ready`), ...good.map(row)) : "");
   pill.className = "pill link " + (bad.length ? "bad" : "ok");
   pill.textContent = bad.length ? `setup: ${bad.length} of ${names.length} need work` : "setup ready";
   if (bad.length) toast(`${bad.join(", ")}: missing pieces on this ComfyUI. See Renders, Setup.`, true);
