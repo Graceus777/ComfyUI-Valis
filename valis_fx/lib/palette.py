@@ -49,6 +49,17 @@ def _hex(c):
     return np.array([int(c[i:i + 2], 16) / 255 for i in (0, 2, 4)], np.float32)
 
 
+# your own colours over a named look: how much of the gradient map goes over it (app/js/grade.js OWN_AMOUNT). Nearly
+# all of it, so the colours you pick are the colours you get; the look's contrast, fade, glow, grain and vignette stay.
+OWN_AMOUNT = .9
+
+
+def own_look(name, colors, amount=OWN_AMOUNT):
+    """A named look with your own 2-6 HEX colours mapped through it (darkest to the shadows, lightest to the highlights)."""
+    cs = sorted((_hex(c) for c in colors), key=lambda c: float(_luma(c)))
+    return Look(LOOKS[name], palette=[c.tolist() for c in cs], palette_amount=amount)
+
+
 def hex_look(colors, amount=.85, name="custom", contrast=.1):
     """Your own palette: 2-6 HEX colours. Shadows take the darkest, highlights the lightest, the rest fall between
     by brightness (a luminance-preserving gradient map), blended in at `amount`."""
