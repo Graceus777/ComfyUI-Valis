@@ -944,7 +944,7 @@ export function filmCut({shots, title = null, prefix = "valis/film"}) {
 // ---------------------------------------------------------------- stereo: pictures hidden in noise (nodes_stereo.py)
 // SAM 3 finds the thing and Depth Anything 3 gives its relief; Valis Mask Depth rounds the silhouette; a spinning solid
 // joins it (Valis Depth Shape / Place); Valis Stereogram hides it all in a field of dots that you free-view; Valis
-// Kinetogram makes the motion-only version in live static; Valis Stereo Decode reads the depth back after H.264 (check).
+// Kinetogram makes the motion-only version in live static (every dot rides the clip's own motion); Valis Stereo Decode reads the depth back after H.264 (check).
 export function stereo({video, target = "person", maxObjects = 2, viewing = "parallel", shape = "torus", shapeFrames = 96,
                         look = "squares", cell = 4, noise = "white", color = "black & white", palette = "neon", charset = "minimal",
                         refresh = 1, mbps = 4, prefix = "valis/stereo"}) {
@@ -971,8 +971,8 @@ export function stereo({video, target = "person", maxObjects = 2, viewing = "par
     "17": N("CreateVideo", {images: ["16", 0], fps: ["2", 2]}),
     "18": N("SaveVideo", {video: ["17", 0], filename_prefix: `${prefix}_decoded`, format: "auto", codec: "auto"}),
     "19": N("PreviewAny", {source: ["16", 2]}),
-    "20": N("ValisKinetogram", {mask: ["6", 0], static: ["23", 0], motion: "follow", drift_x: 0.0, drift_y: 1.5, kind: "dots", dot_size: cell, field_drift_x: 0.0,
-      field_drift_y: 0.0, seed: 0, field_refresh: 1, width: 0, height: 0, dot_life: 24}),
+    "20": N("ValisKinetogram", {mask: ["6", 0], images: ["2", 0], static: ["23", 0], motion: "flow", drift_x: 0.0, drift_y: 0.0, kind: "dots", dot_size: cell,
+      field_drift_x: 0.0, field_drift_y: 0.0, seed: 0, field_refresh: 1, width: 0, height: 0, dot_life: 12}),
     "21": N("CreateVideo", {images: ["20", 0], fps: ["2", 2]}),
     "22": N("SaveVideo", {video: ["21", 0], filename_prefix: `${prefix}_kinetogram`, format: "auto", codec: "auto"}),
     "23": N("ValisStatic", {look, cell, noise, color, palette, charset, custom_palette: "#0b0b10, #f2efe6, #d4462f, #2f6fd4",

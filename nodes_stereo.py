@@ -1068,9 +1068,10 @@ class _Thing:
 
     follow / drift only: the thing's dots are one texture slid along with the mask (and the drift): a rigid move,
     so every cell takes a different dot and the dots stay put relative to each other.
-    flow: every dot rides the clip's optical flow on its own, for a limited life (a limited-lifetime random-dot
-    kinematogram). Where dots bunch up, one stays; where they spread, new dots are born; every dot is reborn
-    somewhere after about `life` frames. Without that, flow drags the dots into streaks and smears (one dot
+    flow: every dot rides the clip's optical flow on its own (read where the dot is, not at its cell), for a limited
+    life (a limited-lifetime random-dot kinematogram). Where dots bunch up, one stays; where they spread, new dots
+    are born, each exactly whole cells from a dot beside it so it moves in step with its neighbours; every dot is
+    reborn somewhere after about `life` frames. Without that, flow drags the dots into streaks and smears (one dot
     copied across many cells), which a paused frame shows."""
 
     def __init__(self, k, mask, motion, dx, dy, seed, H, W, images=None, life=24):
@@ -1087,8 +1088,11 @@ class _Thing:
         self.cents = _centroids((mask > 0.5).float()) if motion == "follow" else None
         self.flow = None
         if motion == "flow":
-            if images is None:
-                raise ValueError("motion = flow needs the clip connected to images")
+            if images is None:                              # no clip: the mask's own movement, softened so its
+                mm = mask.float()[:, None]                  # inside moves with its outline
+                kk = max(3, (min(mm.shape[-2:]) // 16) | 1)
+                mm = F.avg_pool2d(mm, kk, 1, kk // 2, count_include_pad=False)
+                images = mm[:, 0, :, :, None].expand(-1, -1, -1, 3)
             self.flow = torch.from_numpy(_flow_fields(images, H, W, self.cw, self.ch))
         self.jx = (torch.arange(self.wc, dtype=torch.float32) + 0.5)[None, :].expand(self.hc, self.wc) * self.cw
         self.iy = (torch.arange(self.hc, dtype=torch.float32) + 0.5)[:, None].expand(self.hc, self.wc) * self.ch
@@ -1120,11 +1124,12 @@ class _Thing:
         else:
             pos, val, age, life = self.p
             fl = self.flow[min(t, self.flow.shape[0] - 1)]
-            ri = pos[:, 1].round().long().clamp(0, hc - 1)
-            rj = pos[:, 0].round().long().clamp(0, wc - 1)
-            pos = pos + fl[ri, rj] + torch.tensor([self.dx / self.cw, self.dy / self.ch])
+            g = torch.stack([pos[:, 0] / max(1, wc - 1) * 2 - 1, pos[:, 1] / max(1, hc - 1) * 2 - 1], 1)
+            v = F.grid_sample(fl.permute(2, 0, 1)[None], g[None, None], mode="bilinear", padding_mode="border",
+                              align_corners=True)[0, :, 0].T            # flow where each dot is, not at its cell
+            pos = pos + v + torch.tensor([self.dx / self.cw, self.dy / self.ch])
             age = age + 1
-        ri, rj = pos[:, 1].round().long(), pos[:, 0].round().long()
+        ri, rj = pos[:, 1].add(0.5).floor().long(), pos[:, 0].add(0.5).floor().long()
         inside = (ri >= 0) & (ri < hc) & (rj >= 0) & (rj < wc)
         ok = inside & (age <= life)
         ok[ok.clone()] = mt[ri[ok], rj[ok]]                 # dots that left the thing die
@@ -1140,7 +1145,7 @@ class _Thing:
         pos, val, age, life = pos[keep], val[keep], age[keep], life[keep]
         occ = torch.full((hc * wc,), -1, dtype=torch.long)
         if pos.shape[0]:
-            occ[(pos[:, 1].round().long() * wc + pos[:, 0].round().long())] = torch.arange(pos.shape[0])
+            occ[(pos[:, 1].add(0.5).floor().long() * wc + pos[:, 0].add(0.5).floor().long())] = torch.arange(pos.shape[0])
         born = (occ.view(hc, wc) < 0) & mt                  # empty cells of the thing: new dots
         bi, bj = born.nonzero(as_tuple=True)
         if t == 0:
@@ -1151,31 +1156,48 @@ class _Thing:
             bval = self.k.cells(hc, wc, gen)[bi, bj]
             blife = torch.randint(self.life // 2, self.life * 3 // 2 + 1, (bi.shape[0],), generator=gen)
             bage = torch.zeros(bi.shape[0], dtype=torch.long)
-        jit = torch.rand(bi.shape[0], 2, generator=gen) * 0.98 - 0.49   # each dot its own place inside its cell, so
-        pos = torch.cat([pos, torch.stack([bj.float(), bi.float()], 1) + jit])   # a slow, even flow steps them one by one
+        if pos.shape[0] and bi.shape[0]:
+            # a new dot sits exactly whole cells from a dot next to it (the nearest one found within a few cells),
+            # so it keeps the local spacing and moves in step; one placed at its cell's centre beside dots that have
+            # drifted part of a cell would land on one of them, and each such collision empties a cell for another
+            cell = pos.add(0.5).floor()
+            nid = occ.view(hc, wc).float()
+            for _ in range(4):
+                spread = F.max_pool2d(nid[None, None], 3, 1, 1)[0, 0]
+                nid = torch.where(nid < 0, spread, nid)
+            near = nid[bi, bj].long()
+            have = near >= 0
+            jit = torch.zeros(bi.shape[0], 2)
+            if have.any():
+                n_ = near[have]
+                jit[have] = (pos[n_] - cell[n_]).clamp(-0.499, 0.499)
+        else:
+            jit = torch.zeros(bi.shape[0], 2)
+        pos = torch.cat([pos, torch.stack([bj.float(), bi.float()], 1) + jit])
         val = torch.cat([val, bval])
         age = torch.cat([age, bage])
         life = torch.cat([life, blife])
         self.p = (pos, val, age, life)
         ob = torch.zeros(hc, wc, 4)
-        ob[pos[:, 1].round().long(), pos[:, 0].round().long()] = val
+        ob[pos[:, 1].add(0.5).floor().long(), pos[:, 0].add(0.5).floor().long()] = val
         return mt, ob
 
 
 class ValisKinetogram:
     DESCRIPTION = ("The thing is made of the same dots as the field, and you see it only because its dots move "
                    "together while the field is live TV static (fresh dots every frame). Pause on any frame and it "
-                   "is gone. 'follow' moves its dots with the mask, 'flow' with the footage's own motion (connect "
-                   "the clip), and drift keeps a still thing visible. Chain: connect the last kinetogram as the field "
+                   "is gone. 'flow' moves every dot with the footage's own motion (connect the clip; without it, "
+                   "the mask's own movement), so limbs carry their own dots and dots keep renewing inside; 'follow' "
+                   "slides one rigid texture along with the mask; drift keeps a still thing visible. Chain: connect the last kinetogram as the field "
                    "to give each thing its own motion.")
 
     @classmethod
     def INPUT_TYPES(cls):
         return {"required": {
                     "mask": ("MASK",),
-                    "motion": (["follow", "flow", "drift only"], {"default": "follow"}),
+                    "motion": (["flow", "follow", "drift only"], {"default": "flow"}),
                     "drift_x": ("FLOAT", {"default": 0.0, "min": -64.0, "max": 64.0, "step": 0.25, "tooltip": "the thing's dots slide this much per frame on top of its motion"}),
-                    "drift_y": ("FLOAT", {"default": 1.5, "min": -64.0, "max": 64.0, "step": 0.25}),
+                    "drift_y": ("FLOAT", {"default": 0.0, "min": -64.0, "max": 64.0, "step": 0.25, "tooltip": "a thing that stands still is invisible: give it a slow drift (e.g. 1.5)"}),
                     "kind": (KINDS, {"default": "dots"}),
                     "dot_size": ("INT", {"default": 4, "min": 1, "max": 32}),
                     "field_drift_x": ("FLOAT", {"default": 0.0, "min": -64.0, "max": 64.0, "step": 0.25}),
@@ -1183,13 +1205,13 @@ class ValisKinetogram:
                     "seed": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFF}),
                 },
                 "optional": {
-                    "images": ("IMAGE", {"tooltip": "the clip, for motion = flow"}),
+                    "images": ("IMAGE", {"tooltip": "the clip, for motion = flow (without it the mask's own movement is used)"}),
                     "field": ("IMAGE", {"tooltip": "frames to use as the field (e.g. another kinetogram)"}),
                     "field_refresh": ("INT", {"default": 1, "min": 0, "max": 10000, "tooltip": "new field dots every N frames: 1 = live TV static, 0 = a still field (then the thing shows as the only moving part)"}),
                     "static": ("VALIS_STATIC", {"tooltip": "what the dots are (Valis Static); replaces kind and dot_size. Chained kinetograms should share one"}),
                     "width": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 2, "tooltip": "output size (0 = the mask's)"}),
                     "height": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 2}),
-                    "dot_life": ("INT", {"default": 24, "min": 2, "max": 1000, "tooltip": "motion = flow: frames a dot rides the motion before it is reborn somewhere new (so dots never bunch into streaks)"}),
+                    "dot_life": ("INT", {"default": 12, "min": 2, "max": 1000, "tooltip": "motion = flow: frames a dot rides the motion before it is reborn somewhere new (so dots never bunch into streaks)"}),
                 }}
 
     RETURN_TYPES = ("IMAGE",)
@@ -1198,7 +1220,7 @@ class ValisKinetogram:
     CATEGORY = CAT
 
     def run(self, mask, motion, drift_x, drift_y, kind, dot_size, field_drift_x, field_drift_y, seed, images=None,
-            field=None, field_refresh=1, static=None, width=0, height=0, dot_life=24):
+            field=None, field_refresh=1, static=None, width=0, height=0, dot_life=12):
         """Drawn on the cell grid: the thing's outline falls between whole cells and its cells step a whole cell at
         a time, so a paused frame has one unbroken grid of dots (or characters) and nothing to see."""
         k = static if static is not None else Static.from_kind(kind, dot_size)

@@ -276,13 +276,17 @@
         "6",
         0
       ],
+      "images": [
+        "2",
+        0
+      ],
       "static": [
         "23",
         0
       ],
-      "motion": "follow",
+      "motion": "flow",
       "drift_x": 0,
-      "drift_y": 1.5,
+      "drift_y": 0,
       "kind": "dots",
       "dot_size": 4,
       "field_drift_x": 0,
@@ -291,7 +295,7 @@
       "field_refresh": 1,
       "width": 0,
       "height": 0,
-      "dot_life": 24
+      "dot_life": 12
     }
   },
   "21": {
