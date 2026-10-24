@@ -430,7 +430,7 @@ const E = {clip: null, clipUrl: null, mode: "transform", look: null, character: 
 const EXAMPLES = ["the man", "his head", "her dress", "the woman", "man in the mirror", "the sky", "the car"];
 $("#e-target-ex").replaceChildren(...EXAMPLES.map(t => h("button", {class: "chip", onclick: () => { $("#e-target").value = t; refreshPrompt(); }}, t)));
 seg($("#e-mode"), [{id: "transform", name: "Transform", tip: "The thing you named becomes something else (a look below): Krea 2 makes the first and last frames, H3 re-renders only the masked region"},
-  {id: "remove", name: "Remove", tip: "The thing you named is taken out; the background carries on where it was"},
+  {id: "remove", name: "Remove", tip: "The person you named is taken out: SAM 3 finds them, the H3 Person Remover LoRA paints in what was behind them, and outside the mask every pixel stays the source's. Made for people; a shadow or reflection outside the mask stays"},
   {id: "swap", name: "Swap", tip: "The whole person replaced by your character (H3 character swap), keeping the take's voice and motion"},
   {id: "turn", name: "Turn", tip: "One take turns into another on a spoken word: the man into the vampire on 'morning'"}], (m) => {
   E.mode = m.id;
@@ -442,7 +442,8 @@ seg($("#e-mode"), [{id: "transform", name: "Transform", tip: "The thing you name
   $('[data-key="e-sec-prompt"]').style.display = m.id === "turn" ? "none" : "";
   editEst();
   if (m.id === "turn") { fillClipB(); drawWave(); }
-  if (m.id === "remove") { $("#e-rb").value = 1; }
+  $("#e-rb").closest(".slider").style.display = m.id === "remove" ? "none" : "";       // the LoRA has no faithfulness knob
+  if (m.id === "remove") { $("#e-rb").value = 1; $("#e-grow").value = 8; }
   if (m.id === "swap") { $("#e-rb").value = 0.8; }
   syncSliders(); refreshPrompt();
 });
@@ -457,7 +458,7 @@ async function editEst() {
 }
 function syncSliders() {
   $("#e-rb-o").textContent = Number($("#e-rb").value).toFixed(1); $("#e-grow-o").textContent = `${$("#e-grow").value} px`;
-  $("#e-sec-ctl-val").textContent = `faithfulness ${Number($("#e-rb").value).toFixed(1)} · margin ${$("#e-grow").value} px${$("#e-audio").checked ? "" : " · silent"}`;
+  $("#e-sec-ctl-val").textContent = `${E.mode === "remove" ? "" : `faithfulness ${Number($("#e-rb").value).toFixed(1)} · `}margin ${$("#e-grow").value} px${$("#e-audio").checked ? "" : " · silent"}`;
 }
 $("#e-audio").addEventListener("change", () => syncSliders());
 ["#e-rb", "#e-grow"].forEach(s => $(s).addEventListener("input", syncSliders));
