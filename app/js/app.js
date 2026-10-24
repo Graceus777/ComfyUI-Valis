@@ -14,10 +14,11 @@ import * as R from "./refengine.js";
 import {Bin} from "./bin.js";
 import * as MC from "./machine.js";
 import {showHelp} from "./help.js";
-import {$, $$, h, esc, toast, chips, cards, seg, slider, section, dropzone, fillDrop, media, initTips, ASSETS, VID} from "./ui.js";
+import {$, $$, h, esc, toast, chips, cards, seg, slider, section, dropzone, fillDrop, media, initTips, wireSections, ASSETS, VID} from "./ui.js";
 export {toast};
 
 initTips();
+wireSections();
 
 // ------------------------------------------------------------------ tabs
 function show(view) {
@@ -349,6 +350,7 @@ function gjRefs() {
 }
 gjRefs();
 async function gjEst() {
+  $("#g-sec-len-val").textContent = `${GJ.seconds} s · ${GJ.mp > .5 ? "576p" : "480p"} · ${(GJ.aspect || "").split(" ")[0]}${$("#g-turbo")?.checked ? " · turbo" : ""}`;
   const g = G.genjutsu({video: "x.mp4", refs: ["a.png"], prompt: "x", mode: GJ.mode, seconds: GJ.seconds, megapixels: GJ.mp, aspect: GJ.aspect, turbo: $("#g-turbo")?.checked});
   const e = await EST.estimate(g), c = await EST.estimate(G.poseCheck({video: "x.mp4"}));
   $("#g-run .sub").textContent = `H3 + Fun ControlNet · ${EST.fmt(e)}`; $("#g-run").dataset.tip = `Time: ${e.basis}.`;
@@ -427,10 +429,9 @@ seg($("#e-mode"), [{id: "transform", name: "Transform", tip: "The thing you name
   $("#e-looks-wrap").style.display = m.id === "transform" ? "" : "none";
   $("#e-swap-wrap").style.display = m.id === "swap" ? "" : "none";
   $("#e-turn-wrap").style.display = m.id === "turn" ? "" : "none";
-  $("#e-controls").style.display = ["swap", "turn"].includes(m.id) ? "none" : "";
+  $('[data-key="e-sec-ctl"]').style.display = ["swap", "turn"].includes(m.id) ? "none" : "";
   $("#e-find").style.display = m.id === "turn" ? "none" : "";
-  $("#e-prompt").style.display = m.id === "turn" ? "none" : "";
-  $("#e-prompt").previousElementSibling.style.display = m.id === "turn" ? "none" : "";
+  $('[data-key="e-sec-prompt"]').style.display = m.id === "turn" ? "none" : "";
   editEst();
   if (m.id === "turn") { fillClipB(); drawWave(); }
   if (m.id === "remove") { $("#e-rb").value = 1; }
@@ -446,7 +447,11 @@ async function editEst() {
   $("#e-render").dataset.tip = `Time: ${e.basis}.`;
   $("#e-find .sub").textContent = `SAM 3 · ${EST.fmt(f)}`;
 }
-function syncSliders() { $("#e-rb-o").textContent = Number($("#e-rb").value).toFixed(1); $("#e-grow-o").textContent = `${$("#e-grow").value} px`; }
+function syncSliders() {
+  $("#e-rb-o").textContent = Number($("#e-rb").value).toFixed(1); $("#e-grow-o").textContent = `${$("#e-grow").value} px`;
+  $("#e-sec-ctl-val").textContent = `faithfulness ${Number($("#e-rb").value).toFixed(1)} · margin ${$("#e-grow").value} px${$("#e-audio").checked ? "" : " · silent"}`;
+}
+$("#e-audio").addEventListener("change", () => syncSliders());
 ["#e-rb", "#e-grow"].forEach(s => $(s).addEventListener("input", syncSliders));
 syncSliders();
 $("#e-target").addEventListener("input", refreshPrompt);
@@ -617,6 +622,7 @@ const Score = new ScoreView({run, onFilm: (sv) => {
 let FX_SCORE = null;
 const Fx = new FxView({$, h, toast, assets: ASSETS, api, G, run, VID, getScore: () => FX_SCORE, estimate: () => fxEst()});
 async function fxEst() {
+  $("#f-sec-more-val").textContent = `${$("#f-loop").checked ? "loops" : "no loop"} · ${$("#f-sound").checked ? "sound on" : "no sound"}`;
   const F = Fx.F, secs = F.seconds || 107 / 24;
   const g = G.fx({clip: "x.mp4", layers: F.layers.length ? F.layers : [{effect: "Punch", on: "kick"}], source: F.source === "write" ? "write" : "sheet",
     songSpec: F.source === "write" ? {style: "x", lyrics: "x", seconds: Number($("#f-secs").value) || 20} : null});
@@ -624,6 +630,7 @@ async function fxEst() {
   $("#f-render .sub").textContent = `${F.source === "write" ? "YuE2 + " : ""}Valis · ${EST.fmt({...e, seconds: e.seconds * Math.max(.5, secs / 4.46)})}`;
 }
 // the FX tab's Score lanes follow whatever score is open in the Score tab
+["#f-loop", "#f-sound"].forEach(sel => $(sel).addEventListener("change", fxEst));
 $("#f-source").addEventListener("click", async () => { if (Fx.F.source === "score") { Score.ensure(); FX_SCORE = await Score.forFx(); if (!FX_SCORE) toast("Open the Score tab and make or open a score: FX fires on its lanes"); } });
 
 

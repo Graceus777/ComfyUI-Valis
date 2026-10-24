@@ -198,7 +198,7 @@ async function checkOut(outs, exp, log) {
   const checks = [];
   if (exp.noVideo) { checks.push({name: "made something", pass: outs.length > 0 || !!exp.any, detail: `${outs.length} files`}); log({checks}); return checks.every(c => c.pass); }
   if (!vids.length) { checks.push({name: "a video", pass: false, detail: `outputs: ${outs.map(o => o.filename).join(", ") || "none"}`}); log({checks}); return false; }
-  const v = vids.find(f => !/_decoded|_kinetogram|overlay|_control_|_mask/.test(f.filename)) || vids[0];
+  const v = vids.find(f => !/_decoded|_kinetogram|overlay|_control_|_mask|matte|plate|anchor|_end_/.test(f.filename)) || vids[0];
   const m = await inspectVideo(api.viewUrl(v));
   checks.push(...verdicts(m, {width: exp.width, height: exp.height, audio: exp.audio, minMotion: .002}));
   if (exp.minSeconds) checks.push({name: "longer", pass: m.seconds >= exp.minSeconds, detail: `${m.seconds.toFixed(2)} s`});

@@ -455,3 +455,5 @@ body.binopen .view { height: calc(100vh - 56px - 168px); }
 .score-viewer { min-height: 0 !important; height: 46vh; flex: 0 0 auto; }
 .score-viewer canvas.livefx { max-height: 100%; }
 .tl-scroll { max-height: 34vh; overflow-y: auto; }
+
+.secs { margin-top: 16px; }

@@ -149,3 +149,12 @@ export function media(f, {controls = true, autoplay = true} = {}) {
     ? h("video", {src: url, controls, autoplay, loop: true, muted: autoplay, playsinline: true})
     : h("img", {src: url, alt: ""});
 }
+
+// sections written in index.html (details.sec[data-key]) remember open/closed like the ones section() builds
+export function wireSections() {
+  for (const d of $$("details.sec[data-key]")) {
+    const key = `valis.sec.${d.dataset.key}`;
+    try { const s = localStorage.getItem(key); if (s != null) d.open = s === "1"; } catch { /* storage off */ }
+    d.addEventListener("toggle", () => { try { localStorage.setItem(key, d.open ? "1" : "0"); } catch { /* */ } });
+  }
+}

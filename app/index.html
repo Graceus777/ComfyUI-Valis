@@ -107,13 +107,17 @@
         <label class="check" style="margin-top:8px"><input type="checkbox" id="g-keep" checked> keep everything else exactly: paste the new object back onto the original frames</label>
         <label class="check"><input type="checkbox" id="g-edges" checked> follow the object's own shape (edges); off = follow the body (pose)</label>
       </div>
-      <h2>Prompt</h2>
+<div class="secs">
+      <details class="sec" data-key="g-sec-prompt"><summary data-tip="What H3 is told, built from your choices. Open it to edit"><span class="st">Prompt</span><span class="val" id="g-sec-prompt-val"></span></summary><div class="body">
       <textarea id="g-prompt" rows="5" placeholder="Built from your choices; edit freely"></textarea>
-      <h2>Length and size</h2>
+      </div></details>
+      <details class="sec" data-key="g-sec-len" open><summary><span class="st">Length, size and sound</span><span class="val" id="g-sec-len-val"></span></summary><div class="body">
       <div class="row"><div class="seg" id="g-len"></div><div class="seg" id="g-size"></div></div>
       <div class="seg" id="g-aspect" style="margin-top:8px"></div>
       <label class="check" style="margin-top:10px"><input type="checkbox" id="g-audio" checked> keep the source's sound</label>
       <label class="check"><input type="checkbox" id="g-turbo"> turbo (8 steps, faster, a little rougher)</label>
+      </div></details>
+      </div>
       <div class="cta">
         <button class="btn" id="g-check" disabled>Check source<span class="sub">pose only</span></button>
         <button class="btn primary" id="g-run" disabled>Cast it<span class="sub">H3 + Fun ControlNet</span></button>
@@ -164,15 +168,19 @@
         <p class="hint" id="e-wave-hint">Click the word where it turns. Auto: the first syllable after the longest pause.</p>
         <label class="check" style="margin-top:10px"><input type="checkbox" id="e-voice" checked> the voice turns too: deeper, a bigger throat, a growl, on the same word</label>
       </div>
-      <h2>Prompt</h2>
+<div class="secs">
+      <details class="sec" data-key="e-sec-prompt"><summary data-tip="What Krea 2 is told for the new first and last frames. Open it to edit"><span class="st">Prompt</span><span class="val" id="e-sec-prompt-val"></span></summary><div class="body">
       <textarea id="e-prompt" rows="4" placeholder="Pick a look or write your own"></textarea>
+      </div></details>
+      <details class="sec" data-key="e-sec-ctl" open><summary><span class="st">Controls</span><span class="val" id="e-sec-ctl-val"></span></summary><div class="body">
       <div id="e-controls">
-      <h2>Controls</h2>
       <div class="slider"><label for="e-rb">Faithfulness to the original</label><output id="e-rb-o"></output><input type="range" id="e-rb" min="0.3" max="5" step="0.1" value="0.5"></div>
       <p class="hint">Low lets the look take over (a whole new face). High keeps the shape and changes the material.</p>
       <div class="slider" style="margin-top:10px"><label for="e-grow">Mask margin</label><output id="e-grow-o"></output><input type="range" id="e-grow" min="0" max="40" step="2" value="12"></div>
       </div>
-      <label class="row" style="margin-top:12px; gap:8px"><input type="checkbox" id="e-audio" checked style="flex:0"> <span style="flex:1">Keep the clip's own sound</span></label>
+      <label class="check" style="margin-top:12px"><input type="checkbox" id="e-audio" checked> keep the clip's own sound</label>
+      </div></details>
+      </div>
       <div class="cta">
         <button class="btn" id="e-find">Find it<span class="sub">SAM 3</span></button>
         <button class="btn primary" id="e-render" disabled>Render<span class="sub">H3 masked</span></button>
@@ -250,11 +258,14 @@
       <h2>Layers</h2>
       <div class="map" id="f-layers"></div>
       <p class="hint" id="f-layers-hint">Add effects from the library on the right. Each listens to a lane: a hit lane fires it, a curve holds it.</p>
-      <h2>Loop</h2>
+<div class="secs">
+      <details class="sec" data-key="f-sec-more"><summary data-tip="Loop the effects with a looping clip; each effect's own sound; background beds"><span class="st">Loop and sound</span><span class="val" id="f-sec-more-val"></span></summary><div class="body">
       <label class="check"><input type="checkbox" id="f-loop"> the clip is a loop (Create · Loop): the effects loop with it. The cues repeat every loop, and each effect is played once round first so trails, echoes and frost carry across the join. Keeps the clip's own sound; saved as MP4 and GIF</label>
-      <h2>Sound</h2>
       <label class="check"><input type="checkbox" id="f-sound" checked> every effect makes its own sound, on the same cue</label>
       <div class="chips" id="f-beds" style="margin-top:8px"></div>
+
+      </div></details>
+      </div>
       <div class="cta">
         <button class="btn ember" id="f-render" style="flex:1" disabled>Render<span class="sub">Valis</span></button>
       </div>
