@@ -243,7 +243,7 @@ export class ScoreView {
           targetA: $("#s-a").value.trim(), targetB: $("#s-b").value.trim(), prefix: `valis/score_${shot.id}_${tag}`})
       : G.fx({clip: a.clip.ref, subject: G.LIBRARY.some(l => this.rules.some(r => r.effect === l.id) && ((l.needs || []).includes("subject") || l.params?.at === "subject")) ? $("#s-a").value.trim() : "",
           source: "score", score, audio: this.audioRef, layers: this.rules.map(r => { const l = G.LIBRARY.find(x => x.id === r.effect); return {effect: r.effect, on: r.lane, params: l?.params || {}}; }),
-          sound: true, seconds: shot.frames / 24, start: shot.start_frame / 24, prefix: `valis/score_${shot.id}_${tag}`});
+          sound: true, seconds: shot.frames / 24, start: shot.start_frame / 24, fit: true, prefix: `valis/score_${shot.id}_${tag}`});
     return new Promise((res) => this.run(g, `Score · ${shot.id}`, null, {onDone: (j) => {
       const v = j.outputs.find(f => /\.(mp4|webm|mov)$/i.test(f.filename));
       if (v) { this.results[shot.id] = v; Bin.add(v, {from: "Score", label: `${this.sc.title || "score"} ${shot.id}`}); }

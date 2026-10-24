@@ -47,6 +47,14 @@ valid("Score · make from a song", G.scoreMake({audio: "song.flac", title: "x"})
 valid("Score · make from a cue sheet", G.scoreMake({cueSheet: G.CUE_SHEET_EXAMPLE}));
 valid("Score · YuE2 writes it", G.songScore({style: "x", lyrics: "[Instrumental]"}));
 valid("Score · render with the library", G.fx({clip: "x.mp4", source: "score", score: "s.json", audio: "a.flac", layers: [{effect: "Punch", on: "kick"}], start: 4.4}));
+{
+  const g = G.fx({clip: "x.mp4", source: "score", score: "s.json", audio: "a.flac", layers: [{effect: "Punch", on: "kick"}], start: 4.4, seconds: 6.5, fit: true});
+  valid("Score · a shot fitted to its bars", g);
+  ok(g["18"].inputs.length === 156, "fit: the render gets exactly the shot's frames", g["18"].inputs.length);
+  ok(g["18a"].inputs.batch_index === -1, "fit: a short clip holds its last frame");
+  ok(JSON.stringify(g["80"].inputs.images) === '["18",0]', "fit: ValisRender reads the fitted frames");
+  ok(JSON.stringify(G.fx({clip: "x.mp4", layers: []})["80"].inputs.images) === '["17",0]', "no fit: the FX tab renders the whole clip");
+}
 valid("Extras · stereogram", G.stereo({video: "x.mp4"}));
 valid("Extras · stereogram, no shape", G.stereo({video: "x.mp4", shape: "none", look: "ascii", color: "palette"}));
 valid("Extras · loop, draft", G.loopShot({image: "a.png", prompt: "x"}));

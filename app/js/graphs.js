@@ -748,11 +748,22 @@ export function songScore({style, lyrics = "[Instrumental]", seconds = 30, seed 
 // The FX tab: a clip (+ another clip, a subject), cues from a song / a written song / a cue sheet / a score, a stack of
 // library layers, and every layer's own sound mixed with the music.
 export function fx({clip, other = null, subject = "", source = "sheet", audio = null, abc = "", songSpec = null, cueSheet = "", score = null,
-                    layers = [], beds = [], sound = true, seconds = 4.46, start = 0, prefix = "valis/fx", loop = false}) {
+                    layers = [], beds = [], sound = true, seconds = 4.46, start = 0, prefix = "valis/fx", loop = false, fit = false}) {
   const g = {
     "16": N("LoadVideo", {file: clip}),
     "17": N("GetVideoComponents", {video: ["16", 0]}),
   };
+  // fit: the clip fills exactly `seconds` (a score's shot): a longer clip is cut there, a shorter one holds its last frame
+  // to the bar line, so the shots cut together stay on the bars
+  let frames = ["17", 0];
+  if (fit && !loop) {
+    const want = Math.min(4096, Math.max(1, Math.round(seconds * 24)));
+    g["18a"] = N("ImageFromBatch", {image: ["17", 0], batch_index: -1, length: 1});
+    g["18b"] = N("RepeatImageBatch", {image: ["18a", 0], amount: want});
+    g["18c"] = N("ImageBatch", {image1: ["17", 0], image2: ["18b", 0]});
+    g["18"] = N("ImageFromBatch", {image: ["18c", 0], batch_index: 0, length: want});
+    frames = ["18", 0];
+  }
   // start: where this clip begins in the song. The cues are shifted so the clip's own clock starts at 0, and the sound
   // design gets the song from there, so a film's shots can each take their place in one song.
   const cues = {cue_sheet: source === "sheet" ? cueSheet : "", duration: 0, offset: -start, bpm_hint: 0, ...(abc ? {abc} : {})};
@@ -769,9 +780,9 @@ export function fx({clip, other = null, subject = "", source = "sheet", audio = 
     g[id] = N("ValisLayer", {effect: l.effect, on: l.on || "", by: l.by || "", params: JSON.stringify(l.params || {}), ...(prev ? {stack: [prev, 0]} : {})});
     prev = id;
   });
-  const r = {images: ["17", 0], cues: ["50", 0], stack: [prev, 0], fps: 24, start: 0};
+  const r = {images: frames, cues: ["50", 0], stack: [prev, 0], fps: 24, start: 0};
   if (other) { g["40"] = N("LoadVideo", {file: other}); g["41"] = N("GetVideoComponents", {video: ["40", 0]}); r.other = ["41", 0]; }
-  if (subject) { Object.assign(g, personMatte(["17", 0], subject, 30, 10)); r.subject = ["33", 0]; }
+  if (subject) { Object.assign(g, personMatte(frames, subject, 30, 10)); r.subject = ["33", 0]; }
   // loop: the clip already loops (Create · Loop); the stack is rendered so it loops with it (Valis Loop · Render: the cues
   // repeat, every effect is played once round first, what still differs is sealed), the clip keeps its own sound, plus a GIF
   if (loop) {

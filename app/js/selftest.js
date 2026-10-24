@@ -12,6 +12,9 @@ import * as P from "./presets.js";
 import * as CR from "./create.js";
 import {planFilm, makeFilm} from "./film.js";
 
+// the side files a render saves next to its result (mattes, guides, H3's raw pass, anchors…): never the result itself
+const NOT_RESULT = /_decoded|_kinetogram|overlay|_control_|_mask|matte|plate|anchor|_end_|_guide_|_raw_|_kept_/;
+
 const SCENES = {
   street: {subject: "a man in a long dark coat and a hat standing under a streetlamp on a wet city street at night",
            action: "he turns his head slowly and looks down the street while rain falls", who: "the man"},
@@ -202,7 +205,7 @@ async function checkOut(outs, exp, log) {
   const checks = [];
   if (exp.noVideo) { checks.push({name: "made something", pass: outs.length > 0 || !!exp.any, detail: `${outs.length} files`}); log({checks}); return checks.every(c => c.pass); }
   if (!vids.length) { checks.push({name: "a video", pass: false, detail: `outputs: ${outs.map(o => o.filename).join(", ") || "none"}`}); log({checks}); return false; }
-  const v = vids.find(f => !/_decoded|_kinetogram|overlay|_control_|_mask|matte|plate|anchor|_end_|_guide_|_raw_|_kept_/.test(f.filename)) || vids[0];
+  const v = vids.find(f => !NOT_RESULT.test(f.filename)) || vids[0];
   const m = await inspectVideo(api.viewUrl(v));
   checks.push(...verdicts(m, {width: exp.width, height: exp.height, audio: exp.audio, dark: exp.dark, minMotion: .002}));
   if (exp.report) {                         // a check that writes a report: it must say what it found
@@ -231,7 +234,7 @@ async function runChain(t, ctx, log) {
     const shots = score.shots.slice(0, 2), clips = [src.c03, src.c01], done = [];
     for (const [k, sh] of shots.entries()) {
       const r = await render(G.fx({clip: clips[k], source: "score", score: up, audio: src.song, layers: [L("Punch", "kick"), L("Shockwave", "downbeat", {at: "center"})], sound: true,
-        seconds: sh.frames / 24, start: sh.start_frame / 24, prefix: `${pre}_shot${k + 1}`}), `${t.id} shot ${k + 1}`);
+        seconds: sh.frames / 24, start: sh.start_frame / 24, fit: true, prefix: `${pre}_shot${k + 1}`}), `${t.id} shot ${k + 1}`);
       done.push({file: api.fileRef(r.outputs.find(isVid)), seconds: sh.frames / 24});
     }
     const cut = await render(G.filmCut({shots: done, prefix: `${pre}_cut`}), `${t.id} cut`);
@@ -252,7 +255,7 @@ async function runChain(t, ctx, log) {
   const ok = await checkOut(r.outputs, t.expect, log);
   if (!t.expect.gone) return ok;
   // is it gone? SAM 3 looks for it in the source and in the result: the share of the frame it covers should drop
-  const result = r.outputs.filter(isVid).find(f => !/matte|plate|anchor|_end_/.test(f.filename));
+  const result = r.outputs.filter(isVid).find(f => !NOT_RESULT.test(f.filename));
   const cover = async (video, tag) => {
     const m = await render(G.maskPreview({video, target: t.expect.gone.target, prefix: `${pre}_${tag}`}), `${t.id} SAM 3 on the ${tag}`);
     const matte = m.outputs.find(f => /_matte/.test(f.filename));
