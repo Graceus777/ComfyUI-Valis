@@ -6,6 +6,7 @@ import {Stage, MOVES, fitSeq, camSeq} from "./stage3d.js";
 import {EFFECTS, directAt, punchAt} from "./direct.js";
 import {stageToSplat} from "./splat.js";
 import {suggestNames} from "./names.js";
+import * as EST from "./estimate.js";
 
 const EASES = [{id: "inout", name: "Smooth"}, {id: "out", name: "Ease out"}, {id: "in", name: "Ease in"}, {id: "linear", name: "Linear"}];
 const SIZES = [{id: "720", name: "720p", h: 720}, {id: "1080", name: "1080p", h: 1080}];
@@ -289,11 +290,12 @@ export class StageView {
       const erased = !!this.S.meta?.erased?.length;      // erased first: what's behind the things is already real paint
       const krea = this.S.domeEngine === "krea" && (await this.caps()).kreaDome;
       const words = this.S.meta?.prompt || (this.stage?.layers || []).map(l => l.name).filter(n => n !== "the rest" && !/farther back/.test(n)).join(", ");
-      const job = await this.api.submit(this.G.stagePaint({stage: this.S.sub, seed: this.S.domeSeed, plate: !erased, engine: krea ? "krea" : "qwen", prompt: words}),
-        `Paint: ${this.S.sub.split("/").pop()}${krea ? " (Krea 2)" : ""}`, "stage");
+      const graph = this.G.stagePaint({stage: this.S.sub, seed: this.S.domeSeed, plate: !erased, engine: krea ? "krea" : "qwen", prompt: words});
+      const est = await EST.estimate(graph).catch(() => null), eta = est ? EST.fmt(est) : "";
+      const job = await this.api.submit(graph, `Paint: ${this.S.sub.split("/").pop()}${krea ? " (Krea 2)" : ""}`, "stage");
       const who = krea ? "Krea 2 + AnyPaint" : "Qwen Image 2.1";
-      this.toast(erased ? `${who} paints the world past the frame (about 1 min)`
-        : `${who} paints the world past the frame, Krea 2 edit a clean plate behind the people and things (about 3 min)`);
+      this.toast(erased ? `${who} paints the world past the frame${eta ? ` (${eta})` : ""}`
+        : `${who} paints the world past the frame, Krea 2 edit a clean plate behind the people and things${eta ? ` (${eta})` : ""}`);
       await this.until(job);
       // the layers (behind) and the dome changed: reload them, but keep the camera, the sequence and the effects
       const keep = Object.fromEntries(this.stage.layers.map(l => [l.name, {visible: l.visible, zoff: l.zoff}]));

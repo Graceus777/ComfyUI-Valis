@@ -1217,12 +1217,14 @@ const TIPS = {
   // renders
   "#r-free": "Unload every model and free GPU and system memory", "#r-stop": "Stop the job that is running now",
   "#r-engine": "Which model renders Edit, Genjutsu and video relight. FastH3 is the same model distilled to 8 steps", "#r-check": "Check every workflow against this ComfyUI again (after installing something)",
-  "#r-test-run": "Renders every Create combination at 384 px, about 3 s each, and checks each result: size, length, motion, colour, sound. About 2 minutes a combination",
+  "#r-test-run": "Renders every Create combination at 384 px, about 3 s each, then the chains built on them (Edit, Genjutsu, FX, Extras, Score, Film), and checks each result: size, length, motion, colour, sound",
 };
 for (const [sel, tip] of Object.entries(TIPS)) { const el = $(sel); if (el && !el.dataset.tip) el.dataset.tip = tip; }
 
 $("#helpBtn").addEventListener("click", () => { const ov = showHelp(); ov.querySelectorAll(".hn").forEach(n => n.addEventListener("click", () => { const v = n.dataset.view; if (v !== "bin") { ov.remove(); show(v); } else { ov.remove(); document.body.classList.add("binopen"); } })); });
 buildCreate();
+machine(); setInterval(machine, 8000);
+setup();
 show((location.hash || "#film").slice(1));
 refreshPrompt();
 // estimates learn from ComfyUI's history once it's read; every button's time is worked out again then
