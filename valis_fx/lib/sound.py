@@ -816,6 +816,8 @@ class SoundDesign:
                 m = m * (1 - duck * e)[:, None]
             out = m * music_gain + fx
             self.stems = (m * music_gain, fx)        # for checking the balance
+        elif m is not None:                          # the effects make no sound here: the song alone
+            out = m * music_gain + fx
         else:
             out = fx
         Lo = lufs(out)

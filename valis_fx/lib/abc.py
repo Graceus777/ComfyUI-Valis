@@ -197,6 +197,8 @@ def cues_from_abc(abc, y=None, sr=None, fps=24.0):
         lanes[lane] = tt; vals[lane] = [n[2] for n in notes]          # value = MIDI pitch
         allnotes += [(T(n[0]), T(n[1]), n[2], lane) for n in notes]
     allnotes.sort()
+    if not lanes.get("melody") and lanes.get("ins"):     # an instrumental: the tune is whatever plays it
+        lanes["melody"], vals["melody"] = list(lanes["ins"]), list(vals["ins"])
     if allnotes:
         lanes["note"] = [n[0] for n in allnotes]; vals["note"] = [n[2] for n in allnotes]
         low = [n for n in allnotes if n[2] < 55]
@@ -218,7 +220,10 @@ def cues_from_abc(abc, y=None, sr=None, fps=24.0):
     c = Cues(lanes, vals, None, end, fps, P["bpm"], P["meter"][0], 0.0, meta)
     if y is not None:
         off, scale = align(c, y, sr)
-        c = Cues({k: np.asarray(v) * scale + off for k, v in c.lanes.items()}, c.vals, None, min(end * scale + off, len(y) / sr),
+        # YuE2 plans the whole song but may render less of it: only what the audio holds
+        keep = {k: (np.asarray(v) * scale + off) < len(y) / sr + .25 for k, v in c.lanes.items()}
+        c = Cues({k: (np.asarray(v) * scale + off)[keep[k]] for k, v in c.lanes.items()},
+                 {k: np.asarray(v)[keep[k]] if k in keep and len(v) == len(keep[k]) else v for k, v in c.vals.items()}, None, min(end * scale + off, len(y) / sr),
                  fps, P["bpm"] / scale, P["meter"][0], off, {**meta, "aligned": {"offset": round(off, 3), "scale": round(scale, 4)}})
     return c
 
