@@ -69,7 +69,9 @@ def make_score(c, title="untitled", shot_seconds=SHOT_SECONDS, section_bars=8, s
         lo, hi = np.percentile(e, 30), np.percentile(e, 70)
         for k, (a, b) in enumerate(ph):
             start, end = float(bars[a]), float(bars[b]) if b < n_bars else dur
-            if k == 0 and len(ph) > 2 and e[k] <= np.median(e):
+            if len(ph) < 3:                              # too short to have a shape: a verse, then a louder chorus
+                name = "chorus" if k == 1 and e[1] > e[0] * 1.1 else "verse"
+            elif k == 0 and e[k] <= np.median(e):
                 name = "intro"
             elif k == len(ph) - 1 and len(ph) > 2 and e[k] < e.max():
                 name = "outro"
