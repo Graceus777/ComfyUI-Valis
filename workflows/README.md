@@ -14,7 +14,7 @@ on Linux and macOS pick `Krea2/...` in its LoRA loader. The studio and the CLI d
 | `03_shot_h3_i2v.json` | Create · Shoot it: MiniMax H3 image-to-video (PDD 8-step), 4.5 s. | `valis/keyframe.png` |
 | `04_find_sam3.json` | Edit · Find it: SAM 3 tracks the named target; saves the matte and an overlay preview. | `valis/clip.mp4` |
 | `05_transform_vampire.json` | Edit · Transform: SAM 3 track, Krea 2 first/last anchors, MiniMax H3 ref2va masked re-render, uncrop. | `valis/clip.mp4` |
-| `06_remove_qwen.json` | Edit · Remove: as Transform, with Qwen Image 2.1 clean-plate anchors. | `valis/clip.mp4` |
+| `06_remove_person.json` | Edit · Remove: SAM 3 paints the person green, Qwen Image 2.1 makes a clean first frame, H3 ref2va with the H3 Person Remover LoRA fills the green with what was behind them, and the result is laid back over the source. | `valis/clip.mp4` |
 | `07_swap_character_h3.json` | Edit · Swap: full character swap (H3 ref2va + character-swap LoRA + turbo LoRA, 8 steps) after a SAM 3 background replacement. | `valis/take.mp4`, `valis/character_sheet.png`, `valis/new_background.png` |
 | `08_turn_on_a_word.json` | Edit · Turn: Valis scores the voice track (syllable onsets) and ignites the swapped take from the eyes on the chosen word. | `valis/take.mp4`, `valis/take_swapped.mp4` |
 | `09_valis_score_pass.json` | Score · Render with Valis: the score's event map drives the reveal, shockwaves, halo and light on one 4-bar shot. | `valis/shot.mp4`, `valis/shot_transformed.mp4`, `valis/danse_v3_score.json` |

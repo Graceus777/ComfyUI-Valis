@@ -60,7 +60,7 @@ api.on((ev) => {
       // every result goes in the bin (not the masks, overlays, anchors and control videos made along the way)
       // (the end-to-end test's renders stay in its own report, under Renders)
       if (ev.job.kind !== "selftest")
-        for (const f of ev.job.outputs) if (!/matte|overlay|anchor|_end_|_mask|control|_part_|\.txt$|\.json$/i.test(f.filename)) Bin.add(f, {from: ev.job.kind, label: ev.job.label}, {soft: true});
+        for (const f of ev.job.outputs) if (!/matte|overlay|anchor|_end_|_mask|control|_part_|_guide_|\.txt$|\.json$/i.test(f.filename)) Bin.add(f, {from: ev.job.kind, label: ev.job.label}, {soft: true});
     }
     Renders.onJob(ev.job);
   }
@@ -451,7 +451,7 @@ async function editEst() {
   const graph = E.mode === "turn" ? G.turn({a: "x.mp4", b: "y.mp4"}) : E.mode === "swap" ? G.swapFull({video: "x.mp4", character: "c.png", prompt: "x", turbo: true})
     : G.edit({mode: E.mode, video: "x.mp4", target: "x", anchorPrompt: "x", desc: "x"});
   const e = await EST.estimate(graph), f = await EST.estimate(G.maskPreview({video: "x.mp4", target: "x"}));
-  $("#e-render .sub").textContent = `${{transform: "H3 masked", remove: "H3 masked", swap: "H3 character swap", turn: "Valis"}[E.mode]} · ${EST.fmt(e)}`;
+  $("#e-render .sub").textContent = `${{transform: "H3 masked", remove: "H3 + Person Remover", swap: "H3 character swap", turn: "Valis"}[E.mode]} · ${EST.fmt(e)}`;
   $("#e-render").dataset.tip = `Time: ${e.basis}.`;
   $("#e-find .sub").textContent = `SAM 3 · ${EST.fmt(f)}`;
 }
@@ -592,10 +592,12 @@ $("#e-render").addEventListener("click", async () => {
     character: E.character, prefix: `valis/edit_${Date.now().toString(36)}`});
   const before = E.clipUrl;
   run(g, `${E.mode[0].toUpperCase() + E.mode.slice(1)} “${target}”`, $("#e-viewer"), {onDone: (j) => {
-    const v = j.outputs.find(f => VID.test(f.filename) && !/matte/.test(f.filename));
+    const v = j.outputs.find(f => VID.test(f.filename) && !/matte|_guide_|_raw_|_kept_/.test(f.filename));
     if (v) $("#e-viewer").replaceChildren(compare(before, api.viewUrl(v)));
-    const anchors = j.outputs.filter(f => /anchor/.test(f.filename));
-    $("#e-strip").replaceChildren(...[...anchors, ...(v ? [v] : [])].map(f => h("div", {class: "thumb"}, media(f, {controls: false}), h("div", {class: "meta"}, /anchor_first/.test(f.filename) ? "first anchor" : /anchor_last/.test(f.filename) ? "last anchor" : "result"))));
+    const extra = j.outputs.filter(f => /anchor|_guide_|_raw_|_kept_/.test(f.filename));
+    const name = (f) => /anchor_first/.test(f.filename) ? (E.mode === "remove" ? "clean first frame" : "first anchor") : /anchor_last/.test(f.filename) ? "last anchor"
+      : /_guide_/.test(f.filename) ? "what H3 is shown" : /_raw_/.test(f.filename) ? "H3's own pass" : /_kept_/.test(f.filename) ? "laid over the source" : "result";
+    $("#e-strip").replaceChildren(...[...extra, ...(v ? [v] : [])].map(f => h("div", {class: "thumb"}, media(f, {controls: false}), h("div", {class: "meta"}, name(f)))));
   }});
 });
 function compare(a, b) {
@@ -782,7 +784,7 @@ const Renders = {
     // renders made outside the studio's own buttons (or before the bin existed) join it from ComfyUI's history
     const hist = await api.history(120).catch(() => ({}));
     for (const e of Object.values(hist || {}).reverse()) for (const f of api.outputsOf(e))
-      if ((f.type || "output") === "output" && /^valis|^danse/.test(f.subfolder || "") && !/selftest/.test(f.subfolder || "") && /\.(mp4|webm|png|jpe?g)$/i.test(f.filename) && !/matte|overlay|anchor|_end_|_mask|control/i.test(f.filename)
+      if ((f.type || "output") === "output" && /^valis|^danse/.test(f.subfolder || "") && !/selftest/.test(f.subfolder || "") && /\.(mp4|webm|png|jpe?g)$/i.test(f.filename) && !/matte|overlay|anchor|_end_|_mask|control|_guide_/i.test(f.filename)
           && !Bin.removed.has(Bin.keyOf(f)) && !Bin.items.some(i => i.file.filename === f.filename && i.file.subfolder === f.subfolder)) Bin.add(f, {from: "ComfyUI", label: f.filename.replace(/_\d+_?\.\w+$/, "")});
     const items = Bin.items.filter(i => i.kind === "clip" || i.kind === "still").slice(0, 160);
     const grid = $("#r-grid");

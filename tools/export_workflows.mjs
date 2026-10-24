@@ -27,7 +27,7 @@ const flows = {
   "05_transform_vampire": [G.edit({mode: "transform", video: "valis/clip.mp4", target: T, anchorPrompt: vamp.anchor.replaceAll("{T}", T), desc: vamp.desc,
     who: vamp.who, keep: vamp.keep, refBoost: vamp.rb}),
     "Edit · Transform: SAM 3 track, Krea 2 first/last anchors, MiniMax H3 ref2va masked re-render, uncrop."],
-  "06_remove_qwen": [G.edit({mode: "remove", video: "valis/clip.mp4", target: "the man in the mirror", anchorPrompt: P.REMOVE_PROMPT.replaceAll("{T}", "the man in the mirror"),
+  "06_remove_person": [G.edit({mode: "remove", video: "valis/clip.mp4", target: "the man in the mirror", anchorPrompt: P.REMOVE_PROMPT.replaceAll("{T}", "the man in the mirror"),
     desc: "gone; only the mirror's reflection of the room remains", who: "the masked region", keep: "the room behind it"}),
     "Edit · Remove: as Transform, with Qwen Image 2.1 clean-plate anchors."],
   "07_swap_character_h3": [G.swapFull({video: "valis/take.mp4", character: "valis/character_sheet.png", prompt: G.swapPrompt({target: "the man"}),

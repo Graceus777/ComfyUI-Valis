@@ -390,9 +390,78 @@ function h3Prompt({who, desc, keep, extra}) {
     "\n\noverall_soundscape:\nKeep the source soundtrack unchanged.\n\nnon_diegetic_music:\nN/A";
 }
 
-// mode: "transform" (Krea anchors), "remove" (Qwen anchors), "swap" (Krea anchors + a character reference)
+// ---------------------------------------------------------------- Remove: the H3 Person Remover LoRA (Akatz Labs, V1)
+// Painting the mask out with plain H3 ref2va (a latent noise mask over a tracked crop, Qwen plates as references) put a
+// person back in every time: a new man mid-shot (x06), another woman in a floral dress (x06b), a hooded figure with box
+// masks. The LoRA was trained for exactly this: the source rides in as a reference video with the person painted solid
+// green, a clean first frame (Qwen edit) is the first-frame guide and a reference picture, the whole frame is generated
+// (12 steps, er_sde, CFG 1), and it fills the green with what was behind them. The result is then laid back over the
+// source through the grown mask, so everything outside it is the original pixels (keepRest: false shows the raw pass).
+// Recipe: huggingface.co/akatz-ai/MiniMax-H3-Person-Remover-LoRA (single window here: our clips are up to 15 s).
+export const REMOVER_LORA = "H3-Person-Remover-V1.safetensors";
+export const REMOVER_PROMPT = "Remove the green-masked person and reconstruct the background. Preserve the rest of the video, including its camera motion and frame timing.";
+export function removePerson({video, audio, target, anchorPrompt, grow = 8, megapixels = 0.6, steps = 12, seed = 904234, keepRest = true,
+                              maxSeconds = 15, prefix = "valis/remove", engine}) {
+  const g = track(video, target, {audio, grow, maxSeconds});
+  Object.assign(g, {
+    // the size H3 works at (the source's shape, a 32 px grid); the mask follows it
+    "s0": N("ImageScaleToTotalPixels", {image: ["18", 0], upscale_method: "lanczos", megapixels, resolution_steps: 32}),
+    "s1": N("GetImageSize", {image: ["s0", 0]}),
+    "m0": N("MaskToImage", {mask: ["23", 0]}),
+    "m1": N("ImageScale", {image: ["m0", 0], upscale_method: "bilinear", width: ["s1", 0], height: ["s1", 1], crop: "disabled"}),
+    "m2": N("ImageToMask", {image: ["m1", 0], channel: "red"}),
+    "m3": N("ThresholdMask", {mask: ["m2", 0], value: 0.5}),
+    // the guide: the source with the person painted pure green (#00ff00)
+    "gr": N("EmptyImage", {width: ["s1", 0], height: ["s1", 1], batch_size: 1, color: 65280}),
+    "gg": N("ImageCompositeMasked", {destination: ["s0", 0], source: ["gr", 0], x: 0, y: 0, resize_source: false, mask: ["m3", 0]}),
+    // the clean first frame: Qwen Image 2.1 takes them out of frame 0, sized exactly like the guide
+    "250": N("UnetLoaderGGUF", {unet_name: MODELS.qwen}), "251": N("CLIPLoader", {clip_name: MODELS.qwenTE, type: "qwen_image", device: "default"}),
+    "252": N("VAELoader", {vae_name: MODELS.qwenVAE}),
+    "f0": N("ImageFromBatch", {image: ["s0", 0], batch_index: 0, length: 1}),
+    ...qwenEdit(300, ["f0", 0], anchorPrompt || REMOVE_PROMPT_FALLBACK(target), 3, null),
+    "cf": N("ImageScale", {image: ["303", 0], upscale_method: "lanczos", width: ["s1", 0], height: ["s1", 1], crop: "center"}),
+    "cfs": N("SaveImage", {images: ["cf", 0], filename_prefix: `${prefix}_anchor_first`}),
+    // H3 ref2va + the LoRA
+    "1": N("CLIPLoader", {clip_name: MODELS.h3TE, type: "minimax", device: "default"}),
+    "2": N("UNETLoader", {unet_name: MODELS.h3ref, weight_dtype: "default"}),
+    "3": N("VAELoader", {vae_name: MODELS.h3VAE}),
+    "4": N("VAELoader", {vae_name: MODELS.h3AVAE}),
+    "5": N("MiniMaxH3SigmaShift", {model: ["2", 0], shift_video: 12.0, shift_audio: 3.0}),
+    "lo": N("LoraLoaderModelOnly", {model: ["5", 0], lora_name: REMOVER_LORA, strength_model: 1.0}),
+    "6": N("MiniMaxH3ReferenceToVideo", {clip: ["1", 0], prompt: REMOVER_PROMPT, width: ["s1", 0], height: ["s1", 1], length: ["18", 4], ref_image_size: "match",
+                                          "ref_videos.ref_video_0": ["gg", 0], "ref_images.ref_image_0": ["cf", 0]}),
+    "7": N("MiniMaxH3AddGuide", {positive: ["6", 0], latent: ["6", 1], frame_idx: 0, vae: ["3", 0], image: ["cf", 0]}),
+    "8": N("CFGGuider", {model: ["lo", 0], positive: ["7", 0], negative: ["7", 0], cfg: 1.0}),
+    "9": N("RandomNoise", {noise_seed: seed}),
+    "10": N("KSamplerSelect", {sampler_name: "er_sde"}),
+    "11": N("BasicScheduler", {model: ["lo", 0], scheduler: "simple", steps, denoise: 1.0}),
+    "12": N("SamplerCustomAdvanced", {noise: ["9", 0], guider: ["8", 0], sampler: ["10", 0], sigmas: ["11", 0], latent_image: ["6", 1]}),
+    "13": N("LTXVSeparateAVLatent", {av_latent: ["12", 0]}),
+    "14": N("VAEDecode", {samples: ["13", 0], vae: ["3", 0]}),
+    // back at the source's size; outside the grown, feathered mask the source's own pixels
+    "15": N("GetImageSize", {image: ["18", 0]}),
+    "16u": N("ImageScale", {image: ["14", 0], upscale_method: "lanczos", width: ["15", 0], height: ["15", 1], crop: "disabled"}),
+    "17k": N("GrowMaskWithBlur", {mask: ["23", 0], expand: 16, incremental_expandrate: 0, tapered_corners: true, flip_input: false, blur_radius: 8, lerp_alpha: 1, decay_factor: 1}),
+    "18k": N("ImageCompositeMasked", {destination: ["18", 0], source: ["16u", 0], x: 0, y: 0, resize_source: false, mask: ["17k", 0]}),
+    "50": N("MaskToImage", {mask: ["23", 0]}),
+    "51": N("CreateVideo", {images: ["50", 0], fps: 24}),
+    "52": N("SaveVideo", {video: ["51", 0], filename_prefix: `${prefix}_matte`, format: "auto", codec: "auto"}),
+    "53": N("CreateVideo", {images: ["gg", 0], fps: ["18", 3]}),
+    "54": N("SaveVideo", {video: ["53", 0], filename_prefix: `${prefix}_guide`, format: "auto", codec: "auto"}),
+    "60": N("CreateVideo", {images: keepRest ? ["18k", 0] : ["16u", 0], fps: ["18", 3], audio: ["18", 2]}),
+    "61": N("SaveVideo", {video: ["60", 0], filename_prefix: prefix, format: "auto", codec: "auto"}),
+    "62": N("CreateVideo", {images: keepRest ? ["16u", 0] : ["18k", 0], fps: ["18", 3], audio: ["18", 2]}),
+    "63": N("SaveVideo", {video: ["62", 0], filename_prefix: `${prefix}_${keepRest ? "raw" : "kept"}`, format: "auto", codec: "auto"}),
+  });
+  return g;                     // always the base ref2va: the LoRA was trained on it, not on FastH3's distilled weights
+}
+const REMOVE_PROMPT_FALLBACK = (t) => `Remove ${t} from the picture completely: show only what is behind it, the background continuing naturally where it was. Keep everything else in the picture exactly the same.`;
+
+// mode: "transform" (Krea anchors), "remove" (the Person Remover LoRA; plainRemove: the old Qwen plates + masked H3), "swap"
 export function edit({mode, video, audio, target, anchorPrompt, desc, who = "the subject", keep = "its shape and material",
-                      refBoost = 0.5, grow = 12, crop = 1.3, character = null, lastFrame = -1, maxSeconds = 15, prefix = "valis/edit", engine}) {
+                      refBoost = 0.5, grow = 12, crop = 1.3, character = null, lastFrame = -1, maxSeconds = 15, prefix = "valis/edit", engine, plainRemove = false,
+                      megapixels}) {
+  if (mode === "remove" && !plainRemove) return removePerson({video, audio, target, anchorPrompt, grow, maxSeconds, prefix, ...(megapixels ? {megapixels} : {})});
   const g = track(video, target, {audio, grow, maxSeconds});
   Object.assign(g, {
     "24": N("MVEx_SubjectCrop", {original_images: ["18", 0], masks: ["23", 0], mode: "tracked", "mode.crop_scale": crop, "mode.padding": "firm", "mode.prefer": "stillness", "mode.aspect_ratio": 0, "mode.seamless_loop": false, divisible_by: 32, upscale_megapixels: -0.6, resize_method: "auto"}),

@@ -56,9 +56,9 @@ TESTS.push(
   x("x04", "Edit · Find it: the woman (SAM 3)", ["c03"], (s) => G.maskPreview({video: s.c03, target: "the woman", prefix: s.pre}), {}),
   x("x05", "Edit · Transform her dress into liquid chrome", ["c03"], (s) => { const lk = P.LOOKS.find(l => l.id === "chrome");
     return G.edit({mode: "transform", video: s.c03, target: "her dress", anchorPrompt: lk.anchor.replaceAll("{T}", "her dress"), desc: lk.desc, who: "her dress", keep: lk.keep, refBoost: lk.rb, grow: 12, prefix: s.pre}); }, {audio: true}),
-  x("x06", "Edit · Remove the man (Qwen plates + H3)", ["c01"], (s) => G.edit({mode: "remove", video: s.c01, target: "the man", anchorPrompt: P.REMOVE_PROMPT.replaceAll("{T}", "the man"),
+  x("x06", "Edit · Remove the man walking at the camera (Person Remover LoRA)", ["c01"], (s) => G.edit({mode: "remove", video: s.c01, target: "the man", anchorPrompt: P.REMOVE_PROMPT.replaceAll("{T}", "the man"), megapixels: 0.26,
     desc: "gone: only the background continues where the man was", who: "the man", refBoost: 1, grow: 12, prefix: s.pre}), {gone: {source: "c01", target: "the man"}}),
-  x("x06b", "Edit · Remove the woman walking through the market", ["c03"], (s) => G.edit({mode: "remove", video: s.c03, target: "the woman in the red dress", anchorPrompt: P.REMOVE_PROMPT.replaceAll("{T}", "the woman in the red dress"),
+  x("x06b", "Edit · Remove the woman walking through the market (Person Remover LoRA)", ["c03"], (s) => G.edit({mode: "remove", video: s.c03, target: "the woman in the red dress", anchorPrompt: P.REMOVE_PROMPT.replaceAll("{T}", "the woman in the red dress"), megapixels: 0.26,
     desc: "gone", who: "the woman in the red dress", refBoost: 1, grow: 12, prefix: s.pre}), {audio: true, gone: {source: "c03", target: "the woman in the red dress"}}),
   x("x07", "Edit · Swap the woman for the street's man (character swap, turbo)", ["c03", "k:c01"], (s) => G.swapFull({video: s.c03, character: s["k:c01"], prompt: G.swapPrompt({target: "the woman", look: "a man in a long dark coat and a hat"}), person: "woman", turbo: true, megapixels: 0.26, prefix: s.pre}), {audio: true}),
   x("x08", "Edit · Turn: the market take turns into the relit take, voice too", ["c03", "c13"], (s) => G.turn({a: s.c03, b: s.c13, swapAt: 1.5, person: "woman", voice: true, prefix: s.pre}), {}),
@@ -202,7 +202,7 @@ async function checkOut(outs, exp, log) {
   const checks = [];
   if (exp.noVideo) { checks.push({name: "made something", pass: outs.length > 0 || !!exp.any, detail: `${outs.length} files`}); log({checks}); return checks.every(c => c.pass); }
   if (!vids.length) { checks.push({name: "a video", pass: false, detail: `outputs: ${outs.map(o => o.filename).join(", ") || "none"}`}); log({checks}); return false; }
-  const v = vids.find(f => !/_decoded|_kinetogram|overlay|_control_|_mask|matte|plate|anchor|_end_/.test(f.filename)) || vids[0];
+  const v = vids.find(f => !/_decoded|_kinetogram|overlay|_control_|_mask|matte|plate|anchor|_end_|_guide_|_raw_|_kept_/.test(f.filename)) || vids[0];
   const m = await inspectVideo(api.viewUrl(v));
   checks.push(...verdicts(m, {width: exp.width, height: exp.height, audio: exp.audio, dark: exp.dark, minMotion: .002}));
   if (exp.report) {                         // a check that writes a report: it must say what it found
