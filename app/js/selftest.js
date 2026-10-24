@@ -243,6 +243,7 @@ async function runChain(t, ctx, log) {
     const genre = P.GENRES.find(g => g.id === "fairytale");
     const plan = await planFilm({idea: "a lighthouse keeper's lantern goes out and a fox brings the light back", shots: 2, genre}, io);
     plan.size = {w: 384, h: 672};
+    plan.dir = "valis/selftest";              // with the test's other renders, out of the bin
     log({plan: {title: plan.title, shots: plan.shots.map(s => s.keyframe)}});
     const r = await makeFilm(plan, io, {genre});
     return checkOut([r.film], {...t.expect, width: 384, height: 672}, log);

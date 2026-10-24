@@ -69,7 +69,7 @@ export async function planFilm({idea, shots = 6, genre = null}, io) {
 // Results put there by hand (a still made in Create, a clip from the bin) are used as they are.
 //
 // io: {run(graph, label) -> {outputs}, text(file), ref(file), free?(), has?(node), exists?(file)}
-const pre = (plan) => `valis/film_${plan.tag || (plan.tag = Date.now().toString(36))}`;
+const pre = (plan) => `${plan.dir || "valis"}/film_${plan.tag || (plan.tag = Date.now().toString(36))}`;
 const base = (plan) => pre(plan).slice("valis/".length);
 async function saved(io, names) {
   if (!io.exists) return null;
