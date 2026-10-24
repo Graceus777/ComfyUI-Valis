@@ -44,6 +44,14 @@
         "1",
         0
       ],
+      "vae": [
+        "3",
+        0
+      ],
+      "audio_vae": [
+        "4",
+        0
+      ],
       "prompt": "Remove the green-masked person and reconstruct the background. Preserve the rest of the video, including its camera motion and frame timing.",
       "width": [
         "s1",

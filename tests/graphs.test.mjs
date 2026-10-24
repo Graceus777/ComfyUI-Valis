@@ -43,6 +43,12 @@ function valid(name, g) {
 
 // ---- every feature the setup check knows, and the newer ones
 for (const [name, g] of Object.entries(features())) valid(name, g);
+// a reference picture or video without the VAE only reaches H3's text encoder: every ref2va that has references gets the VAEs
+for (const [name, g] of Object.entries(features())) for (const [id, n] of Object.entries(g)) {
+  if (n.class_type !== "MiniMaxH3ReferenceToVideo") continue;
+  const refs = Object.keys(n.inputs).filter(k => /^ref_(images|videos)\./.test(k));
+  if (refs.length) ok(Array.isArray(n.inputs.vae), `${name} node ${id}: references go in with the VAE`);
+}
 valid("Score · make from a song", G.scoreMake({audio: "song.flac", title: "x"}));
 valid("Score · make from a cue sheet", G.scoreMake({cueSheet: G.CUE_SHEET_EXAMPLE}));
 valid("Score · YuE2 writes it", G.songScore({style: "x", lyrics: "[Instrumental]"}));

@@ -428,7 +428,9 @@ export function removePerson({video, audio, target, anchorPrompt, grow = 8, mega
     "4": N("VAELoader", {vae_name: MODELS.h3AVAE}),
     "5": N("MiniMaxH3SigmaShift", {model: ["2", 0], shift_video: 12.0, shift_audio: 3.0}),
     "lo": N("LoraLoaderModelOnly", {model: ["5", 0], lora_name: REMOVER_LORA, strength_model: 1.0}),
-    "6": N("MiniMaxH3ReferenceToVideo", {clip: ["1", 0], prompt: REMOVER_PROMPT, width: ["s1", 0], height: ["s1", 1], length: ["18", 4], ref_image_size: "match",
+    // the VAEs put the guide video and the clean frame in as picture tokens (without them they only reach the text encoder,
+    // and H3 paints the person back from what the encoder was told)
+    "6": N("MiniMaxH3ReferenceToVideo", {clip: ["1", 0], vae: ["3", 0], audio_vae: ["4", 0], prompt: REMOVER_PROMPT, width: ["s1", 0], height: ["s1", 1], length: ["18", 4], ref_image_size: "match",
                                           "ref_videos.ref_video_0": ["gg", 0], "ref_images.ref_image_0": ["cf", 0]}),
     "7": N("MiniMaxH3AddGuide", {positive: ["6", 0], latent: ["6", 1], frame_idx: 0, vae: ["3", 0], image: ["cf", 0]}),
     "8": N("CFGGuider", {model: ["lo", 0], positive: ["7", 0], negative: ["7", 0], cfg: 1.0}),

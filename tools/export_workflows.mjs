@@ -29,7 +29,7 @@ const flows = {
     "Edit · Transform: SAM 3 track, Krea 2 first/last anchors, MiniMax H3 ref2va masked re-render, uncrop."],
   "06_remove_person": [G.edit({mode: "remove", video: "valis/clip.mp4", target: "the man in the mirror", anchorPrompt: P.REMOVE_PROMPT.replaceAll("{T}", "the man in the mirror"),
     desc: "gone; only the mirror's reflection of the room remains", who: "the masked region", keep: "the room behind it"}),
-    "Edit · Remove: as Transform, with Qwen Image 2.1 clean-plate anchors."],
+    "Edit · Remove: SAM 3 paints the person green, Qwen Image 2.1 makes a clean first frame, H3 ref2va with the H3 Person Remover LoRA fills the green with what was behind them, and the result is laid back over the source."],
   "07_swap_character_h3": [G.swapFull({video: "valis/take.mp4", character: "valis/character_sheet.png", prompt: G.swapPrompt({target: "the man"}),
     background: "valis/new_background.png", turbo: true}),
     "Edit · Swap: full character swap (H3 ref2va + character-swap LoRA + turbo LoRA, 8 steps) after a SAM 3 background replacement."],
