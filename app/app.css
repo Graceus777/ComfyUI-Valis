@@ -225,8 +225,11 @@ details.prompt pre { margin: 0; padding: 0 12px 12px; white-space: pre-wrap; col
 .status > span:first-child { white-space: nowrap; }
 .pill { white-space: nowrap; background: none; color: inherit; font: inherit; }
 button.pill { cursor: pointer; }
-@media (max-width: 1180px) { .tab .k { display: none; } .brand { min-width: 0; } }
 @media (max-width: 1560px) { #connText { display: none; } }     /* the dot says it; the tabs keep their room */
+/* narrower: the key hints and "studio" go, then the VRAM and queue pills (their numbers are on Renders), so every tab shows */
+@media (max-width: 1440px) { .tab .k, .brand .sub { display: none; } .brand { min-width: 0; } .top { gap: 14px; } }
+@media (max-width: 1300px) { #vramPill { display: none; } .tab { padding: 8px 10px; } }
+@media (max-width: 1100px) { #queuePill { display: none; } .tab { padding: 7px 8px; } .top { padding: 0 12px; } }
 
 /* tooltips */
 .tipbox { position: fixed; left: 0; top: 0; z-index: 100; max-width: 340px; padding: 9px 11px; border-radius: 9px; background: #1f1f2a;
