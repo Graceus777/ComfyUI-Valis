@@ -57,9 +57,9 @@ TESTS.push(
   x("x05", "Edit · Transform her dress into liquid chrome", ["c03"], (s) => { const lk = P.LOOKS.find(l => l.id === "chrome");
     return G.edit({mode: "transform", video: s.c03, target: "her dress", anchorPrompt: lk.anchor.replaceAll("{T}", "her dress"), desc: lk.desc, who: "her dress", keep: lk.keep, refBoost: lk.rb, grow: 12, prefix: s.pre}); }, {audio: true}),
   x("x06", "Edit · Remove the man (Qwen plates + H3)", ["c01"], (s) => G.edit({mode: "remove", video: s.c01, target: "the man", anchorPrompt: P.REMOVE_PROMPT.replaceAll("{T}", "the man"),
-    desc: "gone: only the background continues where the man was", who: "the man", refBoost: 1, grow: 12, prefix: s.pre}), {}),
+    desc: "gone: only the background continues where the man was", who: "the man", refBoost: 1, grow: 12, prefix: s.pre}), {gone: {source: "c01", target: "the man"}}),
   x("x06b", "Edit · Remove the woman walking through the market", ["c03"], (s) => G.edit({mode: "remove", video: s.c03, target: "the woman in the red dress", anchorPrompt: P.REMOVE_PROMPT.replaceAll("{T}", "the woman in the red dress"),
-    desc: "gone", who: "the woman in the red dress", refBoost: 1, grow: 12, prefix: s.pre}), {audio: true}),
+    desc: "gone", who: "the woman in the red dress", refBoost: 1, grow: 12, prefix: s.pre}), {audio: true, gone: {source: "c03", target: "the woman in the red dress"}}),
   x("x07", "Edit · Swap the woman for the street's man (character swap, turbo)", ["c03", "k:c01"], (s) => G.swapFull({video: s.c03, character: s["k:c01"], prompt: G.swapPrompt({target: "the woman", look: "a man in a long dark coat and a hat"}), person: "woman", turbo: true, megapixels: 0.26, prefix: s.pre}), {audio: true}),
   x("x08", "Edit · Turn: the market take turns into the relit take, voice too", ["c03", "c13"], (s) => G.turn({a: s.c03, b: s.c13, swapAt: 1.5, person: "woman", voice: true, prefix: s.pre}), {}),
   x("x09", "Genjutsu · motion transfer: the astronaut walks like the woman", ["c03", "k:c09"], (s) => G.genjutsu({video: s.c03, refs: [s["k:c09"]], prompt: P.genjutsuPrompt({mode: "motion", refs: [{role: "character"}]}), mode: "motion", seconds: 3, megapixels: 0.26, turbo: true, prefix: s.pre}), {audio: true}),
@@ -208,6 +208,7 @@ async function checkOut(outs, exp, log) {
   if (exp.minSeconds) checks.push({name: "longer", pass: m.seconds >= exp.minSeconds, detail: `${m.seconds.toFixed(2)} s`});
   if (exp.minShort) checks.push({name: "upscaled", pass: Math.min(m.width, m.height) >= exp.minShort, detail: `${m.width}x${m.height}`});
   log({shot: v, measured: {...m, strip: undefined}, strip: m.strip, checks, files: outs.map(o => o.filename)});
+  log.checks = checks;
   return checks.every(c => c.pass);
 }
 async function runChain(t, ctx, log) {
@@ -241,7 +242,19 @@ async function runChain(t, ctx, log) {
     return checkOut([r.film], {...t.expect, width: 384, height: 672}, log);
   }
   const r = await render(t.fn({...src, pre, run: ctx.run}), `${t.id} ${t.label.split(":")[0]}`);
-  return checkOut(r.outputs, t.expect, log);
+  const ok = await checkOut(r.outputs, t.expect, log);
+  if (!t.expect.gone) return ok;
+  // is it gone? SAM 3 looks for it in the source and in the result: the share of the frame it covers should drop
+  const result = r.outputs.filter(isVid).find(f => !/matte|plate|anchor|_end_/.test(f.filename));
+  const cover = async (video, tag) => {
+    const m = await render(G.maskPreview({video, target: t.expect.gone.target, prefix: `${pre}_${tag}`}), `${t.id} SAM 3 on the ${tag}`);
+    const matte = m.outputs.find(f => /_matte/.test(f.filename));
+    return matte ? (await inspectVideo(api.viewUrl(matte))).luma : 0;
+  };
+  const before = await cover(src[t.expect.gone.source], "source"), after = await cover(api.fileRef(result), "result");
+  const gone = {name: "gone", pass: after < Math.max(.01, before * .25), detail: `${t.expect.gone.target} covers ${(before * 100).toFixed(1)}% of the source, ${(after * 100).toFixed(1)}% of the result`};
+  log({gone: {before, after}, checks: [...(log.checks || []), gone]});
+  return ok && gone.pass;
 }
 
 let ABORT = false;
