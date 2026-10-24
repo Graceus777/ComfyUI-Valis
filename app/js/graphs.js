@@ -370,6 +370,17 @@ function qwenEdit(b, img, prompt, seed, prefix) {
   return g;
 }
 
+// Remove: the masked region holds only what was behind them. (It used to share Transform's prompt, which names
+// "<Subject 1> is the man ... fully preserved ... with the same motion as the source": the end-to-end test's clean
+// Qwen plates came back with the man re-rendered in them.)
+function h3RemovePrompt({who}) {
+  return "subject_definitions:\n<Picture 1> and <Picture 2> show the scene with " + who + " taken out: only what was behind them." +
+    "\n\nsummary:\n[video editing + reference generation] Inside the masked region there is no one and nothing: only the background continues, exactly as in <Picture 1> at the start and <Picture 2> at the end." +
+    "\n\nretention_analysis:\nBackground: fully_preserved - the empty background inside the mask follows <Picture 1> and <Picture 2> in every frame, from the first to the last." +
+    "\n\ndetailed_description:\n[Shot 1] The original camera, timing, lighting and everything outside the mask stay unchanged. Inside the mask " + who +
+    " is gone: no person, no body, no face, no shadow of them; only the scene behind where they were, moving only with the camera." +
+    "\n\noverall_soundscape:\nKeep the source soundtrack unchanged.\n\nnon_diegetic_music:\nN/A";
+}
 function h3Prompt({who, desc, keep, extra}) {
   return "subject_definitions:\n<Subject 1> is " + who + " as shown in <Picture 1> and <Picture 2>: " + desc + "." + (extra || "") +
     "\n\nsummary:\n[video editing + reference generation] Inside the masked region " + who + " is " + desc + " for the whole video, exactly as in <Picture 1>." +
@@ -415,7 +426,7 @@ export function edit({mode, video, audio, target, anchorPrompt, desc, who = "the
     "3": N("VAELoader", {vae_name: MODELS.h3VAE}),
     "4": N("VAELoader", {vae_name: MODELS.h3AVAE}),
     "5": N("MiniMaxH3SigmaShift", {model: ["2", 0], shift_video: 8, shift_audio: 3}),
-    "6": N("MiniMaxH3ReferenceToVideo", Object.assign({clip: ["1", 0], vae: ["3", 0], audio_vae: ["4", 0], prompt: h3Prompt({who, desc, keep, extra}), width: ["25", 0], height: ["25", 1], length: ["18", 4], ref_image_size: "max"}, refs)),
+    "6": N("MiniMaxH3ReferenceToVideo", Object.assign({clip: ["1", 0], vae: ["3", 0], audio_vae: ["4", 0], prompt: mode === "remove" ? h3RemovePrompt({who}) : h3Prompt({who, desc, keep, extra}), width: ["25", 0], height: ["25", 1], length: ["18", 4], ref_image_size: "max"}, refs)),
     "62": anchor(["6", 0], "first", first), "65": anchor(["62", 0], "last", last),
     "7": N("BasicGuider", {model: ["5", 0], conditioning: ["65", 0]}),
     "8": N("RandomNoise", {noise_seed: 31}),
