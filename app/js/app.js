@@ -58,15 +58,17 @@ api.on((ev) => {
       ev.job._binned = true;
       if (ev.job.ranSeconds) EST.record(ev.job.id, ev.job.graph, ev.job.ranSeconds);
       // every result goes in the bin (not the masks, overlays, anchors and control videos made along the way)
-      for (const f of ev.job.outputs) if (!/matte|overlay|anchor|_end_|_mask|control|_part_|\.txt$|\.json$/i.test(f.filename)) Bin.add(f, {from: ev.job.kind, label: ev.job.label});
+      for (const f of ev.job.outputs) if (!/matte|overlay|anchor|_end_|_mask|control|_part_|\.txt$|\.json$/i.test(f.filename)) Bin.add(f, {from: ev.job.kind, label: ev.job.label}, {soft: true});
     }
     Renders.onJob(ev.job);
   }
   if (ev.type === "connection") { $("#conn").classList.toggle("up", ev.up); $("#connText").textContent = ev.up ? "ComfyUI connected" : "ComfyUI offline"; }
   if (ev.type === "status") $("#queuePill").textContent = `queue ${ev.queue}`;
 });
+// the tab a job came from names it in the bin ("Edit", "Genjutsu"...)
+const TABNAME = {film: "Film", create: "Create", edit: "Edit", genjutsu: "Genjutsu", score: "Score", fx: "FX", extras: "Extras", renders: "Renders"};
 function run(graph, label, viewer, {onDone, kind} = {}) {
-  return api.submit(graph, label, kind).then((job) => {
+  return api.submit(graph, label, kind || TABNAME[$(".tab.on")?.dataset.view] || "render").then((job) => {
     const upd = viewer ? progressFor(job, viewer) : () => {};
     waiters.set(job.id, (j) => {
       upd(j);
@@ -342,10 +344,12 @@ function gjRefs() {
     h("select", {onchange: (e) => { r.role = e.target.value; gjPrompt(); }}, ...P.GENJUTSU_ROLES.map(x => h("option", {value: x, selected: x === r.role}, x))),
     h("button", {class: "x", onclick: () => { GJ.refs.splice(i, 1); gjRefs(); gjPrompt(); }}, "×")));
   const add = h("div", {class: "drop small"}, GJ.refs.length < 8 ? "+ image" : "8 images max");
-  if (GJ.refs.length < 8) dropzone(add, "image/*", async (f) => {
-    try { const u = await api.upload(f); GJ.refs.push({ref: api.inputRef(u), url: URL.createObjectURL(f), role: GJ.refs.length ? "location" : "character"}); gjRefs(); gjPrompt(); }
-    catch (e) { toast(e.message, true); }
-  });
+  if (GJ.refs.length < 8) {
+    dropzone(add, "image/*", async (f) => {
+      const u = await api.upload(f); GJ.refs.push({ref: api.inputRef(u), url: URL.createObjectURL(f), role: GJ.refs.length ? "location" : "character"}); gjRefs(); gjPrompt();
+    });
+    add._onItem = (it) => { if (it.kind !== "still") return; GJ.refs.push({ref: Bin.ref(it), url: Bin.url(it), role: GJ.refs.length ? "location" : "character"}); gjRefs(); gjPrompt(); };
+  }
   $("#g-refs").replaceChildren(...slots, add);
 }
 gjRefs();
@@ -478,11 +482,10 @@ dropzone($("#e-bg"), "image/*", async (f) => {
 });
 // ---- turn: the second take, and the word it turns on
 async function fillClipB() {
-  const hist = await api.history(80).catch(() => ({}));
-  const vids = [];
-  for (const e of Object.values(hist).reverse()) for (const f of api.outputsOf(e)) if (VID.test(f.filename) && !/matte|overlay|plate/.test(f.filename) && (f.type || "output") === "output") vids.push(f);
+  await Bin.load();
   const sel = $("#e-clipb"), keep = sel.value;
-  sel.replaceChildren(h("option", {value: ""}, "pick a render…"), ...vids.slice(0, 40).map(f => h("option", {value: api.outputRef(f), "data-url": api.viewUrl(f)}, `${f.subfolder}/${f.filename}`)));
+  sel.replaceChildren(h("option", {value: ""}, "pick a clip from the bin…"),
+    ...Bin.list("clip").slice(0, 60).map(it => h("option", {value: Bin.ref(it), "data-url": Bin.url(it)}, it.label ? `${it.label} · ${it.file.filename}` : it.file.filename)));
   if (keep) sel.value = keep;
 }
 $("#e-clipb").addEventListener("change", (e) => { const o = e.target.selectedOptions[0]; E.clipB = o.value || null; E.clipBUrl = o.dataset.url || null; });
@@ -620,7 +623,7 @@ const Score = new ScoreView({run, onFilm: (sv) => {
 
 // ------------------------------------------------------------------ FX
 let FX_SCORE = null;
-const Fx = new FxView({$, h, toast, assets: ASSETS, api, G, run, VID, getScore: () => FX_SCORE, estimate: () => fxEst()});
+const Fx = new FxView({$, h, toast, assets: ASSETS, api, G, run, VID, bin: Bin, getScore: () => FX_SCORE, estimate: () => fxEst()});
 async function fxEst() {
   $("#f-sec-more-val").textContent = `${$("#f-loop").checked ? "loops" : "no loop"} · ${$("#f-sound").checked ? "sound on" : "no sound"}`;
   const F = Fx.F, secs = F.seconds || 107 / 24;

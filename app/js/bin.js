@@ -16,12 +16,13 @@ export const Bin = {
     return this;
   },
   save() { clearTimeout(this._t); this._t = setTimeout(() => api.writeUser(FILE, {items: this.items.slice(0, MAX)}).catch(() => {}), 800); },
-  // f: a ComfyUI file {filename, subfolder, type}; meta: {from, label, prompt, ...}
-  add(f, meta = {}) {
+  // f: a ComfyUI file {filename, subfolder, type}; meta: {from, label, prompt, ...}. soft: only fill what the item lacks
+  // (the catch-all for every finished job must not overwrite the label a tab gave its own result)
+  add(f, meta = {}, {soft = false} = {}) {
     if (!f?.filename) return null;
     const id = `${f.type || "output"}:${f.subfolder || ""}/${f.filename}`;
     let it = this.items.find(i => i.id === id);
-    if (it) Object.assign(it, meta);
+    if (it) { for (const [k, v] of Object.entries(meta)) if (!soft || it[k] == null) it[k] = v; }
     else { it = {id, kind: kindOf(f.filename), file: {filename: f.filename, subfolder: f.subfolder || "", type: f.type || "output"}, at: Date.now(), ...meta}; this.items.unshift(it); }
     this.save(); this.draw(); this.listeners.forEach(fn => fn(it));
     return it;

@@ -1,8 +1,8 @@
 // The FX tab: the Valis library on any clip. Effects are layers that each listen to a lane; the lanes come from a song
 // (beats, bands, loudness), a song YuE2 writes (its own sheet music), a soundless cue sheet, or a Valis score.
 export class FxView {
-  constructor({$, h, toast, assets, api, G, run, VID, getScore = () => null, estimate = null}) {
-    Object.assign(this, {$, h, toast, assets, api, G, run, VID, getScore});
+  constructor({$, h, toast, assets, api, G, run, VID, bin, getScore = () => null, estimate = null}) {
+    Object.assign(this, {$, h, toast, assets, api, G, run, VID, getScore, bin});
     this.estimate = () => setTimeout(() => estimate?.(), 0);      // after the studio has finished building
     this.F = {clip: null, clipUrl: null, other: null, source: "sheet", audio: null, layers: [], beds: new Set(["room"])};
     this.lanes = new Set(["beat", "downbeat", "kick", "snare", "hat", "onset", "loud", "bright", "low"]);
@@ -66,15 +66,14 @@ export class FxView {
     this.estimate?.();
   }
 
+  // the clips to pick from: the bin (everything the studio made, kept between sessions)
   async refreshClips() {
-    const {$, h, api, VID} = this;
-    const hist = await api.history(80).catch(() => ({}));
-    const vids = [];
-    for (const e of Object.values(hist).reverse()) for (const f of api.outputsOf(e))
-      if (VID.test(f.filename) && !/matte|overlay/.test(f.filename) && (f.type || "output") === "output") vids.push(f);
-    const opts = (first) => [h("option", {value: ""}, first), ...vids.slice(0, 60).map(f => h("option", {value: api.outputRef(f), "data-url": api.viewUrl(f)}, `${f.subfolder}/${f.filename}`))];
+    const {$, h} = this, Bin = this.bin;
+    await Bin.load();
+    const clips = Bin.list("clip").slice(0, 60);
+    const opts = (first) => [h("option", {value: ""}, first), ...clips.map(it => h("option", {value: Bin.ref(it), "data-url": Bin.url(it)}, it.label ? `${it.label} · ${it.file.filename}` : it.file.filename))];
     const a = $("#f-clip-sel"), b = $("#f-other-sel"), ka = a.value, kb = b.value;
-    a.replaceChildren(...opts("…or pick a render")); b.replaceChildren(...opts("none"));
+    a.replaceChildren(...opts("…or pick a clip from the bin")); b.replaceChildren(...opts("none"));
     if (ka) a.value = ka; if (kb) b.value = kb;
   }
 
