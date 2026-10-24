@@ -58,7 +58,9 @@ api.on((ev) => {
       ev.job._binned = true;
       if (ev.job.ranSeconds) EST.record(ev.job.id, ev.job.graph, ev.job.ranSeconds);
       // every result goes in the bin (not the masks, overlays, anchors and control videos made along the way)
-      for (const f of ev.job.outputs) if (!/matte|overlay|anchor|_end_|_mask|control|_part_|\.txt$|\.json$/i.test(f.filename)) Bin.add(f, {from: ev.job.kind, label: ev.job.label}, {soft: true});
+      // (the end-to-end test's renders stay in its own report, under Renders)
+      if (ev.job.kind !== "selftest")
+        for (const f of ev.job.outputs) if (!/matte|overlay|anchor|_end_|_mask|control|_part_|\.txt$|\.json$/i.test(f.filename)) Bin.add(f, {from: ev.job.kind, label: ev.job.label}, {soft: true});
     }
     Renders.onJob(ev.job);
   }
@@ -780,7 +782,7 @@ const Renders = {
     // renders made outside the studio's own buttons (or before the bin existed) join it from ComfyUI's history
     const hist = await api.history(120).catch(() => ({}));
     for (const e of Object.values(hist || {}).reverse()) for (const f of api.outputsOf(e))
-      if ((f.type || "output") === "output" && /^valis|^danse/.test(f.subfolder || "") && /\.(mp4|webm|png|jpe?g)$/i.test(f.filename) && !/matte|overlay|anchor|_end_|_mask|control/i.test(f.filename)
+      if ((f.type || "output") === "output" && /^valis|^danse/.test(f.subfolder || "") && !/selftest/.test(f.subfolder || "") && /\.(mp4|webm|png|jpe?g)$/i.test(f.filename) && !/matte|overlay|anchor|_end_|_mask|control/i.test(f.filename)
           && !Bin.items.some(i => i.file.filename === f.filename && i.file.subfolder === f.subfolder)) Bin.add(f, {from: "ComfyUI", label: f.filename.replace(/_\d+_?\.\w+$/, "")});
     const items = Bin.items.filter(i => i.kind === "clip" || i.kind === "still").slice(0, 160);
     const grid = $("#r-grid");

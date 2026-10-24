@@ -44,7 +44,7 @@ export class ScoreView {
   }
   build() {
     seg($("#s-source"), SOURCES, (x) => this.setSource(x.id), "song");
-    this.secRules = section("Effects on the music", {id: "s-sec-rules", open: true, tip: "Each rule: a lane of the score fires an effect. Library effects work on any score; the DANSE engine's are made for its example."},
+    this.secRules = section("Effects on the music", {id: "s-sec-rules", open: true, tip: "Each rule: a lane of the score fires an effect. Library effects work on any score; the classic engine's are made for the example."},
       h("div", {class: "seg", id: "s-engine"}), h("div", {class: "map", id: "s-map"}), h("button", {class: "btn small", id: "s-add", type: "button", style: "margin-top:8px"}, "+ Add a rule"),
       h("h3", {class: "lab", tip: "SAM 3 follows this in every shot: Echo, Lens, Vertigo, Double exposure and the classic reveals use it"}, "Subject"),
       h("div", {class: "row"}, h("input", {type: "text", id: "s-a", value: "the woman", tip: "subject A (the classic engine takes two)"}), h("input", {type: "text", id: "s-b", value: "the man", tip: "subject B"})));
@@ -52,7 +52,7 @@ export class ScoreView {
       h("div", {class: "row", style: "margin-bottom:8px"}, h("button", {class: "btn small", type: "button", id: "s-fill", tip: "Lay the newest clips from the bin on the shots that have none, in order"}, "Fill from the bin")),
       h("div", {class: "map", id: "s-shots"}));
     $("#s-sections").replaceChildren(this.secRules, this.secShots);
-    seg($("#s-engine"), [{id: "library", name: "Library", tip: "The Valis library (the FX tab's effects): any lane, any score"}, {id: "classic", name: "DANSE engine", tip: "ValisFX, the engine DANSE MACABRE was made with: candles, ghost crowd, reveals. Made for that score's lanes"}],
+    seg($("#s-engine"), [{id: "library", name: "Library", tip: "The Valis library (the FX tab's effects): any lane, any score"}, {id: "classic", name: "Classic", tip: "ValisFX, the engine the first Valis film (DANSE MACABRE) was made with: candles, ghost crowd, reveals. Made for the example's lanes"}],
       (x) => { this.engine = x.id; if (this.sc) { this.rules = this.defaultRules(); this.renderRules(); this.draw(); } }, "library");
     $("#s-add").addEventListener("click", () => { this.rules.push({lane: this.lanes?.[0] || "kick", effect: this.engine === "classic" ? "flare" : "Punch"}); this.renderRules(); this.draw(); });
     $("#s-fill").addEventListener("click", () => this.fill());
@@ -184,7 +184,7 @@ export class ScoreView {
   }
   renderRules() {
     const effects = this.engine === "classic" ? CLASSIC : G.LIBRARY;
-    this.secRules.setValue(`${this.rules.length} rule${this.rules.length === 1 ? "" : "s"}${this.engine === "classic" ? " · DANSE engine" : ""}`);
+    this.secRules.setValue(`${this.rules.length} rule${this.rules.length === 1 ? "" : "s"}${this.engine === "classic" ? " · classic engine" : ""}`);
     $("#s-map").replaceChildren(...this.rules.map((r, k) => {
       const lane = h("select", {onchange: (e) => { r.lane = e.target.value; this.draw(); }, tip: "The lane that fires it"},
         ...this.lanes.map(x => h("option", {value: x, selected: x === r.lane}, `${x.replaceAll("_", " ")} (${this.sc.events[x].length})`)));

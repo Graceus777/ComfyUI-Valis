@@ -65,7 +65,7 @@ TESTS.push(
   x("x09", "Genjutsu · motion transfer: the astronaut walks like the woman", ["c03", "k:c09"], (s) => G.genjutsu({video: s.c03, refs: [s["k:c09"]], prompt: P.genjutsuPrompt({mode: "motion", refs: [{role: "character"}]}), mode: "motion", seconds: 3, megapixels: 0.26, turbo: true, prefix: s.pre}), {audio: true}),
   x("x10", "Genjutsu · restyle the street shot as clay", ["c01"], (s) => G.genjutsu({video: s.c01, refs: [], prompt: P.genjutsuPrompt({mode: "restyle", style: P.GENJUTSU_STYLES[0]}), mode: "restyle", seconds: 3, megapixels: 0.26, turbo: true, prefix: s.pre}), {}),
   x("x11", "Genjutsu · object swap: her dress becomes the sepia canyon", ["c03", "k:c07"], (s) => G.genjutsu({video: s.c03, refs: [s["k:c07"]], prompt: P.genjutsuPrompt({mode: "swap", refs: [{role: "outfit"}], target: "her red dress"}), mode: "swap", target: "her red dress", seconds: 3, megapixels: 0.26, turbo: true, prefix: s.pre, cn: G.MODELS.funCN2}), {}),
-  x("x12", "Genjutsu · source check (SDPose + Valis Pose Check)", ["c03"], (s) => G.poseCheck({video: s.c03, seconds: 3, prefix: s.pre}), {any: true}),
+  x("x12", "Genjutsu · source check (SDPose + Valis Pose Check)", ["c03"], (s) => G.poseCheck({video: s.c03, seconds: 3, prefix: s.pre}), {any: true, dark: true, report: "verdict"}),
   x("x13", "FX · Punch + Glitch + Shockwave on a cue sheet", ["c01"], (s) => G.fx({clip: s.c01, source: "sheet", cueSheet: G.CUE_SHEET_EXAMPLE, layers: [L("Punch", "kick"), L("Glitch", "beat"), L("Shockwave", "downbeat", {at: "center"})], sound: true, seconds: 3.04, prefix: s.pre}), {audio: true}),
   x("x14", "FX · Echo on the woman + Rays, on a song", ["c03", "song"], (s) => G.fx({clip: s.c03, subject: "the woman", source: "song", audio: s.song, layers: [L("Echo", "beat"), L("Rays", "kick")], sound: true, seconds: 3.04, prefix: s.pre}), {audio: true}),
   x("x15", "FX · a song YuE2 writes (10 s) + Frost on its notes", ["c06"], (s) => G.fx({clip: s.c06, source: "write", songSpec: {style: "slow cello, sea shanty, 80 BPM", lyrics: "[Instrumental]", seconds: 10}, layers: [L("Frost", "melody")], sound: true, seconds: 2.71, prefix: s.pre}), {audio: true}),
@@ -121,7 +121,7 @@ function verdicts(m, exp) {
   const ok = (name, pass, detail) => out.push({name, pass, detail});
   if (exp.width) ok("size", m.width === exp.width && m.height === exp.height, `${m.width}x${m.height} (asked ${exp.width}x${exp.height})`);
   if (exp.seconds) ok("length", Math.abs(m.seconds - exp.seconds) <= (exp.slack ?? 0.6), `${m.seconds.toFixed(2)} s (asked ${exp.seconds.toFixed(2)} s)`);
-  ok("not black", m.luma > 0.03, `mean brightness ${(m.luma * 100).toFixed(1)}%`);
+  if (!exp.dark) ok("not black", m.luma > 0.03, `mean brightness ${(m.luma * 100).toFixed(1)}%`);
   ok("moves", m.motion > (exp.minMotion ?? 0.004), `frame-to-frame change ${(m.motion * 100).toFixed(2)}%`);
   if (exp.mono) ok("monochrome", m.hueSpread < 0.08, `hue spread ${m.hueSpread.toFixed(3)} (grey or one tint < 0.08), colourfulness ${(m.saturation * 100).toFixed(1)}%`);
   if (exp.audio) ok("sound", m.audioDb != null && m.audioDb > -60, m.audioDb == null ? "no audio track" : `${m.audioDb.toFixed(1)} dB`);
@@ -204,7 +204,13 @@ async function checkOut(outs, exp, log) {
   if (!vids.length) { checks.push({name: "a video", pass: false, detail: `outputs: ${outs.map(o => o.filename).join(", ") || "none"}`}); log({checks}); return false; }
   const v = vids.find(f => !/_decoded|_kinetogram|overlay|_control_|_mask|matte|plate|anchor|_end_/.test(f.filename)) || vids[0];
   const m = await inspectVideo(api.viewUrl(v));
-  checks.push(...verdicts(m, {width: exp.width, height: exp.height, audio: exp.audio, minMotion: .002}));
+  checks.push(...verdicts(m, {width: exp.width, height: exp.height, audio: exp.audio, dark: exp.dark, minMotion: .002}));
+  if (exp.report) {                         // a check that writes a report: it must say what it found
+    const jf = outs.find(o => /\.json$/i.test(o.filename));
+    let rep = null;
+    try { rep = jf && JSON.parse(await (await fetch(api.viewUrl(jf))).text()); } catch { rep = null; }
+    checks.push({name: "report", pass: !!(rep && rep[exp.report]), detail: rep ? `${exp.report}: ${rep[exp.report]}${rep.summary ? ` (${rep.summary})` : ""}` : "no report"});
+  }
   if (exp.minSeconds) checks.push({name: "longer", pass: m.seconds >= exp.minSeconds, detail: `${m.seconds.toFixed(2)} s`});
   if (exp.minShort) checks.push({name: "upscaled", pass: Math.min(m.width, m.height) >= exp.minShort, detail: `${m.width}x${m.height}`});
   log({shot: v, measured: {...m, strip: undefined}, strip: m.strip, checks, files: outs.map(o => o.filename)});
