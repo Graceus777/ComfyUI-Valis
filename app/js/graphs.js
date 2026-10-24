@@ -946,7 +946,8 @@ export function filmCut({shots, title = null, prefix = "valis/film"}) {
 // joins it (Valis Depth Shape / Place); Valis Stereogram hides it all in a field of dots that you free-view; Valis
 // Kinetogram makes the motion-only version in live static; Valis Stereo Decode reads the depth back after H.264 (check).
 export function stereo({video, target = "person", maxObjects = 2, viewing = "parallel", shape = "torus", shapeFrames = 96,
-                        kind = "dots", dotSize = 6, refresh = 1, mbps = 4, prefix = "valis/stereo"}) {
+                        look = "squares", cell = 4, noise = "white", color = "black & white", palette = "neon", charset = "minimal",
+                        refresh = 1, mbps = 4, prefix = "valis/stereo"}) {
   return {
     "1": N("LoadVideo", {file: video}),
     "2": N("GetVideoComponents", {video: ["1", 0]}),
@@ -962,17 +963,20 @@ export function stereo({video, target = "person", maxObjects = 2, viewing = "par
     "11": N("ValisDepthShape", {shape, frames: shapeFrames, width: 512, height: 512, size: 0.85, spin_x: 0.5, spin_y: 1.0, spin_z: 0.0, tilt_x: 20, edge: 0.35, near: 0.9}),
     "12": N("ValisDepthPlace", {depth: ["11", 0], mask: ["11", 1], scene: ["10", 0], width: 0, height: 0, x: 0.2, y: 0.32, scale: 0.42, x_end: 0.32, y_end: 0.28,
       scale_end: 0, depth_gain: 1.0, depth_offset: 0.0, start_frame: 0, when_shorter: "loop", field: "flat", field_depth: 0.0, field_amount: 0.15}),
-    "13": N("ValisStereogram", {depth: ["12", 0], period: 0, strength: 0.18, viewing, anchor: "center", kind, dot_size: dotSize, refresh_every: refresh, drift: 0.0,
-      guide_dots: true, seed: 0, width: 0, height: 0, depth_far_is_white: false}),
+    "13": N("ValisStereogram", {depth: ["12", 0], static: ["23", 0], period: 0, strength: 0.18, viewing, anchor: "center", kind: "dots", dot_size: cell,
+      refresh_every: refresh, drift: 0.0, guide_dots: true, seed: 0, width: 0, height: 0, depth_far_is_white: false}),
     "14": N("CreateVideo", {images: ["13", 0], fps: ["2", 2]}),
     "15": N("SaveVideo", {video: ["14", 0], filename_prefix: `${prefix}_${viewing}`, format: "auto", codec: "auto"}),
-    "16": N("ValisStereoDecode", {frames: ["13", 0], depth: ["12", 0], period: 0, strength: 0.18, viewing, window: 3 * dotSize + 1, codec: "h264", bitrate_mbps: mbps, fps: 24}),
+    "16": N("ValisStereoDecode", {frames: ["13", 0], depth: ["12", 0], period: 0, strength: 0.18, viewing, window: (3 * cell) | 1, codec: "h264", bitrate_mbps: mbps, fps: 24}),
     "17": N("CreateVideo", {images: ["16", 0], fps: ["2", 2]}),
     "18": N("SaveVideo", {video: ["17", 0], filename_prefix: `${prefix}_decoded`, format: "auto", codec: "auto"}),
     "19": N("PreviewAny", {source: ["16", 2]}),
-    "20": N("ValisKinetogram", {mask: ["6", 0], motion: "follow", drift_x: 0.0, drift_y: 1.5, kind: "dots", dot_size: 4, field_drift_x: 0.0, field_drift_y: 0.0, seed: 0,
-      field_refresh: 1}),
+    "20": N("ValisKinetogram", {mask: ["6", 0], static: ["23", 0], motion: "follow", drift_x: 0.0, drift_y: 1.5, kind: "dots", dot_size: cell, field_drift_x: 0.0,
+      field_drift_y: 0.0, seed: 0, field_refresh: 1, width: 0, height: 0, dot_life: 24}),
     "21": N("CreateVideo", {images: ["20", 0], fps: ["2", 2]}),
     "22": N("SaveVideo", {video: ["21", 0], filename_prefix: `${prefix}_kinetogram`, format: "auto", codec: "auto"}),
+    "23": N("ValisStatic", {look, cell, noise, color, palette, charset, custom_palette: "#0b0b10, #f2efe6, #d4462f, #2f6fd4",
+      custom_characters: " .oO@", paper: "#000000", cell_height: 0}),
+    "24": N("PreviewImage", {images: ["23", 1]}),
   };
 }

@@ -171,12 +171,16 @@
         "12",
         0
       ],
+      "static": [
+        "23",
+        0
+      ],
       "period": 0,
       "strength": 0.18,
       "viewing": "parallel",
       "anchor": "center",
       "kind": "dots",
-      "dot_size": 6,
+      "dot_size": 4,
       "refresh_every": 1,
       "drift": 0,
       "guide_dots": true,
@@ -225,7 +229,7 @@
       "period": 0,
       "strength": 0.18,
       "viewing": "parallel",
-      "window": 19,
+      "window": 13,
       "codec": "h264",
       "bitrate_mbps": 4,
       "fps": 24
@@ -272,6 +276,10 @@
         "6",
         0
       ],
+      "static": [
+        "23",
+        0
+      ],
       "motion": "follow",
       "drift_x": 0,
       "drift_y": 1.5,
@@ -280,7 +288,10 @@
       "field_drift_x": 0,
       "field_drift_y": 0,
       "seed": 0,
-      "field_refresh": 1
+      "field_refresh": 1,
+      "width": 0,
+      "height": 0,
+      "dot_life": 24
     }
   },
   "21": {
@@ -306,6 +317,30 @@
       "filename_prefix": "valis/stereo_kinetogram",
       "format": "auto",
       "codec": "auto"
+    }
+  },
+  "23": {
+    "class_type": "ValisStatic",
+    "inputs": {
+      "look": "squares",
+      "cell": 4,
+      "noise": "white",
+      "color": "black & white",
+      "palette": "neon",
+      "charset": "minimal",
+      "custom_palette": "#0b0b10, #f2efe6, #d4462f, #2f6fd4",
+      "custom_characters": " .oO@",
+      "paper": "#000000",
+      "cell_height": 0
+    }
+  },
+  "24": {
+    "class_type": "PreviewImage",
+    "inputs": {
+      "images": [
+        "23",
+        1
+      ]
     }
   }
 }

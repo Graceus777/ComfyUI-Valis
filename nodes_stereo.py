@@ -12,7 +12,9 @@ Small nodes (category Valis/Stereo) so they recombine:
   Valis Mask Depth      MASK (SAM 3) -> rounded depth: the silhouette inflated like a balloon, + relief from a depth map
   Valis Depth Shape     a spinning solid (cube, torus, octahedron, heart, star, blob) -> depth + mask
   Valis Depth Place     put one depth into another: where, how big, how near, a straight move, when it enters
-  Valis Stereo Pattern  the dots: random, TV snow, colour, a palette or glyphs (any IMAGE works as a pattern too)
+  Valis Static          what the static is made of: squares, halftone or ASCII cells; white / pink / brown / blue /
+                        violet grain; black and white, grey, RGB, colour-TV or a palette
+  Valis Stereo Pattern  the dots as frames: random, TV snow, colour, a palette or glyphs (any IMAGE works too)
   Valis Stereogram      depth (+ pattern) -> the hidden-picture frames
   Valis Kinetogram      mask -> the motion-only frames (chain several, each thing with its own motion)
   Valis Stereo Decode   reads the depth back out of stereogram frames, optionally after an H.264 round trip at a
@@ -141,6 +143,244 @@ def _auto_period(width, period):
     return int(period) if period and period > 0 else max(24, int(round(width / 9.0)))
 
 
+# ---------------------------------------------------------------------------------------------------- static kernels
+#
+# What the static is made of. A cell holds four numbers: a level (which halftone dot or character) and a colour
+# (the dot, or the ink). Stereograms and kinetograms copy whole cells, then paint them, so a character is never cut.
+
+SPECTRA = {"white": 0.0, "pink": -0.5, "brown": -1.0, "blue": 0.5, "violet": 1.0}   # amplitude ~ frequency ** a
+LOOKS = ["squares", "halftone", "ascii"]
+COLORS = ["black & white", "grey", "rgb", "rgb 8", "tv", "palette"]
+CHARSETS = {                                     # light to dense; the first four are the Valis v1 ASCII sets
+    "standard": " .'`^\",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$",
+    "minimal": " .:-=+*#%@",
+    "blocks": " ░▒▓█",
+    "detailed": " .\",:;'`^i!l|I><~+_-?)(][}{1/\\tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$",
+    "maze": "╱╲",
+    "binary": "01",
+    "hex": "0123456789ABCDEF",
+    "letters": "ABCDEFGHJKLMNPQRSTUVWXYZ",
+    "katakana": "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789",
+}
+_HEX = {                                         # the Valis v1 ASCII Clipper palettes
+    "vaporwave": "#ff71ce #01cdfe #05ffa1 #b967ff #ff97d2 #0198bb #ff3864",
+    "neon": "#ff0066 #00ffff #39ff14 #ffff00 #ff00ff #00bfff #ff69b4",
+    "cyberpunk": "#ff7c00 #00ffc6 #7800ff #ff006e #00c8ff #ffc800 #323250",
+    "synthwave": "#ff0080 #8000ff #0080ff #ff8000 #00ff80 #ff00ff #400080",
+    "terminal": "#00ff00 #00c800 #009600 #006400 #003200",
+    "amber": "#ffb000 #ff8c00 #c86e00 #965000 #643200",
+    "matrix": "#00ff41 #00c832 #009628 #00641e #00320f #001908",
+    "sunset": "#ff5e4d #ff9a00 #ffce54 #ff3864 #8a2be2 #4b0082",
+    "ocean": "#006994 #0096c7 #48cae4 #90e0ef #caf0f8 #00b4d8",
+    "fire": "#ff0000 #ff4500 #ff8c00 #ffd700 #ffff00 #ffffc8",
+    "grayscale": "#ffffff #c8c8c8 #969696 #646464 #323232 #000000",
+    "pastel": "#ffb3ba #ffdfba #ffffba #baffc9 #bae1ff #dbbaff",
+    "noir": "#ffffff #b4b4b4 #646464 #323232 #141414 #000000",
+    # and the study palettes
+    "pigment 12": "#191f2c #663045 #3d468e #1d7072 #b7524f #f3a731 #ea6891 #5cc19e #3d9dcf #8ca7c8 #f4e7ca #ac5bbe",
+    "pigment 8": "#1c202f #3e3f81 #268eb8 #e74f70 #f5b33e #53cfb4 #a367bb #f3e6cb",
+    "pearl": "#fbad49 #f78791 #b795d8 #70c9c9 #99d6ad #f9d581",
+    "glow": "#ffc6a8 #ff8fb1 #c9a2ff #8fc7ff #8fe8d0 #ffe29a",
+    "coral": "#ff7a59 #ffb347 #ffe08a #7fd6c2 #6f9bff #c77dff",
+    "reef": "#7fe0d0 #ffb07a #ffe08a #5fc3e4 #ff8fa3 #9be7a8",
+    "midnight": "#5b7cff #9a6bff #3fd0ff #ff7ad9 #7f8cff #45f0d1",
+    "abyss": "#43e6ff #6f7bff #b06bff #2fffd0",
+    "club blocks": "#ff2bd6 #00f0ff #7a5cff #ffe600 #00ff9c #140a3a",
+    "slate": "#161b24 #2c3441 #4a5462 #6e7987 #98a2ad #c6cdd3 #eef0f1",
+    "ember": "#ffe7a3 #ff8a3d #b8336a #3b2c7a",
+    "gold": "#fffaf0 #ffe9a8 #f6cf6e #d9a441",
+    "flare": "#ffe2b8 #ff7a2a #ff2e88 #3a2a86",
+    "soft spectrum": "#fff1c4 #ffb15c #f0587a #9d4fc4 #3d6fc9 #2aa6a6",
+}
+PALETTES = {k: _parse_hex(v.replace(" ", ",")) for k, v in _HEX.items()}
+
+
+def _font_paths(cjk=False):
+    import os
+    win = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts")
+    if cjk:
+        names = [os.path.join(win, n) for n in ("YuGothM.ttc", "YuGothR.ttc", "msgothic.ttc", "meiryo.ttc")]
+        return names + ["/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                        "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc", "/System/Library/Fonts/Hiragino Sans GB.ttc"]
+    names = [os.path.join(win, n) for n in ("consola.ttf", "lucon.ttf", "cour.ttf")]
+    return names + ["/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", "/usr/share/fonts/TTF/DejaVuSansMono.ttf",
+                    "/System/Library/Fonts/Menlo.ttc", "/Library/Fonts/Courier New.ttf"]
+
+
+def _load_font(px, cjk=False):
+    from PIL import ImageFont
+    for p in _font_paths(cjk) + (_font_paths(False) if cjk else []):
+        try:
+            return ImageFont.truetype(p, px)
+        except Exception:
+            continue
+    return ImageFont.load_default()
+
+
+_BAYER4 = np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]], np.float32)
+
+
+def _drawn_glyph(c, cw, ch, s=4):
+    """Characters drawn exactly instead of from a font: blank, shade blocks and the maze diagonals (they must meet
+    their neighbours' corners)."""
+    if c == " ":
+        return np.zeros((ch, cw), np.float32)
+    if c == "█":
+        return np.ones((ch, cw), np.float32)
+    if c in "░▒▓":
+        yy, xx = np.mgrid[0:ch, 0:cw]
+        return ((_BAYER4[yy % 4, xx % 4] + 0.5) / 16 < {"░": 0.25, "▒": 0.5, "▓": 0.75}[c]).astype(np.float32)
+    if c in "╱╲":
+        yy, xx = np.mgrid[0:ch * s, 0:cw * s].astype(np.float32)
+        X, Y = (xx + 0.5) / (cw * s), (yy + 0.5) / (ch * s)
+        d = np.abs(X + Y - 1) if c == "╱" else np.abs(X - Y)
+        d = d * cw * ch / math.hypot(cw, ch)                         # px from the diagonal
+        a = (d <= max(0.75, min(cw, ch) / 7.0)).astype(np.float32)
+        return a.reshape(ch, s, cw, s).mean((1, 3))
+    return None
+
+
+def _font_glyph(c, cw, ch, s=4):
+    from PIL import Image, ImageDraw
+    cjk = ord(c) > 0x2FFF
+    size = max(4, int(ch * s * 0.92))
+    font = _load_font(size, cjk)
+    try:
+        adv = font.getlength("M" if not cjk else c)
+        if adv > cw * s * 1.04:
+            font = _load_font(max(4, int(size * cw * s * 1.04 / adv)), cjk)
+    except Exception:
+        pass
+    img = Image.new("L", (cw * s, ch * s), 0)
+    try:
+        ImageDraw.Draw(img).text((cw * s / 2.0, ch * s / 2.0), c, fill=255, font=font, anchor="mm")
+    except Exception:
+        ImageDraw.Draw(img).text((0, 0), c, fill=255, font=font)
+    a = np.asarray(img, np.float32) / 255.0
+    return a.reshape(ch, s, cw, s).mean((1, 3))
+
+
+_ATLAS = {}
+
+
+def _atlas(look, chars, cw, ch):
+    """[n, ch, cw] coverage of each level: halftone dots growing in area, or the characters of a set."""
+    key = (look, chars, cw, ch)
+    if key not in _ATLAS:
+        if look == "halftone":
+            n = 8
+            yy, xx = np.mgrid[0:ch * 4, 0:cw * 4].astype(np.float32)
+            r2 = ((xx + 0.5) / 4 - cw / 2.0) ** 2 + ((yy + 0.5) / 4 - ch / 2.0) ** 2
+            R = 0.58 * min(cw, ch)
+            out = [((r2 <= (R * math.sqrt(k / (n - 1))) ** 2) & (k > 0)).astype(np.float32).reshape(ch, 4, cw, 4).mean((1, 3))
+                   for k in range(n)]
+        else:
+            out = []
+            for c in chars:
+                g = _drawn_glyph(c, cw, ch)
+                out.append(g if g is not None else _font_glyph(c, cw, ch))
+        _ATLAS[key] = torch.from_numpy(np.stack(out).astype(np.float32))
+    return _ATLAS[key]
+
+
+def _noise_fields(n, h, w, gen, a):
+    """n fields [n,h,w] of noise with power ~ frequency ** 2a, levelled to an even spread of values in 0..1 (so
+    every noise colour has the same contrast). Clumps never grow past ~24 cells, whatever the field size."""
+    x = torch.rand(n, h, w, generator=gen)
+    if a == 0:
+        return x
+    X = torch.fft.rfft2(x - 0.5)
+    fy = torch.fft.fftfreq(h)[:, None]
+    fx = torch.fft.rfftfreq(w)[None, :]
+    f = torch.sqrt(fy * fy + fx * fx).clamp_min(1.0 / 24.0)
+    X = X * f.pow(a)
+    X[:, 0, 0] = 0
+    y = torch.fft.irfft2(X, s=(h, w))
+    r = y.reshape(n, -1).argsort(1).argsort(1).float()
+    return ((r + 0.5) / (h * w)).reshape(n, h, w)
+
+
+def _box3(x):
+    """3x3 box blur of [n,h,w], wrapping round."""
+    x = torch.cat([x[:, -1:], x, x[:, :1]], 1)
+    x = torch.cat([x[:, :, -1:], x, x[:, :, :1]], 2)
+    return F.avg_pool2d(x[:, None], 3, stride=1)[:, 0]
+
+
+class Static:
+    """A static kernel (the VALIS_STATIC type): what each cell looks like and how cells are drawn."""
+
+    def __init__(self, look="squares", noise="white", color="black & white", palette=None, chars=None, cell=4,
+                 cell_height=0, paper=(0.0, 0.0, 0.0)):
+        self.look = look if look in LOOKS else "squares"
+        self.noise = noise if noise in SPECTRA else "white"
+        self.color = color if color in COLORS else "black & white"
+        self.palette = palette or PALETTES["neon"]
+        self.chars = chars or CHARSETS["minimal"]
+        self.cw = max(1, int(cell))
+        auto = self.cw if (self.look != "ascii" or set(self.chars) <= set("╱╲█ ")) else max(self.cw + 1, int(round(self.cw * 1.6)))
+        self.ch = max(1, int(cell_height)) if cell_height else auto
+        self.paper = [float(v) for v in paper][:3]
+        # rows of the static are unrelated only for white noise cells: then a stereogram may round each row's
+        # separation its own way (rows dither the depth between cell steps). Clumped grain, TV colour blotches and
+        # maze lines run across rows, and rows rounded differently would tear them and show the hidden thing.
+        self.row_dither = (self.noise == "white" and self.color != "tv"
+                           and not (self.look == "ascii" and any(c in "╱╲" for c in self.chars)))
+
+    @classmethod
+    def from_kind(cls, kind, dot_size):
+        """The plain kinds of Valis Stereogram / Kinetogram as kernels."""
+        return cls("squares", "white", {"dots": "black & white", "snow": "grey"}.get(kind, "rgb"), cell=dot_size)
+
+    def cells(self, hc, wc, gen, period=0):
+        """[hc, wc, 4] (level, r, g, b) in 0..1. period: make the noise repeat every `period` cells across (the
+        field of a stereogram then has no seam where the pattern repeats)."""
+        w = int(period) if period and 0 < period < wc else wc
+        f = _noise_fields(4, hc, w, gen, SPECTRA[self.noise])
+        if w < wc:
+            f = f.repeat(1, 1, -(-wc // w))[:, :, :wc]
+        glyph = self.look != "squares"
+        src = f[1:4] if glyph else f[0:3]                     # squares take their colour from the first fields
+        c = self.color
+        if c == "black & white":
+            rgb = torch.ones(3, hc, wc) if glyph else (f[0] > 0.5).float()[None].expand(3, -1, -1)
+        elif c == "grey":
+            rgb = (0.35 + 0.65 * src[0] if glyph else src[0])[None].expand(3, -1, -1)
+        elif c == "rgb":
+            rgb = src
+        elif c == "rgb 8":
+            rgb = (src > 0.5).float()
+            if glyph:                                          # no black ink on black paper: those become white
+                rgb = torch.where((rgb.sum(0) == 0)[None], torch.ones_like(rgb), rgb)
+        elif c == "tv":                                        # colour-TV static: snow with soft colour blotches
+            y = torch.full_like(src[0], 0.85) if glyph else src[0]
+            cu, cv = _box3((src[1:3] - 0.5) * 0.7)
+            rgb = torch.stack([y + 1.14 * cv, y - 0.395 * cu - 0.581 * cv, y + 2.032 * cu])
+        else:
+            pal = torch.tensor(self.palette, dtype=torch.float32)
+            idx = (src[0] * len(pal)).long().clamp(0, len(pal) - 1)
+            rgb = pal[idx].permute(2, 0, 1)
+        return torch.cat([f[:1], rgb.clamp(0, 1)], 0).permute(1, 2, 0).contiguous()
+
+    def paint(self, vals):
+        """cells [B, hc, wc, 4] -> pixels [B, hc * ch, wc * cw, 3]."""
+        B, hc, wc, _ = vals.shape
+        rgb = vals[..., 1:4]
+        if self.look == "squares":
+            return rgb.repeat_interleave(self.ch, 1).repeat_interleave(self.cw, 2)
+        at = _atlas(self.look, self.chars, self.cw, self.ch).to(vals.device)
+        n = at.shape[0]
+        lvl = (vals[..., 0] * n).long().clamp(0, n - 1)
+        a = at[lvl][..., None]                                 # [B, hc, wc, ch, cw, 1]
+        paper = torch.tensor(self.paper, dtype=vals.dtype, device=vals.device)
+        px = paper + (rgb[:, :, :, None, None, :] - paper) * a
+        return px.permute(0, 1, 3, 2, 4, 5).reshape(B, hc * self.ch, wc * self.cw, 3)
+
+    def frame(self, h, w, gen):
+        """One frame of static [h, w, 3]."""
+        return self.paint(self.cells(-(-h // self.ch), -(-w // self.cw), gen)[None])[0, :h, :w]
+
+
 # ---------------------------------------------------------------------------------------------------- stereogram core
 
 def _chain(u, sep, start, T, row_start=None, lo=0):
@@ -210,7 +450,7 @@ def strip_width(P, D):
     return int(math.ceil(P + D)) + 2
 
 
-def stereo_coords(z, P, D, viewing="parallel", anchor="center", cells=False):
+def stereo_coords(z, P, D, viewing="parallel", anchor="center", cells=False, dither=True):
     """Depth z [B,H,W] (1 = near) -> texture column u [B,H,W] in [0, 2 * strip_width(P, D)).
 
     Separation is P for the field (z = 0). Parallel viewing: near things repeat closer (P - D z);
@@ -239,9 +479,10 @@ def stereo_coords(z, P, D, viewing="parallel", anchor="center", cells=False):
     T = strip_width(P, D)
     if cells:
         # whole-cell separations; each row rounds at its own random threshold, so rows dither the depth between
-        # cell steps (the eye averages them) while along a row the separation only steps where the depth does
+        # cell steps (the eye averages them) while along a row the separation only steps where the depth does.
+        # Without dither every row rounds the same way: whole-cell depth steps, but rows stay aligned.
         rows = torch.arange(B * H, device=z.device, dtype=z.dtype) % H
-        th = torch.frac(torch.sin(rows * 78.233 + 1.0) * 43758.5453).abs()[:, None]
+        th = torch.frac(torch.sin(rows * 78.233 + 1.0) * 43758.5453).abs()[:, None] if dither else 0.5
         sq_r = torch.floor(sep_r + th).long()
         sq_l = torch.floor(sep_l + th).long()
         ul = u.long()
@@ -650,42 +891,35 @@ class ValisStereoPattern:
 
 
 def _glyph_frame(w, h, cell, pal, gen):
-    import cv2
+    """Random characters on paper (first palette colour), inked in the others: drawn by the Valis Static painter."""
     paper = pal[0] if pal else [0.0, 0.0, 0.0]
-    inks = pal[1:] if len(pal) > 1 else [[1.0, 1.0, 1.0]]
-    img = np.zeros((h, w, 3), np.float32)
-    img[:] = paper
-    rows, cols = -(-h // cell), -(-w // cell)
-    ch = torch.randint(0, len(_GLYPHS), (rows, cols), generator=gen).numpy()
-    ink = torch.randint(0, len(inks), (rows, cols), generator=gen).numpy()
-    scale = cell / 22.0
-    for r in range(rows):
-        for c in range(cols):
-            cv2.putText(img, _GLYPHS[ch[r, c]], (c * cell + int(cell * 0.12), r * cell + int(cell * 0.85)),
-                        cv2.FONT_HERSHEY_SIMPLEX, scale, inks[ink[r, c]], max(1, int(round(scale * 2))), cv2.LINE_AA)
-    return np.clip(img, 0, 1)
+    inks = pal[1:] if len(pal) > 1 else None
+    k = Static("ascii", "white", "palette" if inks else "black & white", inks, _GLYPHS, cell, cell, paper)
+    return k.frame(h, w, gen).clamp(0, 1).numpy()
 
 
 # ------------------------------------------------------------------------------------------------ stereogram node
 
 def render_stereogram(z, P, D, viewing="parallel", anchor="center", kind="snow", dot_size=3, refresh_every=1,
-                      drift=0.0, guide=True, seed=0, pattern=None, chunk=8, device=None, frame_offset=0, grid=True):
+                      drift=0.0, guide=True, seed=0, pattern=None, chunk=8, device=None, frame_offset=0, grid=True,
+                      static=None):
     """z [B,H,W] (CPU, 0..1, 1 = near) -> frames [B,H,W,3] (CPU). frame_offset: where this batch sits in a longer
     video, so refresh and drift carry on across pieces rendered separately.
 
-    grid: with generated dots bigger than a pixel, the stereogram is drawn on the dot grid itself (one cell = one
-    dot) and blown up, so a depth edge falls between whole dots instead of slicing them into slivers; sliced and
-    stretched dots repeat once per period and show the hidden thing's outline to anyone not fusing. P must then be a
-    multiple of dot_size (Valis Stereogram rounds it)."""
+    grid: generated static (kind / dot_size, or a Static kernel) is drawn on its own cell grid (one cell = one dot or
+    character) and then painted, so a depth edge falls between whole cells instead of slicing them into slivers;
+    sliced and stretched dots repeat once per period and show the hidden thing's outline to anyone not fusing. P
+    must then be a multiple of the cell width (Valis Stereogram rounds it)."""
     dev = device or _device()
     B, H, W = z.shape
-    g = dot_size if (grid and dot_size > 1 and pattern is None) else 1
-    if g > 1 and P % g:
-        P = max(8 * g, int(round(P / g)) * g)
+    k = static if static is not None else Static.from_kind(kind, dot_size)
+    cells = grid and pattern is None                 # drawn cell by cell (any generated static)
+    gx, gy = (k.cw, k.ch) if cells else (1, 1)
+    if gx > 1 and P % gx:
+        P = max(8 * gx, int(round(P / gx)) * gx)
         D = min(D, P - 6)
-    Hl, Wl = -(-H // g), -(-W // g)
-    Pl, Dl = P / g, D / g
-    cell = 1 if g > 1 else dot_size
+    Hl, Wl = -(-H // gy), -(-W // gx)
+    Pl, Dl = P / gx, D / gx
     out = torch.empty(B, H, W, 3)
     T = strip_width(Pl, Dl)
     strips = {}
@@ -703,11 +937,13 @@ def render_stereogram(z, P, D, viewing="parallel", anchor="center", kind="snow",
                 if len(strips) > 64:
                     strips.clear()
                 gen = torch.Generator().manual_seed(int(seed) * 1000003 + r)
-                cells = _cells(kind, -(-Hl // cell), -(-2 * T // cell), gen)
-                strips[key] = _upsample_cells(cells, Hl, 2 * T, cell)
+                if cells:                            # seed half repeats every period (no seam), then fresh cells
+                    strips[key] = torch.cat([k.cells(Hl, T, gen, period=int(round(Pl))), k.cells(Hl, T, gen)], 1)
+                else:
+                    strips[key] = k.frame(H, 2 * T, gen)
             s = strips[key]
         if drift:
-            s = torch.roll(s, shifts=int(math.floor(drift * t / g)) % s.shape[0], dims=0)
+            s = torch.roll(s, shifts=int(math.floor(drift * t / gy)) % s.shape[0], dims=0)
         return s
 
     bar = _Progress(B)
@@ -715,14 +951,15 @@ def render_stereogram(z, P, D, viewing="parallel", anchor="center", kind="snow",
         _check_interrupt()
         b1 = min(B, b0 + chunk)
         zc = z[b0:b1].to(dev).float().clamp(0, 1)
-        if g > 1:
+        if cells and (Hl, Wl) != (H, W):
             zc = F.interpolate(zc[:, None], size=(Hl, Wl), mode="area")[:, 0]
-        u = stereo_coords(zc, Pl, Dl, viewing, anchor, cells=g > 1)
+        u = stereo_coords(zc, Pl, Dl, viewing, anchor, cells=cells, dither=k.row_dither)
         st = torch.stack([strip_for(frame_offset + t) for t in range(b0, b1)]).to(dev)
-        if g > 1:
+        if cells:
             i = u.long() % st.shape[2]
-            fr = torch.gather(st, 2, i[..., None].expand(-1, -1, -1, st.shape[3]))
-            fr = fr.repeat_interleave(g, 1).repeat_interleave(g, 2)[:, :H, :W]
+            vals = torch.gather(st, 2, i[..., None].expand(-1, -1, -1, st.shape[3]))
+            fr = k.paint(vals)[:, :H, :W]
+            del vals
         else:
             fr = sample_strip(st, u)
         fr = fr.clamp(0, 1).contiguous()
@@ -761,7 +998,8 @@ class ValisStereogram:
                     "height": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 2}),
                     "depth_far_is_white": ("BOOLEAN", {"default": False}),
                 },
-                "optional": {"pattern": ("IMAGE", {"tooltip": "any picture or clip as the dots (Valis Stereo Pattern, a render, glyphs)"}),
+                "optional": {"static": ("VALIS_STATIC", {"tooltip": "what the dots are (Valis Static: halftone, ASCII, noise colours, RGB, palettes); replaces kind and dot_size"}),
+                             "pattern": ("IMAGE", {"tooltip": "any picture or clip as the dots (Valis Stereo Pattern, a render)"}),
                              "frame_offset": ("INT", {"default": 0, "min": 0, "max": 10000000, "tooltip": "the first frame's place in a longer video rendered in pieces: the dots carry on across the cut"})}}
 
     RETURN_TYPES = ("IMAGE",)
@@ -770,7 +1008,7 @@ class ValisStereogram:
     CATEGORY = CAT
 
     def run(self, depth, period, strength, viewing, anchor, kind, dot_size, refresh_every, drift, guide_dots, seed,
-            width, height, depth_far_is_white, pattern=None, frame_offset=0):
+            width, height, depth_far_is_white, static=None, pattern=None, frame_offset=0):
         z = _depth_tensor(depth.cpu())
         if depth_far_is_white:
             z = 1.0 - z
@@ -778,12 +1016,14 @@ class ValisStereogram:
         W = width or z.shape[2]
         z = _resize_bhw(z, H, W)
         P = _auto_period(W, period)
-        if dot_size > 1 and pattern is None:                     # drawn on the dot grid: whole dots per period
-            P = max(8 * dot_size, int(round(P / dot_size)) * dot_size)
+        cw = static.cw if static is not None else dot_size
+        if cw > 1 and pattern is None:                           # drawn on the cell grid: whole cells per period
+            P = max(8 * cw, int(round(P / cw)) * cw)
         D = min(strength * P, P - 6)
         with torch.no_grad():
             fr = render_stereogram(z, P, D, viewing, anchor, kind, dot_size, refresh_every, drift, guide_dots, seed,
-                                   pattern.cpu() if pattern is not None else None, frame_offset=frame_offset)
+                                   pattern.cpu() if pattern is not None else None, frame_offset=frame_offset,
+                                   static=static)
         return (fr,)
 
 
@@ -804,26 +1044,122 @@ def _centroids(m):
     return out
 
 
-def _flow_coords(images, H, W, drift):
-    """Texture coordinates carried along by optical flow (Farneback, on a small copy). [B,H,W,2] float32."""
+def _flow_fields(images, H, W, cw=1, ch=1):
+    """Forward optical flow of the clip (Farneback, on a small copy), frame t-1 -> t, at the cell grid and in
+    cells. [B, ceil(H/ch), ceil(W/cw), 2] float32 (frame 0 is zero)."""
     import cv2
     g = _grey(images.cpu()).numpy()
     B = g.shape[0]
+    hc, wc = -(-H // ch), -(-W // cw)
     sw = min(W, 480)
     sh = max(8, int(round(H * sw / W)))
-    small = [cv2.resize((np.clip(g[i % g.shape[0]], 0, 1) * 255).astype(np.uint8), (sw, sh), interpolation=cv2.INTER_AREA)
+    small = [cv2.resize((np.clip(g[i], 0, 1) * 255).astype(np.uint8), (sw, sh), interpolation=cv2.INTER_AREA)
              for i in range(B)]
-    gx, gy = np.meshgrid(np.arange(W, dtype=np.float32), np.arange(H, dtype=np.float32))
-    C = np.stack([gx, gy], -1)
-    out = np.empty((B, H, W, 2), np.float32)
-    out[0] = C
+    out = np.zeros((B, hc, wc, 2), np.float32)
     for t in range(1, B):
-        fl = cv2.calcOpticalFlowFarneback(small[t], small[t - 1], None, 0.5, 3, 21, 3, 5, 1.1, 0)
-        fl = cv2.resize(fl, (W, H), interpolation=cv2.INTER_LINEAR) * (W / sw)
-        C = cv2.remap(C, gx + fl[..., 0], gy + fl[..., 1], cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT)
-        C = C - np.array(drift, np.float32)[None, None]
-        out[t] = C
+        fl = cv2.calcOpticalFlowFarneback(small[t - 1], small[t], None, 0.5, 3, 21, 3, 5, 1.1, 0)
+        fl = cv2.resize(fl, (wc, hc), interpolation=cv2.INTER_AREA) * (W / sw)
+        out[t] = fl / np.array([cw, ch], np.float32)
     return out
+
+
+class _Thing:
+    """One thing of a kinetogram on the cell grid: which of its own dots sits in which cell, frame by frame.
+
+    follow / drift only: the thing's dots are one texture slid along with the mask (and the drift): a rigid move,
+    so every cell takes a different dot and the dots stay put relative to each other.
+    flow: every dot rides the clip's optical flow on its own, for a limited life (a limited-lifetime random-dot
+    kinematogram). Where dots bunch up, one stays; where they spread, new dots are born; every dot is reborn
+    somewhere after about `life` frames. Without that, flow drags the dots into streaks and smears (one dot
+    copied across many cells), which a paused frame shows."""
+
+    def __init__(self, k, mask, motion, dx, dy, seed, H, W, images=None, life=24):
+        self.k, self.m, self.motion = k, mask, motion
+        self.H, self.W = H, W
+        self.cw, self.ch = k.cw, k.ch
+        self.hc, self.wc = -(-H // k.ch), -(-W // k.cw)
+        self.dx, self.dy = dx, dy
+        self.seed = int(seed)
+        self.life = max(2, int(life))
+        H0, W0 = mask.shape[1:]
+        self.sx, self.sy = W / float(W0), H / float(H0)
+        self.tex = k.cells(self.hc, self.wc, torch.Generator().manual_seed(self.seed * 1000003 + 999331))
+        self.cents = _centroids((mask > 0.5).float()) if motion == "follow" else None
+        self.flow = None
+        if motion == "flow":
+            if images is None:
+                raise ValueError("motion = flow needs the clip connected to images")
+            self.flow = torch.from_numpy(_flow_fields(images, H, W, self.cw, self.ch))
+        self.jx = (torch.arange(self.wc, dtype=torch.float32) + 0.5)[None, :].expand(self.hc, self.wc) * self.cw
+        self.iy = (torch.arange(self.hc, dtype=torch.float32) + 0.5)[:, None].expand(self.hc, self.wc) * self.ch
+        self.p = None                                       # flow dots: position (cells), value, age, life
+
+    def mask_cells(self, t):
+        m = self.m[min(t, self.m.shape[0] - 1)].float()
+        return F.interpolate(m[None, None], size=(self.hc, self.wc), mode="area")[0, 0] > 0.5
+
+    def step(self, t):
+        """Frame t (call t = 0, 1, 2... in order) -> (cells the thing covers [hc,wc] bool, its dots [hc,wc,4])."""
+        mt = self.mask_cells(t)
+        if self.flow is None:
+            dx, dy = self.dx * t, self.dy * t
+            if self.cents is not None:
+                c = self.cents
+                dx += (c[min(t, len(c) - 1)][0] - c[0][0]) * self.sx
+                dy += (c[min(t, len(c) - 1)][1] - c[0][1]) * self.sy
+            ix = torch.remainder(torch.floor((self.jx - dx) / self.cw).long(), self.wc)
+            iy = torch.remainder(torch.floor((self.iy - dy) / self.ch).long(), self.hc)
+            return mt, self.tex[iy, ix]
+        hc, wc = self.hc, self.wc
+        gen = torch.Generator().manual_seed(self.seed * 1000003 + 555557 + t)
+        if self.p is None:
+            pos = torch.zeros(0, 2)
+            val = torch.zeros(0, 4)
+            age = torch.zeros(0, dtype=torch.long)
+            life = torch.zeros(0, dtype=torch.long)
+        else:
+            pos, val, age, life = self.p
+            fl = self.flow[min(t, self.flow.shape[0] - 1)]
+            ri = pos[:, 1].round().long().clamp(0, hc - 1)
+            rj = pos[:, 0].round().long().clamp(0, wc - 1)
+            pos = pos + fl[ri, rj] + torch.tensor([self.dx / self.cw, self.dy / self.ch])
+            age = age + 1
+        ri, rj = pos[:, 1].round().long(), pos[:, 0].round().long()
+        inside = (ri >= 0) & (ri < hc) & (rj >= 0) & (rj < wc)
+        ok = inside & (age <= life)
+        ok[ok.clone()] = mt[ri[ok], rj[ok]]                 # dots that left the thing die
+        lin = torch.where(ok, ri.clamp(0, hc - 1) * wc + rj.clamp(0, wc - 1), torch.full_like(ri, -1))
+        occ = torch.full((hc * wc,), -1, dtype=torch.long)
+        ids = torch.arange(pos.shape[0])
+        if ok.any():
+            occ.scatter_reduce_(0, lin[ok], ids[ok], reduce="amax")     # bunched-up dots: one stays
+            keep = ok.clone()
+            keep[ok] = occ[lin[ok]] == ids[ok]
+        else:
+            keep = ok
+        pos, val, age, life = pos[keep], val[keep], age[keep], life[keep]
+        occ = torch.full((hc * wc,), -1, dtype=torch.long)
+        if pos.shape[0]:
+            occ[(pos[:, 1].round().long() * wc + pos[:, 0].round().long())] = torch.arange(pos.shape[0])
+        born = (occ.view(hc, wc) < 0) & mt                  # empty cells of the thing: new dots
+        bi, bj = born.nonzero(as_tuple=True)
+        if t == 0:
+            bval = self.tex[bi, bj]
+            blife = torch.randint(self.life // 2, self.life * 3 // 2 + 1, (bi.shape[0],), generator=gen)
+            bage = torch.randint(0, self.life, (bi.shape[0],), generator=gen).clamp(max=blife - 1)   # staggered
+        else:
+            bval = self.k.cells(hc, wc, gen)[bi, bj]
+            blife = torch.randint(self.life // 2, self.life * 3 // 2 + 1, (bi.shape[0],), generator=gen)
+            bage = torch.zeros(bi.shape[0], dtype=torch.long)
+        jit = torch.rand(bi.shape[0], 2, generator=gen) * 0.98 - 0.49   # each dot its own place inside its cell, so
+        pos = torch.cat([pos, torch.stack([bj.float(), bi.float()], 1) + jit])   # a slow, even flow steps them one by one
+        val = torch.cat([val, bval])
+        age = torch.cat([age, bage])
+        life = torch.cat([life, blife])
+        self.p = (pos, val, age, life)
+        ob = torch.zeros(hc, wc, 4)
+        ob[pos[:, 1].round().long(), pos[:, 0].round().long()] = val
+        return mt, ob
 
 
 class ValisKinetogram:
@@ -850,6 +1186,10 @@ class ValisKinetogram:
                     "images": ("IMAGE", {"tooltip": "the clip, for motion = flow"}),
                     "field": ("IMAGE", {"tooltip": "frames to use as the field (e.g. another kinetogram)"}),
                     "field_refresh": ("INT", {"default": 1, "min": 0, "max": 10000, "tooltip": "new field dots every N frames: 1 = live TV static, 0 = a still field (then the thing shows as the only moving part)"}),
+                    "static": ("VALIS_STATIC", {"tooltip": "what the dots are (Valis Static); replaces kind and dot_size. Chained kinetograms should share one"}),
+                    "width": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 2, "tooltip": "output size (0 = the mask's)"}),
+                    "height": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 2}),
+                    "dot_life": ("INT", {"default": 24, "min": 2, "max": 1000, "tooltip": "motion = flow: frames a dot rides the motion before it is reborn somewhere new (so dots never bunch into streaks)"}),
                 }}
 
     RETURN_TYPES = ("IMAGE",)
@@ -858,55 +1198,41 @@ class ValisKinetogram:
     CATEGORY = CAT
 
     def run(self, mask, motion, drift_x, drift_y, kind, dot_size, field_drift_x, field_drift_y, seed, images=None,
-            field=None, field_refresh=1):
+            field=None, field_refresh=1, static=None, width=0, height=0, dot_life=24):
+        """Drawn on the cell grid: the thing's outline falls between whole cells and its cells step a whole cell at
+        a time, so a paused frame has one unbroken grid of dots (or characters) and nothing to see."""
+        k = static if static is not None else Static.from_kind(kind, dot_size)
         m = _mask_tensor(mask.cpu())
-        B, H, W = m.shape
+        H0, W0 = m.shape[1:]
+        H, W = height or H0, width or W0
+        B = m.shape[0]
+        fl = None
         if field is not None:
             fl = field.cpu()[..., :3].float()
             B = max(B, fl.shape[0])
             if fl.shape[1:3] != (H, W):
-                fl = F.interpolate(fl.permute(0, 3, 1, 2), size=(H, W), mode="bilinear", align_corners=False).permute(0, 2, 3, 1)
-        gen = torch.Generator().manual_seed(int(seed))
-        hc, wc = -(-H // dot_size) + 1, -(-W // dot_size) + 1
-        bg_cells = _cells(kind, hc, wc, gen)
-        ob_cells = _cells(kind, hc, wc, gen)
-        coords = None
-        if motion == "flow":
-            if images is None:
-                raise ValueError("motion = flow needs the clip connected to images")
-            coords = _flow_coords(images, H, W, (drift_x, drift_y))
-        cents = _centroids((m > 0.5).float()) if motion == "follow" else None
-        gx = torch.arange(W, dtype=torch.float32)[None, :].expand(H, W)
-        gy = torch.arange(H, dtype=torch.float32)[:, None].expand(H, W)
+                fl = F.interpolate(fl.permute(0, 3, 1, 2), size=(H, W), mode="nearest").permute(0, 2, 3, 1)
+        cw, ch = k.cw, k.ch
+        hc, wc = -(-H // ch), -(-W // cw)
+        thing = _Thing(k, m, motion, drift_x, drift_y, seed, H, W, images, dot_life)
+        held = None
         out = torch.empty(B, H, W, 3)
-
-        def look(cells, cx, cy):
-            ix = torch.remainder(torch.floor(cx / dot_size).long(), cells.shape[1])
-            iy = torch.remainder(torch.floor(cy / dot_size).long(), cells.shape[0])
-            return cells[iy, ix]
-
         bar = _Progress(B)
         for t in range(B):
-            mt = m[min(t, m.shape[0] - 1)] > 0.5
-            if field is not None:
-                bg = fl[t % fl.shape[0]]
+            _check_interrupt()
+            mt, ob = thing.step(t)
+            if fl is None:
+                r = t // field_refresh if field_refresh > 0 else 0       # live static: fresh field dots
+                if held is None or held[0] != r:
+                    held = (r, k.cells(hc, wc, torch.Generator().manual_seed(int(seed) * 1000003 + 17 + r)))
+                bg = held[1]
+                if field_drift_x or field_drift_y:
+                    bg = torch.roll(bg, (int(math.floor(field_drift_y * t / ch)), int(math.floor(field_drift_x * t / cw))), (0, 1))
+                out[t] = k.paint(torch.where(mt[..., None], ob, bg)[None])[0, :H, :W]
             else:
-                cells = bg_cells
-                if field_refresh > 0 and t // field_refresh > 0:        # live static: fresh field dots
-                    g2 = torch.Generator().manual_seed(int(seed) * 1000003 + 17 + t // field_refresh)
-                    cells = _cells(kind, hc, wc, g2)
-                bg = look(cells, gx - field_drift_x * t, gy - field_drift_y * t)
-            if coords is not None:
-                c = torch.from_numpy(coords[min(t, coords.shape[0] - 1)])
-                ox, oy = c[..., 0], c[..., 1]
-            else:
-                dx, dy = drift_x * t, drift_y * t
-                if cents is not None:
-                    dx += cents[min(t, len(cents) - 1)][0] - cents[0][0]
-                    dy += cents[min(t, len(cents) - 1)][1] - cents[0][1]
-                ox, oy = gx - dx, gy - dy
-            ob = look(ob_cells, ox, oy)
-            out[t] = torch.where(mt[..., None], ob, bg)
+                px = k.paint(ob[None])[0, :H, :W]
+                mp = mt.repeat_interleave(ch, 0).repeat_interleave(cw, 1)[:H, :W]
+                out[t] = torch.where(mp[..., None], px, fl[t % fl.shape[0]])
             bar.update()
         return (out,)
 
@@ -964,7 +1290,8 @@ def estimate_period(frames, device=None):
 def decode_stereogram(frames, P, D, viewing="parallel", window=9, chunk=2, device=None):
     """frames [B,H,W,3] -> depth [B,H,W] read back from the repeats (block matching on the grey picture)."""
     dev = device or _device()
-    B, H, W, _ = frames.shape
+    B, H, W, C = frames.shape
+    window = int(window) | 1                                       # odd, so the matching window has a centre
     cross = viewing == "cross"
     s_lo = int(math.floor(P - (0 if cross else D))) - 1
     s_hi = int(math.ceil(P + (D if cross else 0))) + 1
@@ -974,14 +1301,20 @@ def decode_stereogram(frames, P, D, viewing="parallel", window=9, chunk=2, devic
     for b0 in range(0, B, chunk):
         _check_interrupt()
         x = frames[b0:b0 + chunk].to(dev)
-        g = _grey(x.float() / 255.0 if x.dtype == torch.uint8 else x)
+        x = x.float() / 255.0 if x.dtype == torch.uint8 else x.float()
+        g = x[..., :3].mean(-1) if C >= 3 else x[..., 0]
+        rgb = x[..., :3].permute(0, 3, 1, 2) if C >= 3 else None    # colour static matches on all three channels
         n = g.shape[0]
         costs = []
         for s in shifts:
             c = torch.full_like(g, 4.0)
-            c[:, :, s:] = (g[:, :, s:] - g[:, :, :-s]).abs()
-            c = F.avg_pool2d(c[:, None], window, stride=1, padding=window // 2, count_include_pad=False)[:, 0]
-            costs.append(c)
+            if rgb is not None:
+                c[:, :, s:] = (rgb[:, :, :, s:] - rgb[:, :, :, :-s]).abs().mean(1)
+            else:
+                c[:, :, s:] = (g[:, :, s:] - g[:, :, :-s]).abs()
+            c = F.avg_pool2d(c[:, None], (1, window), stride=1, padding=(0, window // 2), count_include_pad=False)
+            c = F.avg_pool2d(c, (window, 1), stride=1, padding=(window // 2, 0), count_include_pad=False)[:, 0]
+            costs.append(c)                                          # (a box window, as two 1-D passes)
         cv = torch.stack(costs, 0)                                 # [S, n, H, W]
         k = cv.argmin(0)
         S = len(shifts)
@@ -1063,10 +1396,51 @@ def score_text(z, ref, P):
     return f"shape match (IoU) {iou:.3f}; depth error {mae:.3f} overall, {inside:.3f} on the thing"
 
 
+class ValisStatic:
+    DESCRIPTION = ("What the static is made of, for Valis Stereogram and Valis Kinetogram. look: square dots, "
+                   "halftone dots or characters (the Valis v1 ASCII sets, a 10 PRINT maze, katakana...). noise: the "
+                   "grain, named like the colours of noise in sound: white is even TV snow, pink and brown clump "
+                   "into soft blobs (harder to fuse), blue and violet are fine and even with no clumps (easiest to "
+                   "fuse). color: black and white, grey, random RGB, 8-colour RGB, colour-TV static or a palette "
+                   "(the v1 palettes). Cells are copied whole, so a character is never cut.")
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {
+                    "look": (LOOKS, {"default": "squares"}),
+                    "cell": ("INT", {"default": 4, "min": 1, "max": 32, "tooltip": "px across one dot or character (ASCII cells are 1.6x as tall unless cell_height is set)"}),
+                    "noise": (list(SPECTRA), {"default": "white", "tooltip": "white = TV snow; pink, brown = soft clumps; blue, violet = fine even grain"}),
+                    "color": (COLORS, {"default": "black & white", "tooltip": "rgb = every dot a random colour; rgb 8 = the eight corners of RGB; tv = snow with colour blotches; palette = the palette below"}),
+                    "palette": (list(PALETTES) + ["custom"], {"default": "neon"}),
+                    "charset": (list(CHARSETS) + ["custom"], {"default": "minimal", "tooltip": "for look = ascii; light to dense, chosen by the noise"}),
+                },
+                "optional": {
+                    "custom_palette": ("STRING", {"default": "#0b0b10, #f2efe6, #d4462f, #2f6fd4", "tooltip": "HEX, comma separated (palette = custom)"}),
+                    "custom_characters": ("STRING", {"default": " .oO@", "tooltip": "light to dense (charset = custom)"}),
+                    "paper": ("STRING", {"default": "#000000", "tooltip": "behind halftone dots and characters"}),
+                    "cell_height": ("INT", {"default": 0, "min": 0, "max": 64, "tooltip": "px (0 = automatic)"}),
+                }}
+
+    RETURN_TYPES = ("VALIS_STATIC", "IMAGE")
+    RETURN_NAMES = ("static", "preview")
+    FUNCTION = "run"
+    CATEGORY = CAT
+
+    def run(self, look, cell, noise, color, palette, charset, custom_palette="", custom_characters=" .oO@",
+            paper="#000000", cell_height=0):
+        pal = _parse_hex(custom_palette) if palette == "custom" else PALETTES.get(palette)
+        chars = (custom_characters or " .oO@") if charset == "custom" else CHARSETS.get(charset)
+        pp = _parse_hex(paper)
+        k = Static(look, noise, color, pal or PALETTES["neon"], chars, cell, cell_height, pp[0] if pp else (0, 0, 0))
+        prev = k.frame(288, 512, torch.Generator().manual_seed(0))[None]
+        return (k, prev.clamp(0, 1))
+
+
 NODE_CLASS_MAPPINGS = {
     "ValisMaskDepth": ValisMaskDepth,
     "ValisDepthShape": ValisDepthShape,
     "ValisDepthPlace": ValisDepthPlace,
+    "ValisStatic": ValisStatic,
     "ValisStereoPattern": ValisStereoPattern,
     "ValisStereogram": ValisStereogram,
     "ValisKinetogram": ValisKinetogram,
@@ -1076,6 +1450,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ValisMaskDepth": "Valis Mask Depth",
     "ValisDepthShape": "Valis Depth Shape",
     "ValisDepthPlace": "Valis Depth Place",
+    "ValisStatic": "Valis Static",
     "ValisStereoPattern": "Valis Stereo Pattern",
     "ValisStereogram": "Valis Stereogram",
     "ValisKinetogram": "Valis Kinetogram",
