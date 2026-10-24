@@ -783,7 +783,7 @@ const Renders = {
     const hist = await api.history(120).catch(() => ({}));
     for (const e of Object.values(hist || {}).reverse()) for (const f of api.outputsOf(e))
       if ((f.type || "output") === "output" && /^valis|^danse/.test(f.subfolder || "") && !/selftest/.test(f.subfolder || "") && /\.(mp4|webm|png|jpe?g)$/i.test(f.filename) && !/matte|overlay|anchor|_end_|_mask|control/i.test(f.filename)
-          && !Bin.items.some(i => i.file.filename === f.filename && i.file.subfolder === f.subfolder)) Bin.add(f, {from: "ComfyUI", label: f.filename.replace(/_\d+_?\.\w+$/, "")});
+          && !Bin.removed.has(Bin.keyOf(f)) && !Bin.items.some(i => i.file.filename === f.filename && i.file.subfolder === f.subfolder)) Bin.add(f, {from: "ComfyUI", label: f.filename.replace(/_\d+_?\.\w+$/, "")});
     const items = Bin.items.filter(i => i.kind === "clip" || i.kind === "still").slice(0, 160);
     const grid = $("#r-grid");
     grid.replaceChildren(...items.map(it => {

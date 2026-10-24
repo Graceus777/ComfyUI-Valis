@@ -8,26 +8,30 @@ const FILE = "valis/bin.json", MAX = 300;
 const kindOf = (name) => /\.(mp4|webm|mov|mkv|gif)$/i.test(name) ? "clip" : /\.(png|jpe?g|webp)$/i.test(name) ? "still" : /\.(wav|flac|mp3|ogg|m4a)$/i.test(name) ? "audio" : /\.json$/i.test(name) ? "score" : "file";
 
 export const Bin = {
-  items: [], actions: [], loaded: false, listeners: new Set(), el: null, filter: "all",
+  items: [], removed: new Set(), actions: [], loaded: false, listeners: new Set(), el: null, filter: "all",
   async load() {
     if (this.loaded) return this;
-    this.items = (await api.readUser(FILE, null))?.items || [];
+    const saved = await api.readUser(FILE, null);
+    this.items = saved?.items || [];
+    this.removed = new Set(saved?.removed || []);      // what you took out stays out (ComfyUI's history would bring it back)
     this.loaded = true; this.draw();
     return this;
   },
-  save() { clearTimeout(this._t); this._t = setTimeout(() => api.writeUser(FILE, {items: this.items.slice(0, MAX)}).catch(() => {}), 800); },
+  save() { clearTimeout(this._t); this._t = setTimeout(() => api.writeUser(FILE, {items: this.items.slice(0, MAX), removed: [...this.removed].slice(-1000)}).catch(() => {}), 800); },
+  keyOf: (f) => `${f.type || "output"}:${f.subfolder || ""}/${f.filename}`,
   // f: a ComfyUI file {filename, subfolder, type}; meta: {from, label, prompt, ...}. soft: only fill what the item lacks
   // (the catch-all for every finished job must not overwrite the label a tab gave its own result)
   add(f, meta = {}, {soft = false} = {}) {
     if (!f?.filename) return null;
-    const id = `${f.type || "output"}:${f.subfolder || ""}/${f.filename}`;
+    const id = this.keyOf(f);
+    this.removed.delete(id);                           // made again or dropped again: it's wanted
     let it = this.items.find(i => i.id === id);
     if (it) { for (const [k, v] of Object.entries(meta)) if (!soft || it[k] == null) it[k] = v; }
     else { it = {id, kind: kindOf(f.filename), file: {filename: f.filename, subfolder: f.subfolder || "", type: f.type || "output"}, at: Date.now(), ...meta}; this.items.unshift(it); }
     this.save(); this.draw(); this.listeners.forEach(fn => fn(it));
     return it;
   },
-  remove(id) { this.items = this.items.filter(i => i.id !== id); this.save(); this.draw(); },
+  remove(id) { this.items = this.items.filter(i => i.id !== id); this.removed.add(id); this.save(); this.draw(); },
   list(kind) { return this.items.filter(i => !kind || i.kind === kind); },
   on(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
   // tabs register what they can do with an item: {id, label, kinds: ["clip"], run(item)}
