@@ -101,6 +101,9 @@ builds one sound design over the whole film. They are in `ComfyUI/output/finishe
 
 | Film | What drives it |
 |---|---|
+| **THE MAN IN THE SUIT** (2:05) | A straight-faced featurette about the people who say they were inside the 1966 rehearsal suit. Every person in it is invented and speaks in their own MiniMax H3 voice; the library's Projector turns the reel into worn 16 mm (flicker, gate weave, scratches, dust). A YuE2 instrumental score. |
+| **BLUE RIBBON** (53 s) | A 1960s Technicolor caper about a county-fair pie. Every line is spoken by H3 in the shot; trained moves, a dolly zoom, a Wan crash zoom, and a keyframe relit from the daytime fair to the barn at night. A YuE2 score with no lyrics. |
+| **OCCUPIED** (61 s) | An animated comedy short: Krea 2 keyframes in a 3D-feature look, MiniMax H3 shots with their own voices, a YuE2 score with no lyrics. |
 | **DANSE MACABRE** (83 s) | A Valis score. The reveal burns across the dancers on the kicks; version 4 adds the ballroom of 1843, bleeding through on the strings and cutting in on every *oom* of the waltz. |
 | **BURN SEASON: trailer** (71 s) | Cinema Studio end to end: every trained move (crane, push-in, FPV, crash zoom, arc, bullet time), dolly zoom, whip pan, relight, object swap and extend, on Krea 2, MiniMax H3, Wan 2.2 and Qwen Image, to a YuE2 song from Valis's sheet music. |
 | **BURN SEASON** (44 s) | The film: double exposures of the two leads over the burning cane and the swamp, a photograph that burns through on the hits. |
@@ -139,6 +142,8 @@ scikit-image for the Valis engine. The studio makes no request off this machine:
 | [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF) | Qwen Image 2.1 GGUF (Remove) |
 | [ComfyUI-SeedVR2_VideoUpscaler](https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler) | Upscale |
 | [ComfyUI-MiniMaxH3-Loop](https://github.com/pxl-pshr/ComfyUI-MiniMaxH3-Loop) | Create · Loop: H3 shots that play forever |
+| [krea2-anypaint](https://github.com/alexw5702-afk/krea2-anypaint) | Stage: Krea 2 paints the world past the frame (the default dome) |
+| [Plenio Music Production System](https://github.com/jplenio/Plenio-Music-Production-System) | Score Tools: instrumental YuE2 songs (the sheet music's vocal line moves to an instrument) |
 
 SAM 3, MiniMax H3 (and its Fun ControlNet), Wan 2.2, SDPose, Qwen Image 2.1, YuE2 and the video nodes are part of ComfyUI itself.
 
@@ -158,9 +163,13 @@ All are open weights. File names must match: they're listed in `app/js/graphs.js
 | `minimax_h3_video_vae_fp16.safetensors`, `minimax_h3_audio_vae_fp32.safetensors` | `vae` | [Comfy-Org/MiniMax-H3](https://huggingface.co/Comfy-Org/MiniMax-H3) |
 | `MiniMax-H3-FL2VA-Acc-8Step.safetensors` | `pdd_acc` | [alibaba-pai/MiniMax-H3-Acc-LoRAs](https://huggingface.co/alibaba-pai/MiniMax-H3-Acc-LoRAs) |
 | `h3_character_swap_v1.5.safetensors` | `loras` | [akatz-ai/MiniMax-H3-Character-Swap-LoRA](https://huggingface.co/akatz-ai/MiniMax-H3-Character-Swap-LoRA) |
-| `H3-Person-Remover-V1.safetensors` | `loras` | [akatz-ai/MiniMax-H3-Person-Remover-LoRA](https://huggingface.co/akatz-ai/MiniMax-H3-Person-Remover-LoRA) (Remove) |
+| `H3-Person-Remover-V1.safetensors` | `loras` | [akatz-ai/MiniMax-H3-Person-Remover-LoRA](https://huggingface.co/akatz-ai/MiniMax-H3-Person-Remover-LoRA) (Remove; Setup can download it) |
 | `minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors` | `loras` | [RunningHubAI/rh-minimax-h3-ref2v-turbo-8step-v1.0-768p-lora](https://huggingface.co/RunningHubAI/rh-minimax-h3-ref2v-turbo-8step-v1.0-768p-lora) (save under this name) |
+| `fasth3_omniref_8step_pruned_int8_convrot.safetensors` | `diffusion_models` | [FastVideo/FastH3-Omni-Comfy](https://huggingface.co/FastVideo/FastH3-Omni-Comfy) (optional: Renders · Engine, an 8-step ref2va for Transform, Swap and Genjutsu; Setup can download it) |
 | `sam3.1_multiplex_fp16.safetensors` | `checkpoints` | [Comfy-Org/sam3.1](https://huggingface.co/Comfy-Org/sam3.1) |
+| `depth_anything_3_small.safetensors` | `geometry_estimation` | [Comfy-Org/Depth-Anything-3](https://huggingface.co/Comfy-Org/Depth-Anything-3), Apache-2.0 (Stage depth, the stereogram) |
+| `krea2_anypaint_rank32.safetensors` | `loras` | [yijunwang2/krea2-anypaint](https://huggingface.co/yijunwang2/krea2-anypaint), Krea 2 Community License (Stage: the world past the frame) |
+| `qwen-image-2.1-outpaint-v2.safetensors` | `loras` | [ausboss/Qwen-Image-2.1-Outpaint-LoRA](https://huggingface.co/ausboss/Qwen-Image-2.1-Outpaint-LoRA), Qwen Research License (Stage: the Qwen dome) |
 | `qwen_image_2.1-Q6_K.gguf` | `unet` | any Q6_K GGUF of Qwen Image 2.1, e.g. [unsloth/Qwen-Image-2.1-GGUF](https://huggingface.co/unsloth/Qwen-Image-2.1-GGUF) (Remove) |
 | `qwen3vl_8b_w4a8.safetensors`, `qwen_image_2.1_vae_bf16.safetensors` | `text_encoders`, `vae` | [Comfy-Org/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1) (Remove, Relight) |
 | `yue2_3b_bf16.safetensors` | `checkpoints` | the YuE2 checkpoint for ComfyUI's native YuE2 nodes (FX · *New song* only) |
@@ -248,7 +257,7 @@ these graphs. `--api` / `--key` point the CLI at Comfy Cloud or a Comfy API depl
 - `node tests/ui/run.mjs`: the studio clicked through in a headless browser against a stand-in ComfyUI
   (`tests/ui/mock_server.mjs`), with a screenshot of every screen.
 - **Renders → End-to-end test** (or `(await import("/valis/app/js/selftest.js")).run()` in the browser console): short,
-  low-resolution renders on the GPU through the studio's own code. 14 Create combinations (IMAX 65mm + fisheye + 1950s
+  low-resolution renders on the GPU through the studio's own code. 15 Create combinations (IMAX 65mm + fisheye + 1950s
   + noir, Super 8, VHS, trained moves, Wan, custom palettes, an end frame, a loop, relight, a cast character), then the
   chains after them: extend, lead-in, upscale, find, transform, remove, swap, turn, Genjutsu's three modes and source
   check, FX on a cue sheet, a song, a YuE2 song and a loop, the stereogram, a score made from a song and cut on its bars,

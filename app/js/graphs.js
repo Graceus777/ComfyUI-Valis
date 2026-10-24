@@ -443,7 +443,11 @@ export function removePerson({video, audio, target, anchorPrompt, grow = 8, mega
     // back at the source's size; outside the grown, feathered mask the source's own pixels
     "15": N("GetImageSize", {image: ["18", 0]}),
     "16u": N("ImageScale", {image: ["14", 0], upscale_method: "lanczos", width: ["15", 0], height: ["15", 1], crop: "disabled"}),
-    "17k": N("GrowMaskWithBlur", {mask: ["23", 0], expand: 16, incremental_expandrate: 0, tapered_corners: true, flip_input: false, blur_radius: 8, lerp_alpha: 1, decay_factor: 1}),
+    // the mask grown 16 px and feathered 8 (core nodes only)
+    "17g": N("GrowMask", {mask: ["23", 0], expand: 16, tapered_corners: true}),
+    "17i": N("MaskToImage", {mask: ["17g", 0]}),
+    "17b": N("ImageBlur", {image: ["17i", 0], blur_radius: 8, sigma: 4.0}),
+    "17k": N("ImageToMask", {image: ["17b", 0], channel: "red"}),
     "18k": N("ImageCompositeMasked", {destination: ["18", 0], source: ["16u", 0], x: 0, y: 0, resize_source: false, mask: ["17k", 0]}),
     "50": N("MaskToImage", {mask: ["23", 0]}),
     "51": N("CreateVideo", {images: ["50", 0], fps: 24}),

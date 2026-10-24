@@ -670,20 +670,45 @@
       "crop": "disabled"
     }
   },
-  "17k": {
-    "class_type": "GrowMaskWithBlur",
+  "17g": {
+    "class_type": "GrowMask",
     "inputs": {
       "mask": [
         "23",
         0
       ],
       "expand": 16,
-      "incremental_expandrate": 0,
-      "tapered_corners": true,
-      "flip_input": false,
+      "tapered_corners": true
+    }
+  },
+  "17i": {
+    "class_type": "MaskToImage",
+    "inputs": {
+      "mask": [
+        "17g",
+        0
+      ]
+    }
+  },
+  "17b": {
+    "class_type": "ImageBlur",
+    "inputs": {
+      "image": [
+        "17i",
+        0
+      ],
       "blur_radius": 8,
-      "lerp_alpha": 1,
-      "decay_factor": 1
+      "sigma": 4
+    }
+  },
+  "17k": {
+    "class_type": "ImageToMask",
+    "inputs": {
+      "image": [
+        "17b",
+        0
+      ],
+      "channel": "red"
     }
   },
   "18k": {
