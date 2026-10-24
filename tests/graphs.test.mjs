@@ -78,6 +78,15 @@ for (const move of P.CAMERA_MOVES) for (const aspect of Object.keys(CR.KEY_SIZES
 }
 // loops through the planner
 valid("Create · loop", (await CR.planShot({...base, move: "static", seconds: 6.4, opts: {loop: true, loopEngine: "full"}}, env)).graph);
+// the sound H3 is told: the scene as sound (a pinned last frame with "quiet room tone" came out silent), or yours
+{
+  const lc = await CR.planShot({...base, move: "push_in", opts: {trained: false, lightChange: true}, relit: "r.png [output]"}, env);
+  const i2v = Object.values(lc.graph).find(x => x.class_type === "MiniMaxH3ImageToVideo");
+  ok(i2v && /overall_soundscape:\nThe sound of the scene as it happens, a woman in a red coat on a pier; she turns to the sea\./.test(i2v.inputs.prompt) && i2v.inputs.last_frame,
+     "Create · a light change hears its scene", i2v?.inputs.prompt.slice(-260));
+  const own = await CR.planShot({...base, move: "static", sound: "rain on a tin roof", opts: {trained: false}}, env);
+  ok(/overall_soundscape:\nrain on a tin roof\n/.test(Object.values(own.graph).find(x => x.class_type === "MiniMaxH3ImageToVideo").inputs.prompt), "Create · your own sound");
+}
 
 // ---- prompts
 const words = (s) => s.toLowerCase().match(/[a-z0-9-]+/g) || [];

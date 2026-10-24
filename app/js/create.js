@@ -94,6 +94,7 @@ export function keyframePrompt(C0) {
                 lookIsAuto ? s.grade : mono ? "" : lookWords(C)].filter(Boolean).join(", ");
   return [lead, medium, era, first, shot, look].map(sentence).filter(Boolean).join(" ");
 }
+export const soundPrompt = (C) => P.soundPrompt({subject: C.subject || "", action: C.action || "", sound: C.sound || ""});
 export function motionPrompt(C0) {
   const C = normalize(C0);
   const action = [(C.action || "").trim(), C.emotion?.words].filter(Boolean).join("; ");
@@ -162,5 +163,6 @@ export async function planShot(C0, env) {
   return {...base, seconds: secs, notes,
     label: trained ? `Shot · ${C.move.name} (${trained.lora ? "trained" : whip ? "ramped" : "locked"})` : "Shot",
     graph: G.shot({image, motion, width, height, seconds: secs, seed, look, end: lightLast ? null : end, last: lightLast, trimHold: trimHold && !lightLast, dolly, whip, prefix,
+                   soundscape: soundPrompt(C) || undefined,
                    ...(trained?.lora ? {loras: [{name: trained.lora, strength: trained.strength}], raw: trained.raw({subject: who, scene})} : {})})};
 }

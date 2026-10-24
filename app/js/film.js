@@ -155,6 +155,7 @@ export async function shootShots(plan, io, {genre = null, only = null, onStage =
     const seed = s.shotSeed ?? 51101 + k, fresh = only || s.shotSeed != null || plan.size || plan.shotSeconds;
     const r = (!fresh && await saved(io, [`${b}_shot_${k + 1}_00001_.mp4`], plan)) || await io.run(
       G.shot({image: io.ref(s.key), motion: P.motionPrompt({genre, move: push, action: s.motion}), seconds: len, width: w, height: h, seed,
+              soundscape: P.soundPrompt({subject: s.keyframe || "", action: s.motion || ""}) || undefined,
               prefix: `${pre(plan)}_shot_${k + 1}${fresh ? `_s${seed}` : ""}`}), `Film · shot ${k + 1}`);
     s.clip = r.outputs.find(isVideo) || null; s.fx = null; s.clipSeconds = len;
     if (!s.clip) throw new Error(`shot ${k + 1} saved no video`);

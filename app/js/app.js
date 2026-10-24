@@ -116,7 +116,7 @@ function finishBar(el, f, viewer, strip) {
 const C = {genre: null, framing: null, focal: null, light: null, setup: null, body: null, kit: null, era: null, emotion: null, tempo: null, move: null,
            look: {id: "auto"}, gradeShot: true, aspect: "9:16", short: CR.NATIVE_SHORT, seconds: 107 / 24, seed: 7101, shotSeed: 51101,
            opts: {trained: true, anchor: false, trim: true, lightChange: false}, character: null, picked: null, relit: null, keys: []};
-const cstate = () => ({...C, subject: $("#c-subject").value, action: $("#c-action").value, who: $("#c-who").value});
+const cstate = () => ({...C, subject: $("#c-subject").value, action: $("#c-action").value, who: $("#c-who").value, sound: $("#c-sound").value});
 const env = {hasNode: (n) => api.hasNode(n), hasLora: (n) => api.hasLora(n)};
 const cs = {};                                         // the panel's sections, by key
 const lab = (t, tip = null) => h("h3", {class: "lab", tip}, t);
@@ -192,7 +192,7 @@ function buildCreate() {
     C.gradeShot = $("#c-grade-shot").checked; cchanged(); }));
   $("#c-seed").addEventListener("input", (e) => { C.seed = Number(e.target.value) || 0; cchanged(); });
   $("#c-shot-seed").addEventListener("input", (e) => { C.shotSeed = Number(e.target.value) || 0; cchanged(); });
-  ["#c-subject", "#c-action", "#c-who"].forEach(s => $(s).addEventListener("input", cchanged));
+  ["#c-subject", "#c-action", "#c-who", "#c-sound"].forEach(s => $(s).addEventListener("input", cchanged));
   // which trained moves are installed here: ✦ for installed, dimmed ✦ for not
   for (const t of $$("#c-move .tm")) api.hasLora(t.dataset.lora).then(ok => { t.classList.toggle("off", !ok); if (!ok) t.closest(".chip").dataset.tip += "<br><b>Its LoRA isn't installed here</b>: H3 does it from words."; });
   const RL = $("#c-relight");
@@ -245,7 +245,7 @@ function cchanged() {
   cs.perf.setValue([C.emotion?.id !== "neutral" ? C.emotion?.name : null, C.tempo?.name].filter(Boolean).join(" · "));
   cs.format.setValue(`${C.aspect} · ${size.w}×${size.h} · ${(f / 24).toFixed(1)} s`);
   cs.char.setValue(C.character ? "set" : "none");
-  $("#c-prompts").textContent = `KEYFRAME (Krea 2)\n${CR.keyframePrompt(S)}\n\nMOTION (MiniMax H3)\n${CR.motionPrompt(S)}`;
+  $("#c-prompts").textContent = `KEYFRAME (Krea 2)\n${CR.keyframePrompt(S)}\n\nMOTION (MiniMax H3)\n${CR.motionPrompt(S)}\n\nSOUND (MiniMax H3)\n${CR.soundPrompt(S) || "the place's own sound"}`;
   clearTimeout(ctimer); ctimer = setTimeout(cestimates, 250);
 }
 async function cestimates() {

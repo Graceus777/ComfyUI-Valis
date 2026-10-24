@@ -80,6 +80,13 @@ export function keyframePrompt({genre, framing, lens, light, grade, subject}) {
   return parts.filter(Boolean).join(" ");
 }
 
+// What H3 is told it hears. A shot told only "quiet room tone" came out silent whenever a last frame was pinned (a light
+// change: -91 dB on three seeds); told the scene itself as sound, it played it on every seed, pinned or not.
+export function soundPrompt({subject = "", action = "", sound = ""} = {}) {
+  if (sound.trim()) return sound.trim();
+  const scene = [subject.trim(), action.trim()].filter(Boolean).join("; ").replace(/[.;,\s]+$/, "");
+  return scene ? `The sound of the scene as it happens, ${scene}. Everything in the picture is heard: its people and creatures, their steps and movements, the place around them.` : "";
+}
 export function motionPrompt({genre, move, action}) {
   const sc = (genre?.style || "").split(",")[0];
   return `${sc}. The scene begins exactly as shown in the first frame and comes alive: ${action || "subtle natural motion"}. ${move?.words || ""}`.trim();
