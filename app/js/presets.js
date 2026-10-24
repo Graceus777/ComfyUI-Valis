@@ -1,4 +1,25 @@
 // The director's panel. Every choice becomes words in the keyframe prompt (Krea 2) or the motion prompt (H3).
+// `style` is the genre in one sentence (the Film tab and the motion prompt use it). `slots` is the same look in parts:
+// Create puts each part in the prompt only while you haven't chosen something for that slot yourself, so a genre's
+// "shot on 35mm" never fights the IMAX body you picked, and its moonlight never fights your firelight.
+// "auto" in a list = the genre decides (its slot words go in the prompt instead)
+const AUTO = {id: "auto", name: "From genre", words: "", tip: "Leave it to the genre: its own words for this go in the prompt."};
+export const GENRE_SLOTS = {
+  gothic: {medium: "Cinematic live-action film still", mood: "dark and moody gothic horror, drifting mist", body: "shot on 35mm",
+           light: "cold blue moonlight against warm candlelight", grade: "high contrast, fine film grain, sharp focus"},
+  noir: {medium: "Film noir still", mood: "wet streets, cigarette smoke", era: "set in the 1940s", light: "hard venetian-blind shadows",
+         grade: "black-and-white, deep blacks, silver grain"},
+  neon: {medium: "Cinematic sci-fi still", mood: "rain-soaked city at night, volumetric haze", light: "magenta and cyan neon reflections",
+         kit: "anamorphic flares", grade: "saturated neon colour"},
+  fairytale: {medium: "Painterly dark fairy-tale film still", mood: "enchanted forest, fog", light: "shafts of golden light through the fog",
+              grade: "rich saturated colour, soft bloom"},
+  western: {medium: "Widescreen western film still", mood: "dusty frontier town", light: "harsh desert sun", body: "Kodak film grain",
+            grade: "warm ochre palette"},
+  music: {medium: "Stylised music video still", mood: "haze, graphic composition", light: "strong silhouette backlight", grade: "bold colour, crisp"},
+  documentary: {medium: "Natural documentary still", mood: "handheld realism", light: "available light", kit: "shallow depth of field",
+                grade: "true-to-life colour"},
+  fantasy: {medium: "Epic fantasy film still", mood: "vast scale, dramatic clouds, rich textures", light: "rim light", grade: "cinematic grade"},
+};
 export const GENRES = [
   {id: "gothic", name: "Gothic horror", thumb: "gothic.jpg", style: "Cinematic live-action film still, shot on 35mm, dark and moody gothic horror, high contrast, cold blue moonlight against warm candlelight, drifting mist, fine film grain, sharp focus."},
   {id: "noir", c1: "#4a4a52", c2: "#0b0b0d", name: "Film noir", thumb: "noir.jpg", style: "Black-and-white film noir still, 1940s, hard venetian-blind shadows, wet streets, cigarette smoke, deep blacks, silver grain."},
@@ -18,12 +39,14 @@ export const FRAMING = [
 ];
 
 export const LENS = [
+  {id: "auto", name: "Any", words: "", tip: "No focal length in the prompt (a lens kit like fisheye or macro sets its own)."},
   {id: "18", name: "18mm", words: "ultra-wide 18mm lens, deep perspective"}, {id: "35", name: "35mm", words: "35mm lens"},
   {id: "50", name: "50mm", words: "50mm lens, natural perspective"}, {id: "85", name: "85mm", words: "85mm portrait lens, creamy background blur"},
   {id: "135", name: "135mm", words: "135mm telephoto, compressed background"}, {id: "macro", name: "Macro", words: "macro lens, tiny details large"},
 ];
 
 export const LIGHT = [
+  AUTO,
   {id: "moon", name: "Moonlight", words: "cold blue moonlight"}, {id: "candle", name: "Candlelight", words: "warm flickering candlelight"},
   {id: "golden", name: "Golden hour", words: "low golden-hour sun"}, {id: "neon", c1: "#7a2a8a", c2: "#0a1a2a", name: "Neon", words: "saturated neon light"},
   {id: "overcast", name: "Overcast", words: "soft overcast light"}, {id: "back", name: "Backlit", words: "strong backlight, glowing rim light"},
@@ -151,6 +174,7 @@ export const CAMERA_MOVES = [
 ];
 
 export const BODIES = [
+  AUTO,
   {id: "digital", name: "Digital cinema", words: "shot on a large-format digital cinema camera, clean and sharp"},
   {id: "35mm", name: "35mm film", words: "shot on 35mm film, natural grain, rich colour"},
   {id: "16mm", name: "16mm film", words: "shot on 16mm film, visible grain, soft and warm"},
@@ -165,6 +189,7 @@ export const BODIES = [
 ];
 
 export const LENS_KITS = [
+  AUTO,
   {id: "spherical", name: "Clean primes", words: "clean modern spherical prime lens"},
   {id: "anamorphic", name: "Anamorphic", words: "anamorphic lens, oval bokeh, horizontal blue lens flares"},
   {id: "vintage", name: "Vintage", words: "vintage lens, soft glowing highlights, swirly bokeh"},
@@ -173,6 +198,7 @@ export const LENS_KITS = [
 ];
 
 export const ERAS = [
+  AUTO,
   {id: "1920s", name: "1920s", words: "set in the 1920s, period costume and props", look: "sepia"},
   {id: "1940s", name: "1940s", words: "set in the 1940s, period costume and props", look: "noir"},
   {id: "1950s", name: "1950s", words: "set in the 1950s, period costume and props", look: "technicolor"},
@@ -182,7 +208,7 @@ export const ERAS = [
   {id: "1990s", name: "1990s", words: "set in the 1990s, period costume and props", look: "film_colors"},
   {id: "2000s", name: "2000s", words: "set in the 2000s, period costume and props", look: "camcorder"},
   {id: "2010s", name: "2010s", words: "set in the 2010s", look: "teal_orange"},
-  {id: "today", name: "Today", words: "", look: "natural"},
+  {id: "today", name: "Today", words: "set in the present day", look: "natural"},
 ];
 
 export const TEMPO = [
@@ -194,7 +220,7 @@ export const TEMPO = [
 ];
 
 export const LIGHTING = [
-  {id: "auto", name: "Auto", words: ""},
+  {id: "auto", name: "None", words: "", tip: "No lighting setup words: the light source above decides."},
   {id: "silhouette", name: "Silhouette", words: "the subject in silhouette against a bright background"},
   {id: "practicals", name: "Practicals", words: "lit only by practical lamps in the scene, pools of warm light"},
   {id: "window", name: "Window", words: "soft directional light from a large window"},
