@@ -221,6 +221,8 @@ export class ScoreView {
     toast(i ? `${i} shot${i > 1 ? "s" : ""} got a clip from the bin` : "No clips in the bin yet", !i);
   }
   sectionAt(t) { return (this.sc.sections || []).find(s => t >= s.start - 1e-6 && t < s.end); }
+  // for the FX tab's "Score" lanes: the score (uploaded to input/) and its song
+  async forFx() { if (!this.sc) return null; return {score: await this.ensureScore(), audio: this.audioRef, title: this.sc.title}; }
   async ensureScore() {
     if (this.scoreRef) return this.scoreRef;
     const u = await api.upload(this.scoreFile);

@@ -421,3 +421,16 @@ body.binopen .view { height: calc(100vh - 56px - 168px); }
 #sg-then .rule { display: grid; grid-template-columns: 1.4fr 1fr 64px 60px 28px; gap: 4px; cursor: pointer; }
 #sg-then .rule.on { outline: 1px solid var(--accent2); border-radius: 6px; }
 #sg-then .rule select, #sg-then .rule input[type=number] { padding: 6px; font-size: 12px; }
+
+/* the action bar at the foot of a panel: solid, so nothing shows through it */
+.cta { background: var(--panel); border-top: 1px solid var(--line); box-shadow: 0 -14px 20px -8px var(--panel); padding-top: 12px; z-index: 3; }
+.panel { padding-bottom: 96px; }
+.btn .sub:empty { display: none; }
+/* score: the source is a set of chips, not a wrapped pill */
+#s-source.seg.wrap { background: none; border: 0; padding: 0; gap: 6px; }
+#s-source.seg.wrap button { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 5px 11px; }
+#s-source.seg.wrap button.on { background: var(--accent2); color: #0b0b10; border-color: var(--accent2); font-weight: 600; box-shadow: none; }
+/* renders: the gallery is the bin, big */
+#r-grid .thumb .meta { font-size: 11.5px; }
+.rq-ctl { display: flex; gap: 6px; margin: 0 0 8px; }
+.rq-ctl .btn { flex: 1; padding: 7px 10px; font-size: 12px; }

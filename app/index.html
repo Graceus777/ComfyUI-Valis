@@ -114,8 +114,8 @@
       <label class="check" style="margin-top:10px"><input type="checkbox" id="g-audio" checked> keep the source's sound</label>
       <label class="check"><input type="checkbox" id="g-turbo"> turbo (8 steps, faster, a little rougher)</label>
       <div class="cta">
-        <button class="btn" id="g-check" disabled>Check source<span class="sub">pose only · ~3 min</span></button>
-        <button class="btn primary" id="g-run" disabled>Cast it<span class="sub">H3 + Fun ControlNet · ~6–8 min</span></button>
+        <button class="btn" id="g-check" disabled>Check source<span class="sub">pose only</span></button>
+        <button class="btn primary" id="g-run" disabled>Cast it<span class="sub">H3 + Fun ControlNet</span></button>
       </div>
     </aside>
     <div class="stage">
@@ -173,8 +173,8 @@
       </div>
       <label class="row" style="margin-top:12px; gap:8px"><input type="checkbox" id="e-audio" checked style="flex:0"> <span style="flex:1">Keep the clip's own sound</span></label>
       <div class="cta">
-        <button class="btn" id="e-find">Find it<span class="sub">SAM 3 · ~30 s</span></button>
-        <button class="btn primary" id="e-render" disabled>Render<span class="sub">H3 masked · ~12 min</span></button>
+        <button class="btn" id="e-find">Find it<span class="sub">SAM 3</span></button>
+        <button class="btn primary" id="e-render" disabled>Render<span class="sub">H3 masked</span></button>
       </div>
     </aside>
     <div class="stage">
@@ -255,7 +255,7 @@
       <label class="check"><input type="checkbox" id="f-sound" checked> every effect makes its own sound, on the same cue</label>
       <div class="chips" id="f-beds" style="margin-top:8px"></div>
       <div class="cta">
-        <button class="btn ember" id="f-render" style="flex:1" disabled>Render<span class="sub">Valis · CPU · ~1 min per 4 s</span></button>
+        <button class="btn ember" id="f-render" style="flex:1" disabled>Render<span class="sub">Valis</span></button>
       </div>
     </aside>
     <div class="stage">
@@ -321,7 +321,7 @@
       <h2>Still</h2>
       <div class="drop" id="sg-still">Drop a still: a keyframe, a painting, a photo</div>
       <textarea id="sg-prompt" rows="3" spellcheck="true" style="margin-top:8px" placeholder="…or describe one: a vampire lord at a stone table, two braziers burning, a brick arch behind him"></textarea>
-      <button class="btn" id="sg-make" style="margin-top:6px;width:100%">Make the set from words<span class="sub">Krea 2 paints the still, then sharpen and split · one GPU job · ~1–2 min</span></button>
+      <button class="btn" id="sg-make" style="margin-top:6px;width:100%">Make the set from words<span class="sub">Krea 2 paints the still, then sharpen and split · one GPU job</span></button>
       <div class="row" style="margin-top:6px"><label class="hint" style="margin:0;flex:0 0 auto" title="the same seed paints the same still: change a name or a setting and make it again to compare">seed</label><input type="number" id="st-seed" value="7101" min="0" step="1" style="flex:1"><button class="btn" id="st-reseed" style="flex:0 0 auto" title="a new random seed, then make the set">Try another seed</button></div>
       <select id="sg-open" style="margin-top:8px"></select>
       <h2>What's in it</h2>
@@ -343,7 +343,7 @@
         <div class="seg" id="sg-ease" style="margin-top:10px"></div>
         <div class="seg" id="sg-edge" style="margin-top:8px"></div>
         <div class="seg" id="st-domeeng" style="margin-top:8px" title="which model paints the world past the frame"></div>
-        <button class="btn" id="sg-paintdome" style="margin-top:8px;width:100%">Paint what the camera uncovers<span class="sub" id="st-domesub">the world past the frame and behind the people and things in it · Qwen Image 2.1 · ~2 min</span></button>
+        <button class="btn" id="sg-paintdome" style="margin-top:8px;width:100%">Paint what the camera uncovers<span class="sub" id="st-domesub">the world past the frame and behind the people and things in it · Qwen Image 2.1</span></button>
         <div class="row" style="margin-top:10px"><label class="hint" style="margin:0;flex:0 0 auto">move starts at</label><input type="number" id="sg-camstart" value="0" min="0" step="0.05"><select id="sg-punch"><option value="none">no punch</option></select></div>
         <div class="map" id="sg-then" style="margin-top:8px"></div>
         <button class="btn" id="sg-addthen" style="margin-top:8px;width:100%">+ then another move</button>
@@ -389,6 +389,7 @@
   <section class="view" id="view-renders">
     <aside class="panel">
       <h2>Queue</h2>
+      <div class="rq-ctl"><button class="btn" id="r-free">Free memory</button><button class="btn" id="r-stop">Stop current</button></div>
       <div class="map" id="r-queue"></div>
       <p class="hint" id="r-queue-empty">Nothing running.</p>
       <h2>Setup</h2>
@@ -407,15 +408,11 @@
       <p class="hint">Short, low-resolution renders through the studio's own buttons: every Create combination (bodies, lenses, eras, palettes, trained moves, loops, relight, a cast character), each output checked for size, length, motion, colour and sound.</p>
       <div id="r-tests" class="map"></div>
       <div class="row" style="margin-top:8px"><button class="btn" id="r-test-run">Run the test</button><button class="btn" id="r-test-stop">Stop after this one</button></div>
-      <div class="cta">
-        <button class="btn" id="r-free">Free memory</button>
-        <button class="btn" id="r-stop">Stop current</button>
-      </div>
     </aside>
     <div class="stage">
       <div>
         <h1>Renders</h1>
-        <p class="lede">Everything the studio has made. Click a clip to edit it or to use it as the next shot's first frame.</p>
+        <p class="lede">Everything the studio has made (the bin, kept between sessions). Click anything to send it to a tab: a still becomes Create's first frame, a clip goes to Edit, FX, Genjutsu, a Film shot or Extras.</p>
       </div>
       <div id="r-test-results"></div>
       <div class="strip" id="r-grid"></div>

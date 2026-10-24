@@ -10,6 +10,7 @@ import * as api from "./api.js";
 import * as G from "./graphs.js";
 import * as P from "./presets.js";
 import * as CR from "./create.js";
+import {planFilm, makeFilm} from "./film.js";
 
 const SCENES = {
   street: {subject: "a man in a long dark coat and a hat standing under a streetlamp on a wet city street at night",
@@ -41,6 +42,35 @@ export const TESTS = [
   c("c13", "Relight to contre-jour, then a light change shot", "market", {genre: "documentary", look: {id: "film_colors"}, move: "push_in", opts: {trained: false, lightChange: true}, relight: "contre_jour"}),
   c("c14", "Character from another keyframe (Krea identity edit), Kodak 2383", "street", {genre: "gothic", look: {id: "kodak_2383"}, move: "static", cast: "c03"}),
 ];
+
+// Chains: what comes after Create, fed with the clips and stills the Create combinations made (this run's, or the last
+// run that made them). Each runs one more tab's button on them.
+const x = (id, label, needs, fn, expect = {}) => ({id, suite: id.startsWith("x0") || id.startsWith("x1") ? "chain" : "chain", label, needs, fn, expect});
+const L = (effect, on, params = {}) => ({effect, on, params: {...(G.LIBRARY.find(l => l.id === effect)?.params || {}), ...params}});
+TESTS.push(
+  x("x01", "Extend: 5 s more after the market shot", ["c03"], (s) => G.extend({video: s.c03, clipSeconds: 3.04, width: 384, height: 672, action: "she keeps walking toward the camera", direction: "forward", prefix: s.pre}), {width: 384, height: 672, minSeconds: 6}),
+  x("x02", "Lead-in: 5 s before the street shot", ["c01"], (s) => G.extend({video: s.c01, clipSeconds: 3.04, width: 384, height: 672, action: "he walks up to the streetlamp", direction: "backward", prefix: s.pre}), {width: 384, height: 672, minSeconds: 6}),
+  x("x03", "Upscale the market shot (SeedVR2, to 720)", ["c03"], (s) => G.upscale({video: s.c03, resolution: 720, prefix: s.pre}), {minShort: 700}),
+  x("x04", "Edit · Find it: the woman (SAM 3)", ["c03"], (s) => G.maskPreview({video: s.c03, target: "the woman", prefix: s.pre}), {}),
+  x("x05", "Edit · Transform her dress into liquid chrome", ["c03"], (s) => { const lk = P.LOOKS.find(l => l.id === "chrome");
+    return G.edit({mode: "transform", video: s.c03, target: "her dress", anchorPrompt: lk.anchor.replaceAll("{T}", "her dress"), desc: lk.desc, who: "her dress", keep: lk.keep, refBoost: lk.rb, grow: 12, prefix: s.pre}); }, {audio: true}),
+  x("x06", "Edit · Remove the man (Qwen plates + H3)", ["c01"], (s) => G.edit({mode: "remove", video: s.c01, target: "the man", anchorPrompt: P.REMOVE_PROMPT.replaceAll("{T}", "the man"),
+    desc: "gone: only the background continues where the man was", who: "the man", refBoost: 1, grow: 12, prefix: s.pre}), {}),
+  x("x07", "Edit · Swap the woman for the street's man (character swap, turbo)", ["c03", "k:c01"], (s) => G.swapFull({video: s.c03, character: s["k:c01"], prompt: G.swapPrompt({target: "the woman", look: "a man in a long dark coat and a hat"}), person: "woman", turbo: true, megapixels: 0.26, prefix: s.pre}), {audio: true}),
+  x("x08", "Edit · Turn: the market take turns into the relit take, voice too", ["c03", "c13"], (s) => G.turn({a: s.c03, b: s.c13, swapAt: 1.5, person: "woman", voice: true, prefix: s.pre}), {}),
+  x("x09", "Genjutsu · motion transfer: the astronaut walks like the woman", ["c03", "k:c09"], (s) => G.genjutsu({video: s.c03, refs: [s["k:c09"]], prompt: P.genjutsuPrompt({mode: "motion", refs: [{role: "character"}]}), mode: "motion", seconds: 3, megapixels: 0.26, turbo: true, prefix: s.pre}), {audio: true}),
+  x("x10", "Genjutsu · restyle the street shot as clay", ["c01"], (s) => G.genjutsu({video: s.c01, refs: [], prompt: P.genjutsuPrompt({mode: "restyle", style: P.GENJUTSU_STYLES[0]}), mode: "restyle", seconds: 3, megapixels: 0.26, turbo: true, prefix: s.pre}), {}),
+  x("x11", "Genjutsu · object swap: her dress becomes the sepia canyon", ["c03", "k:c07"], (s) => G.genjutsu({video: s.c03, refs: [s["k:c07"]], prompt: P.genjutsuPrompt({mode: "swap", refs: [{role: "outfit"}], target: "her red dress"}), mode: "swap", target: "her red dress", seconds: 3, megapixels: 0.26, turbo: true, prefix: s.pre, cn: G.MODELS.funCN2}), {}),
+  x("x12", "Genjutsu · source check (SDPose + Valis Pose Check)", ["c03"], (s) => G.poseCheck({video: s.c03, seconds: 3, prefix: s.pre}), {any: true}),
+  x("x13", "FX · Punch + Glitch + Shockwave on a cue sheet", ["c01"], (s) => G.fx({clip: s.c01, source: "sheet", cueSheet: G.CUE_SHEET_EXAMPLE, layers: [L("Punch", "kick"), L("Glitch", "beat"), L("Shockwave", "downbeat", {at: "center"})], sound: true, seconds: 3.04, prefix: s.pre}), {audio: true}),
+  x("x14", "FX · Echo on the woman + Rays, on a song", ["c03", "song"], (s) => G.fx({clip: s.c03, subject: "the woman", source: "song", audio: s.song, layers: [L("Echo", "beat"), L("Rays", "kick")], sound: true, seconds: 3.04, prefix: s.pre}), {audio: true}),
+  x("x15", "FX · a song YuE2 writes (10 s) + Frost on its notes", ["c06"], (s) => G.fx({clip: s.c06, source: "write", songSpec: {style: "slow cello, sea shanty, 80 BPM", lyrics: "[Instrumental]", seconds: 10}, layers: [L("Frost", "melody")], sound: true, seconds: 2.71, prefix: s.pre}), {audio: true}),
+  x("x16", "FX · Datamosh on the loop, looping with it", ["c12"], (s) => G.fx({clip: s.c12, source: "sheet", cueSheet: "bpm 96 4/4\nevery 1 beat from 0 to 4.25 kick", layers: [L("Datamosh", "kick")], loop: true, prefix: s.pre}), {audio: true}),
+  x("x17", "Extras · stereogram, kinetogram and decode check on the market shot", ["c03"], (s) => G.stereo({video: s.c03, target: "the woman", maxObjects: 1, shape: "torus", prefix: s.pre}), {any: true}),
+  x("x18", "Score · made from a song, two shots with library effects, cut on the bars", ["c03", "c01", "song"], "score", {audio: true}),
+  x("x19", "Film · one line to a two-shot film at 384 px (Qwen3, YuE2, Krea, H3, effects, cut)", [], "film", {audio: true}),
+  x("x20", "Extras · Stage: split the market still into layers", ["k:c03"], (s) => G.stage({image: s["k:c03"], names: ["the woman in the red dress", "the market stalls", "the sky"], name: `selftest_${s.run}`, far: 6}), {any: true, noVideo: true}),
+);
 
 // ---------------------------------------------------------------------------------------------------------- checks
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -144,6 +174,72 @@ async function runCreate(t, ctx, log) {
   return checks.every(c => c.pass);
 }
 
+// what the chains are fed: this run's results, else the newest earlier run that made them
+async function sources(ctx) {
+  if (ctx.src) return ctx.src;
+  const src = {};
+  let list = [];
+  try { list = await (await fetch(`/api/userdata?dir=${encodeURIComponent("valis/selftest")}&recurse=false&full_info=true`)).json(); } catch { /* none */ }
+  const files = (Array.isArray(list) ? list : []).map(f => f.path || f).filter(f => /\d{8}T\d{6}\.json$/.test(f)).sort().reverse();
+  for (const f of files) {
+    const r = await api.readUser(`valis/selftest/${f.replace(/^.*\//, "")}`);
+    for (const t of r?.tests || []) {
+      if (t.shot && !src[t.id]) src[t.id] = api.fileRef(t.shot);
+      if (t.keyframe && !src[`k:${t.id}`]) src[`k:${t.id}`] = api.fileRef(t.keyframe);
+    }
+  }
+  for (const [k, v] of Object.entries(ctx.shots)) src[k] = api.fileRef(v);
+  for (const [k, v] of Object.entries(ctx.keys)) src[`k:${k}`] = api.fileRef(v);
+  src.song = "danse_score.wav";             // a song in ComfyUI/input (the DANSE MACABRE score's audio)
+  return (ctx.src = src);
+}
+async function checkOut(outs, exp, log) {
+  const vids = outs.filter(isVid), imgs = outs.filter(isImg);
+  const checks = [];
+  if (exp.noVideo) { checks.push({name: "made something", pass: outs.length > 0 || !!exp.any, detail: `${outs.length} files`}); log({checks}); return checks.every(c => c.pass); }
+  if (!vids.length) { checks.push({name: "a video", pass: false, detail: `outputs: ${outs.map(o => o.filename).join(", ") || "none"}`}); log({checks}); return false; }
+  const v = vids.find(f => !/_decoded|_kinetogram|overlay|_control_|_mask/.test(f.filename)) || vids[0];
+  const m = await inspectVideo(api.viewUrl(v));
+  checks.push(...verdicts(m, {width: exp.width, height: exp.height, audio: exp.audio, minMotion: .002}));
+  if (exp.minSeconds) checks.push({name: "longer", pass: m.seconds >= exp.minSeconds, detail: `${m.seconds.toFixed(2)} s`});
+  if (exp.minShort) checks.push({name: "upscaled", pass: Math.min(m.width, m.height) >= exp.minShort, detail: `${m.width}x${m.height}`});
+  log({shot: v, measured: {...m, strip: undefined}, strip: m.strip, checks, files: outs.map(o => o.filename)});
+  return checks.every(c => c.pass);
+}
+async function runChain(t, ctx, log) {
+  const src = await sources(ctx), pre = `valis/selftest/${ctx.run}_${t.id}`;
+  const miss = t.needs.filter(n => !src[n]);
+  if (miss.length) throw new Error(`needs ${miss.join(", ")} first (run the Create combinations once)`);
+  if (t.fn === "score") {
+    const sc = await render(G.scoreMake({audio: src.song, title: "selftest", meter: 3, bpm: 161.5, prefix: `${pre}_score`}), `${t.id} make the score`);
+    const jf = sc.outputs.find(o => /\.json$/i.test(o.filename));
+    if (!jf) throw new Error("the score job saved no .json");
+    const score = JSON.parse(await (await fetch(api.viewUrl(jf))).text());
+    log({score: {bars: score.bars, bpm: score.bpm, shots: score.shots.length, lanes: Object.keys(score.events).length}});
+    const up = await api.upload(new File([JSON.stringify(score)], `selftest_${ctx.run}.json`, {type: "application/json"}));
+    const shots = score.shots.slice(0, 2), clips = [src.c03, src.c01], done = [];
+    for (const [k, sh] of shots.entries()) {
+      const r = await render(G.fx({clip: clips[k], source: "score", score: up, audio: src.song, layers: [L("Punch", "kick"), L("Shockwave", "downbeat", {at: "center"})], sound: true,
+        seconds: sh.frames / 24, start: sh.start_frame / 24, prefix: `${pre}_shot${k + 1}`}), `${t.id} shot ${k + 1}`);
+      done.push({file: api.fileRef(r.outputs.find(isVid)), seconds: sh.frames / 24});
+    }
+    const cut = await render(G.filmCut({shots: done, prefix: `${pre}_cut`}), `${t.id} cut`);
+    return checkOut(cut.outputs, {...t.expect, minSeconds: done.reduce((a, d) => a + d.seconds, 0) - .3}, log);
+  }
+  if (t.fn === "film") {
+    const io = {run: async (g, label) => { const r = await render(g, `${t.id} ${label}`); return {outputs: r.outputs}; }, text: async (f) => (await fetch(api.viewUrl(f))).text(),
+      ref: (f) => api.fileRef(f), free: () => api.free(), has: async (n) => api.hasNode(n), exists: async (f) => (await fetch(api.viewUrl(f), {method: "HEAD"})).ok};
+    const genre = P.GENRES.find(g => g.id === "fairytale");
+    const plan = await planFilm({idea: "a lighthouse keeper's lantern goes out and a fox brings the light back", shots: 2, genre}, io);
+    plan.size = {w: 384, h: 672};
+    log({plan: {title: plan.title, shots: plan.shots.map(s => s.keyframe)}});
+    const r = await makeFilm(plan, io, {genre});
+    return checkOut([r.film], {...t.expect, width: 384, height: 672}, log);
+  }
+  const r = await render(t.fn({...src, pre, run: ctx.run}), `${t.id} ${t.label.split(":")[0]}`);
+  return checkOut(r.outputs, t.expect, log);
+}
+
 let ABORT = false;
 export function stop() { ABORT = true; }
 export async function run({only = null, onUpdate = () => {}} = {}) {
@@ -159,7 +255,7 @@ export async function run({only = null, onUpdate = () => {}} = {}) {
     const r = report.tests[k];
     r.status = "running"; r.t0 = Date.now(); await save();
     const log = (o) => { Object.assign(r, o); save(); };
-    try { r.status = (await runCreate(t, ctx, log)) ? "pass" : "fail"; }
+    try { r.status = (await (t.suite === "create" ? runCreate(t, ctx, log) : runChain(t, ctx, log))) ? "pass" : "fail"; }
     catch (e) { r.status = "error"; r.error = e.message; }
     r.seconds = (Date.now() - r.t0) / 1000;
     await save();

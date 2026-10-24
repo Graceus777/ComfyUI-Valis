@@ -3,3 +3,5 @@ __pycache__/
 node_modules/
 tools/build-sdk/package*.json
 valis_out/
+tests/ui/screens/
+tests/ui/media/

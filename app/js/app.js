@@ -194,6 +194,8 @@ function buildCreate() {
     const u = await api.upload(f); C.character = api.inputRef(u);
     fillDrop($("#c-char"), h("img", {src: URL.createObjectURL(f)}), h("span", {}, f.name)); toast("Character ready: it goes into the next keyframes"); cchanged();
   });
+  $("#c-char")._onItem = (it) => { if (it.kind !== "still") return; C.character = api.fileRef(it.file); fillDrop($("#c-char"), h("img", {src: api.viewUrl(it.file)}), h("span", {}, it.label || it.file.filename)); cchanged(); };
+  $("#c-viewer")._onItem = (it) => { if (it.kind === "still") pickKey(it.file, null); };
   // your own still as the first frame: drop it on the viewer
   dropzone($("#c-viewer"), "image/*", async (f) => {
     const u = await api.upload(f), ref = api.inputRef(u), url = URL.createObjectURL(f);
@@ -318,16 +320,19 @@ $("#c-shoot").addEventListener("click", async () => {
 // ------------------------------------------------------------------ GENJUTSU
 const GJ = {clip: null, clipUrl: null, mode: "motion", refs: [], style: null, seconds: 5, mp: 0.4, aspect: "9:16 (Portrait Widescreen)",
             window: null};   // window: {start, duration} picked from the source check
-seg($("#g-mode"), [{id: "motion", name: "Motion transfer"}, {id: "restyle", name: "Restyle"}, {id: "swap", name: "Object swap"}], (m) => {
+seg($("#g-mode"), [{id: "motion", name: "Motion transfer", tip: "New people (your reference images) doing exactly what the people in the clip do: the motion is read as SDPose skeletons"},
+  {id: "restyle", name: "Restyle", tip: "The whole clip in a new look (clay, anime, watercolour...): the motion is read as Canny edges"},
+  {id: "swap", name: "Object swap", tip: "Only the thing you name is replaced (SAM 3 finds it); everything else stays"}], (m) => {
   GJ.mode = m.id;
   $("#g-styles-wrap").style.display = m.id === "restyle" ? "" : "none";
   $("#g-target-wrap").style.display = m.id === "swap" ? "" : "none";
   gjPrompt();
 });
-chips($("#g-styles"), P.GENJUTSU_STYLES, (x) => { GJ.style = x; gjPrompt(); }, "clay");
-seg($("#g-len"), [{id: "5", name: "5 s", s: 5}, {id: "10", name: "10 s", s: 10}, {id: "15", name: "15 s", s: 15}], (l) => { GJ.seconds = l.s; });
-seg($("#g-size"), [{id: "480", name: "480p", mp: 0.4}, {id: "576", name: "576p", mp: 0.5625}], (x) => { GJ.mp = x.mp; });
-seg($("#g-aspect"), [{id: "9:16 (Portrait Widescreen)", name: "9:16"}, {id: "16:9 (Widescreen)", name: "16:9"}, {id: "1:1 (Square)", name: "1:1"}], (x) => { GJ.aspect = x.id; });
+chips($("#g-styles"), P.GENJUTSU_STYLES, (x) => { GJ.style = x; gjPrompt(); }, "clay", {where: "video"});
+seg($("#g-len"), [{id: "5", name: "5 s", s: 5}, {id: "10", name: "10 s", s: 10}, {id: "15", name: "15 s", s: 15}].map(x => ({...x, tip: `${x.s} seconds of the source (from its start, or the best window the check finds)`})), (l) => { GJ.seconds = l.s; gjEst(); });
+seg($("#g-size"), [{id: "480", name: "480p", mp: 0.4, tip: "0.4 megapixels: the size motion transfer holds together best"}, {id: "576", name: "576p", mp: 0.5625, tip: "0.56 megapixels: sharper; a body that's hard to read warps more"}], (x) => { GJ.mp = x.mp; gjEst(); });
+seg($("#g-aspect"), [{id: "9:16 (Portrait Widescreen)", name: "9:16"}, {id: "16:9 (Widescreen)", name: "16:9"}, {id: "1:1 (Square)", name: "1:1"}], (x) => { GJ.aspect = x.id; gjEst(); });
+$("#g-turbo").addEventListener("change", gjEst);
 function gjRefs() {
   const slots = GJ.refs.map((r, i) => h("div", {class: "ref"}, h("img", {src: r.url, alt: ""}),
     h("select", {onchange: (e) => { r.role = e.target.value; gjPrompt(); }}, ...P.GENJUTSU_ROLES.map(x => h("option", {value: x, selected: x === r.role}, x))),
@@ -340,7 +345,14 @@ function gjRefs() {
   $("#g-refs").replaceChildren(...slots, add);
 }
 gjRefs();
+async function gjEst() {
+  const g = G.genjutsu({video: "x.mp4", refs: ["a.png"], prompt: "x", mode: GJ.mode, seconds: GJ.seconds, megapixels: GJ.mp, aspect: GJ.aspect, turbo: $("#g-turbo")?.checked});
+  const e = await EST.estimate(g), c = await EST.estimate(G.poseCheck({video: "x.mp4"}));
+  $("#g-run .sub").textContent = `H3 + Fun ControlNet · ${EST.fmt(e)}`; $("#g-run").dataset.tip = `Time: ${e.basis}.`;
+  $("#g-check .sub").textContent = `pose only · ${EST.fmt(c)}`;
+}
 function gjPrompt() {
+  gjEst();
   $("#g-prompt").value = P.genjutsuPrompt({mode: GJ.mode, refs: GJ.refs, style: GJ.style, target: $("#g-target").value.trim(), text: ""});
 }
 $("#g-target").addEventListener("input", gjPrompt);
@@ -404,7 +416,10 @@ $("#g-run").addEventListener("click", async () => {
 const E = {clip: null, clipUrl: null, mode: "transform", look: null, character: null, matte: null, bg: null, clipB: null, clipBUrl: null, swapAt: -1, wave: null};
 const EXAMPLES = ["the man", "his head", "her dress", "the woman", "man in the mirror", "the sky", "the car"];
 $("#e-target-ex").replaceChildren(...EXAMPLES.map(t => h("button", {class: "chip", onclick: () => { $("#e-target").value = t; refreshPrompt(); }}, t)));
-seg($("#e-mode"), [{id: "transform", name: "Transform"}, {id: "remove", name: "Remove"}, {id: "swap", name: "Swap"}, {id: "turn", name: "Turn"}], (m) => {
+seg($("#e-mode"), [{id: "transform", name: "Transform", tip: "The thing you named becomes something else (a look below): Krea 2 makes the first and last frames, H3 re-renders only the masked region"},
+  {id: "remove", name: "Remove", tip: "The thing you named is taken out; the background carries on where it was"},
+  {id: "swap", name: "Swap", tip: "The whole person replaced by your character (H3 character swap), keeping the take's voice and motion"},
+  {id: "turn", name: "Turn", tip: "One take turns into another on a spoken word: the man into the vampire on 'morning'"}], (m) => {
   E.mode = m.id;
   $("#e-looks-wrap").style.display = m.id === "transform" ? "" : "none";
   $("#e-swap-wrap").style.display = m.id === "swap" ? "" : "none";
@@ -413,13 +428,21 @@ seg($("#e-mode"), [{id: "transform", name: "Transform"}, {id: "remove", name: "R
   $("#e-find").style.display = m.id === "turn" ? "none" : "";
   $("#e-prompt").style.display = m.id === "turn" ? "none" : "";
   $("#e-prompt").previousElementSibling.style.display = m.id === "turn" ? "none" : "";
-  $("#e-render .sub").textContent = {transform: "H3 masked · ~12 min", remove: "H3 masked · ~12 min", swap: "H3 character swap, turbo · ~15 min", turn: "Valis · ~2 min"}[m.id];
+  editEst();
   if (m.id === "turn") { fillClipB(); drawWave(); }
   if (m.id === "remove") { $("#e-rb").value = 1; }
   if (m.id === "swap") { $("#e-rb").value = 0.8; }
   syncSliders(); refreshPrompt();
 });
 cards($("#e-looks"), P.LOOKS, (l) => { E.look = l; $("#e-rb").value = l.rb; syncSliders(); refreshPrompt(); }, "vampire");
+async function editEst() {
+  const graph = E.mode === "turn" ? G.turn({a: "x.mp4", b: "y.mp4"}) : E.mode === "swap" ? G.swapFull({video: "x.mp4", character: "c.png", prompt: "x", turbo: true})
+    : G.edit({mode: E.mode, video: "x.mp4", target: "x", anchorPrompt: "x", desc: "x"});
+  const e = await EST.estimate(graph), f = await EST.estimate(G.maskPreview({video: "x.mp4", target: "x"}));
+  $("#e-render .sub").textContent = `${{transform: "H3 masked", remove: "H3 masked", swap: "H3 character swap", turn: "Valis"}[E.mode]} · ${EST.fmt(e)}`;
+  $("#e-render").dataset.tip = `Time: ${e.basis}.`;
+  $("#e-find .sub").textContent = `SAM 3 · ${EST.fmt(f)}`;
+}
 function syncSliders() { $("#e-rb-o").textContent = Number($("#e-rb").value).toFixed(1); $("#e-grow-o").textContent = `${$("#e-grow").value} px`; }
 ["#e-rb", "#e-grow"].forEach(s => $(s).addEventListener("input", syncSliders));
 syncSliders();
@@ -503,6 +526,9 @@ $("#e-wave").addEventListener("click", (e) => {
   const v = $("#e-viewer video"); if (v) { v.currentTime = Math.max(0, E.swapAt - .5); v.play(); }
 });
 $("#e-wave").addEventListener("dblclick", () => { E.swapAt = -1; drawWave(); });
+$("#e-clip")._onItem = (it) => it.kind === "clip" && setClip(api.fileRef(it.file), api.viewUrl(it.file), it.label || it.file.filename);
+$("#e-char")._onItem = (it) => { if (it.kind !== "still") return; E.character = api.fileRef(it.file); fillDrop($("#e-char"), h("img", {src: api.viewUrl(it.file)}), h("span", {}, it.label || it.file.filename)); };
+$("#e-bg")._onItem = (it) => { if (it.kind !== "still") return; E.bg = api.fileRef(it.file); fillDrop($("#e-bg"), h("img", {src: api.viewUrl(it.file)}), h("span", {}, it.label || it.file.filename)); };
 dropzone($("#e-clip"), "video/*", async (f) => {
   try { const u = await api.upload(f); setClip(api.inputRef(u), URL.createObjectURL(f), f.name); }
   catch (e) { toast(e.message, true); }
@@ -585,7 +611,17 @@ const Score = new ScoreView({run, onFilm: (sv) => {
 }});
 
 // ------------------------------------------------------------------ FX
-const Fx = new FxView({$, h, toast, assets: ASSETS, api, G, run, VID});
+let FX_SCORE = null;
+const Fx = new FxView({$, h, toast, assets: ASSETS, api, G, run, VID, getScore: () => FX_SCORE, estimate: () => fxEst()});
+async function fxEst() {
+  const F = Fx.F, secs = F.seconds || 107 / 24;
+  const g = G.fx({clip: "x.mp4", layers: F.layers.length ? F.layers : [{effect: "Punch", on: "kick"}], source: F.source === "write" ? "write" : "sheet",
+    songSpec: F.source === "write" ? {style: "x", lyrics: "x", seconds: Number($("#f-secs").value) || 20} : null});
+  const e = await EST.estimate(g);
+  $("#f-render .sub").textContent = `${F.source === "write" ? "YuE2 + " : ""}Valis · ${EST.fmt({...e, seconds: e.seconds * Math.max(.5, secs / 4.46)})}`;
+}
+// the FX tab's Score lanes follow whatever score is open in the Score tab
+$("#f-source").addEventListener("click", async () => { if (Fx.F.source === "score") { Score.ensure(); FX_SCORE = await Score.forFx(); if (!FX_SCORE) toast("Open the Score tab and make or open a score: FX fires on its lanes"); } });
 
 
 // ------------------------------------------------------------------ EXTRAS: stereograms, loops, Stage (experimental)
@@ -725,21 +761,25 @@ const Renders = {
     if (job.status === "done" && $("#view-renders").classList.contains("on")) this.refresh();
   },
   async refresh() {
-    const hist = await api.history(80).catch(() => ({}));
-    const items = [];
-    for (const [id, e] of Object.entries(hist).reverse()) for (const f of api.outputsOf(e)) if ((f.type || "output") === "output" && /^valis|^danse/.test(f.subfolder || "")) items.push(f);
+    await Bin.load();
+    // renders made outside the studio's own buttons (or before the bin existed) join it from ComfyUI's history
+    const hist = await api.history(120).catch(() => ({}));
+    for (const e of Object.values(hist || {}).reverse()) for (const f of api.outputsOf(e))
+      if ((f.type || "output") === "output" && /^valis|^danse/.test(f.subfolder || "") && /\.(mp4|webm|png|jpe?g)$/i.test(f.filename) && !/matte|overlay|anchor|_end_|_mask|control/i.test(f.filename)
+          && !Bin.items.some(i => i.file.filename === f.filename && i.file.subfolder === f.subfolder)) Bin.add(f, {from: "ComfyUI", label: f.filename.replace(/_\d+_?\.\w+$/, "")});
+    const items = Bin.items.filter(i => i.kind === "clip" || i.kind === "still").slice(0, 160);
     const grid = $("#r-grid");
-    grid.replaceChildren(...items.slice(0, 120).map(f => {
-      const isVid = VID.test(f.filename);
-      const t = h("div", {class: "thumb"}, media(f, {controls: false}), h("div", {class: "meta"}, f.filename.replace(/_\d+_\.\w+$/, "")));
-      t.onclick = () => {
-        if (isVid) { setClip(api.outputRef(f), api.viewUrl(f), f.filename); show("edit"); toast("Loaded into Edit"); }
-        else { useAsFirstFrame(f); toast("Set as the first frame"); }
-      };
-      if (isVid) { const v = t.querySelector("video"); t.onmouseenter = () => v.play(); t.onmouseleave = () => v.pause(); v.muted = true; v.autoplay = false; }
+    grid.replaceChildren(...items.map(it => {
+      const url = Bin.url(it), isVid = it.kind === "clip";
+      const pic = isVid ? h("video", {src: url, muted: true, preload: "metadata", playsinline: true, loop: true}) : h("img", {src: url, alt: "", loading: "lazy"});
+      const t = h("div", {class: "thumb", tip: `<b>${esc(it.label || it.file.filename)}</b><br>${esc(it.from || "")} · ${esc(it.file.filename)}${it.prompt ? `<br><i>${esc(it.prompt.slice(0, 200))}</i>` : ""}`},
+        pic, h("div", {class: "meta"}, it.label || it.file.filename.replace(/_\d+_\.\w+$/, "")));
+      t.onclick = (e) => Bin.menu(it, e);
+      t.draggable = true; t.addEventListener("dragstart", (e) => e.dataTransfer.setData("application/x-valis-item", JSON.stringify(it)));
+      if (isVid) { t.onmouseenter = () => pic.play().catch(() => {}); t.onmouseleave = () => pic.pause(); }
       return t;
     }));
-    if (!items.length) grid.replaceChildren(h("p", {class: "hint"}, "Nothing yet. Renders from the studio land in output/valis/."));
+    if (!items.length) grid.replaceChildren(h("p", {class: "hint"}, "Nothing yet. Everything the studio makes lands here (and in the bin), saved in ComfyUI/output/valis/."));
   },
 };
 $("#r-free").addEventListener("click", async () => { await api.free(); toast("Models unloaded and memory freed"); });
@@ -1122,8 +1162,46 @@ function filmActions() {
   (M.plan?.shots || []).forEach((sh, k) => Bin.action({id: `film${k + 1}`, label: `Film · shot ${k + 1}`, kinds: ["still", "clip"], run: (it) => { toShot(k, it); show("film"); }}));
 }
 
+// ---- tooltips for the controls written in index.html
+const TIPS = {
+  "#queuePill": "Jobs waiting in ComfyUI's queue (from any client)", "#conn": "Whether the studio can reach this ComfyUI",
+  // genjutsu
+  "#g-clip": "The performance: its motion, camera, timing and sound are kept. 4 to 15 seconds; a body that stays in frame works best",
+  "#g-refs": "Up to 8 pictures. Each is &lt;Picture N&gt; in the prompt, with the role you give it: who, where, what style, what outfit",
+  "#g-target": "Name what to replace: SAM 3 finds it in every frame", "#g-keep": "H3 re-renders the whole frame; this pastes only the new object back onto the original frames, so faces and sky don't drift",
+  "#g-edges": "On: the new object follows the old one's edges (Canny), for clothes and things. Off: it follows the body's pose (SDPose)",
+  "#g-prompt": "What H3 is told. Built from your choices; edit it freely", "#g-audio": "Keep the source clip's own sound on the result",
+  "#g-turbo": "8 steps instead of 20 with the turbo LoRA (or FastH3, under Renders, Engine): faster, a little rougher",
+  "#g-check": "Reads the body in every frame (SDPose) and says where motion transfer will hold and where it will warp, before the long render",
+  // edit
+  "#e-clip": "The clip to change: a video you drop, or one from the bin", "#e-target": "Name what to change, as you'd say it: the man, his head, her dress, the car. SAM 3 follows it through every frame",
+  "#e-looks": "What it becomes. The look's words go to Krea 2 (the new first and last frames) and to H3",
+  "#e-char": "The character who replaces the person: an upper-body or full-body sheet works best", "#e-look": "Their hair, face and clothes in words: helps H3 keep them",
+  "#e-bg": "Optional: a new place. The take is keyed onto it first, so the new scene and the new character are lit together",
+  "#e-match": "After the swap, match its tone, colour and grain to the plate (no AI)", "#e-clipb": "The second take: the one it turns into",
+  "#e-wave": "The first take's sound. Click the word where it turns; double-click for the automatic pick (after the longest pause)",
+  "#e-voice": "The voice turns on the same word: deeper, a bigger throat, a growl", "#e-prompt": "What Krea 2 is told for the new first and last frames. Built from the look; edit freely",
+  "#e-rb": "Low: the look takes over (a whole new face). High: the shape is kept and only the material changes",
+  "#e-grow": "How far past the thing's edge the re-render reaches: more covers hair and loose clothes, less keeps the background untouched",
+  "#e-audio": "Keep the clip's own sound", "#e-find": "Shows what SAM 3 finds for that name, as an overlay, before the long render",
+  // fx
+  "#f-clip": "The clip the effects go on", "#f-clip-sel": "Or one from the studio's renders", "#f-other-sel": "A second clip, for effects that show another scene (tear, shatter, time slip, double exposure, split, era cut)",
+  "#f-subject": "SAM 3 follows this for effects that are about someone (echo, lens, vertigo, double exposure)",
+  "#f-song": "Valis hears its beats, kick, snare and hats, and how loud and bright it is: those are the lanes effects listen to",
+  "#f-style": "YuE2's brief: genre, instruments, mood, tempo", "#f-lyrics": "Lyrics with [verse] and [chorus], or [Instrumental]", "#f-secs": "How long the song is",
+  "#f-cues": "No music: write the hits yourself. Seconds or bar:beat, a lane name, an optional strength; 'every' for grids, 'ramp' for held curves",
+  "#f-loop": "For a loop from Extras: the effects repeat with it, played once round first so trails and frost carry across the join",
+  "#f-sound": "Each effect makes its own sound on the same frame it fires, synthesised in the song's key, held under the music",
+  "#f-beds": "Background sound under everything",
+  // renders
+  "#r-free": "Unload every model and free GPU and system memory", "#r-stop": "Stop the job that is running now",
+  "#r-engine": "Which model renders Edit, Genjutsu and video relight. FastH3 is the same model distilled to 8 steps", "#r-check": "Check every workflow against this ComfyUI again (after installing something)",
+  "#r-test-run": "Renders every Create combination at 384 px, about 3 s each, and checks each result: size, length, motion, colour, sound. About 2 minutes a combination",
+};
+for (const [sel, tip] of Object.entries(TIPS)) { const el = $(sel); if (el && !el.dataset.tip) el.dataset.tip = tip; }
+
 buildCreate();
 show((location.hash || "#film").slice(1));
 refreshPrompt();
 // estimates learn from ComfyUI's history once it's read; every button's time is worked out again then
-EST.learnFromHistory().then(() => { cchanged(); fsteps(); xest(); lest(); Score.estimates(); });
+EST.learnFromHistory().then(() => { cchanged(); fsteps(); xest(); lest(); Score.estimates(); editEst(); gjEst(); fxEst(); });

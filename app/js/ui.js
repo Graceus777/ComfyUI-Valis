@@ -60,7 +60,7 @@ export function initTips() {
   document.addEventListener("focusin", (e) => { const t = e.target.closest?.("[data-tip]"); if (t) showTip(t); });
   document.addEventListener("focusout", hideTip);
   document.addEventListener("mousedown", hideTip);
-  addEventListener("scroll", hideTip, true);
+  addEventListener("scroll", () => { if (tipEl.classList.contains("on")) hideTip(); }, true);   // a scroll hides a shown tip, not one about to show
 }
 
 // ---------------------------------------------------------------------------------------------------------- choices

@@ -5,7 +5,11 @@ const num = (v, d = 0) => typeof v === "number" ? v : d;
 export function workOf(graph) {
   const nodes = Object.values(graph || {}), find = (t) => nodes.filter(n => n.class_type === t);
   const steps = () => { const s = nodes.find(n => n.class_type === "BasicScheduler")?.inputs?.steps; const acc = nodes.find(n => /PDDAcc/.test(n.class_type)); return acc ? 8 : num(s, 8); };
-  const mpf = (n, lenKey = "length") => num(n.inputs.width) * num(n.inputs.height) / 1e6 * num(n.inputs[lenKey], 1);
+  // sizes wired from another node (a crop, a megapixel budget) aren't known until it runs: half a megapixel, 121 frames
+  const mpf = (n, lenKey = "length") => {
+    const w = num(n.inputs.width), hh = num(n.inputs.height), len = num(n.inputs[lenKey], 121);
+    return (w && hh ? w * hh / 1e6 : .5) * len;
+  };
   const loop = find("MiniMaxH3Loop")[0];
   const r2v = find("MiniMaxH3ReferenceToVideo"), i2v = find("MiniMaxH3ImageToVideo"), wan = find("WanImageToVideo");
   if (loop && r2v.length) return {kind: "loop", work: mpf(r2v[0]) * steps() / 8 * num(loop.inputs.views, 1)};

@@ -20,14 +20,14 @@ const GPUS = [[/5090/, 3.0], [/4090 laptop/i, 1.3], [/4090/, 2.3], [/5080/, 1.9]
 const PRIOR = {
   krea: {a: 20, b: 9.5, unit: "megapixel images"},           // 2 keyframes at 768x1344: ~40 s
   h3: {a: 30, b: 3.4, unit: "megapixel-frames x steps / 8"},   // 768x1344 x 107 frames: ~7 min; 384x672 x 73: ~70 s
-  h3ref: {a: 40, b: 1.0, unit: "megapixel-frames x steps / 8"},// masked re-render, 20 steps: ~12 min at 768p, 5 s
+  h3ref: {a: 40, b: 3.6, unit: "megapixel-frames x steps / 8"},// masked transform ~13 min; motion transfer at 480p, 5 s: ~6 min
   loop: {a: 40, b: 3.6, unit: "megapixel-frames x steps x views / 8"},
   wan: {a: 60, b: 2.6, unit: "megapixel-frames x steps / 4"},
   qwen: {a: 25, b: 30, unit: "edits"},
   seedvr2: {a: 40, b: .45, unit: "output megapixel-frames"},
   yue2: {a: 40, b: 3.2, unit: "seconds of music"},
   sam3: {a: 15, b: .25, unit: "frames"},
-  valis: {a: 10, b: .12, unit: "megapixel-frames"},
+  valis: {a: 10, b: .8, unit: "megapixel-frames"},              // ~1 min per 4.5 s clip
   llm: {a: 60, b: 1, unit: "plans"},
   other: {a: 20, b: 0, unit: ""},
 };
