@@ -335,7 +335,9 @@ seg($("#g-mode"), [{id: "motion", name: "Motion transfer", tip: "New people (you
   gjPrompt();
 });
 chips($("#g-styles"), P.GENJUTSU_STYLES, (x) => { GJ.style = x; gjPrompt(); }, "clay", {where: "video"});
-seg($("#g-len"), [{id: "5", name: "5 s", s: 5}, {id: "10", name: "10 s", s: 10}, {id: "15", name: "15 s", s: 15}].map(x => ({...x, tip: `${x.s} seconds of the source (from its start, or the best window the check finds)`})), (l) => { GJ.seconds = l.s; gjEst(); });
+slider($("#g-len"), {label: "Length", min: 2, max: 15, step: 0.5, value: GJ.seconds, fmt: (v) => `${v.toFixed(1)} s of the source`,
+  tip: "How much of the source to use: from its start, or from the best window the source check finds. H3 was trained on 5 to 15 s",
+  marks: [{name: "3 s", value: 3}, {name: "5 s", value: 5}, {name: "10 s", value: 10}, {name: "15 s", value: 15}]}, (v) => { GJ.seconds = v; gjEst(); });
 seg($("#g-size"), [{id: "480", name: "480p", mp: 0.4, tip: "0.4 megapixels: the size motion transfer holds together best"}, {id: "576", name: "576p", mp: 0.5625, tip: "0.56 megapixels: sharper; a body that's hard to read warps more"}], (x) => { GJ.mp = x.mp; gjEst(); });
 seg($("#g-aspect"), [{id: "9:16 (Portrait Widescreen)", name: "9:16"}, {id: "16:9 (Widescreen)", name: "16:9"}, {id: "1:1 (Square)", name: "1:1"}], (x) => { GJ.aspect = x.id; gjEst(); });
 $("#g-turbo").addEventListener("change", gjEst);

@@ -1,0 +1,198 @@
+{
+  "500": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "yue2_3b_bf16.safetensors"
+    }
+  },
+  "501": {
+    "class_type": "YuE2GenerateABC",
+    "inputs": {
+      "clip": [
+        "509",
+        1
+      ],
+      "style": "southern gothic, slow slide guitar, brushed drums, 84 BPM",
+      "lyrics": "[instrumental]",
+      "seed": 1843,
+      "mode": "full",
+      "max_abc_tokens": 8192,
+      "temperature": 0.7,
+      "top_p": 0.9,
+      "top_k": 30,
+      "repetition_penalty": 1.005,
+      "penalty_window": 100
+    }
+  },
+  "502": {
+    "class_type": "YuE2GenerateMusic",
+    "inputs": {
+      "clip": [
+        "509",
+        1
+      ],
+      "style": "southern gothic, slow slide guitar, brushed drums, 84 BPM",
+      "lyrics": "[instrumental]",
+      "abc": [
+        "510",
+        0
+      ],
+      "seed": 1843,
+      "mode": "full",
+      "max_duration": 30,
+      "temperature": 1,
+      "top_p": 0.95,
+      "top_k": 100,
+      "repetition_penalty": 1.2,
+      "cfg_scale": 1
+    }
+  },
+  "503": {
+    "class_type": "ConditioningZeroOut",
+    "inputs": {
+      "conditioning": [
+        "502",
+        0
+      ]
+    }
+  },
+  "504": {
+    "class_type": "EmptyYuE2LatentAudio",
+    "inputs": {
+      "seconds": [
+        "502",
+        1
+      ],
+      "batch_size": 1
+    }
+  },
+  "505": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "500",
+        0
+      ],
+      "positive": [
+        "502",
+        0
+      ],
+      "negative": [
+        "503",
+        0
+      ],
+      "latent_image": [
+        "504",
+        0
+      ],
+      "seed": 1843,
+      "steps": 32,
+      "cfg": 1,
+      "sampler_name": "dpm_2",
+      "scheduler": "sgm_uniform",
+      "denoise": 1
+    }
+  },
+  "506": {
+    "class_type": "VAEDecodeAudio",
+    "inputs": {
+      "samples": [
+        "505",
+        0
+      ],
+      "vae": [
+        "500",
+        2
+      ]
+    }
+  },
+  "507": {
+    "class_type": "SaveAudio",
+    "inputs": {
+      "audio": [
+        "506",
+        0
+      ],
+      "filename_prefix": "valis/scores/yue2"
+    }
+  },
+  "508": {
+    "class_type": "SaveText",
+    "inputs": {
+      "text": [
+        "510",
+        0
+      ],
+      "filename_prefix": "valis/scores/yue2_abc",
+      "format": "txt"
+    }
+  },
+  "509": {
+    "class_type": "LoraLoader",
+    "inputs": {
+      "model": [
+        "500",
+        0
+      ],
+      "clip": [
+        "500",
+        1
+      ],
+      "lora_name": "ar_lora_inst_v3abc_comfyui.safetensors",
+      "strength_model": 0,
+      "strength_clip": 1
+    }
+  },
+  "510": {
+    "class_type": "PlenioScoreTools",
+    "inputs": {
+      "operation": "voices",
+      "operation.vocal": "move Vocal melody to Ins",
+      "operation.conflict": "replace Ins",
+      "score": [
+        "501",
+        0
+      ]
+    }
+  },
+  "c": {
+    "class_type": "ValisCues",
+    "inputs": {
+      "cue_sheet": "",
+      "duration": 0,
+      "music": [
+        "506",
+        0
+      ],
+      "abc": [
+        "510",
+        0
+      ]
+    }
+  },
+  "m": {
+    "class_type": "ValisScoreMake",
+    "inputs": {
+      "cues": [
+        "c",
+        0
+      ],
+      "title": "slide guitar",
+      "shot_seconds": 4.458333333333333,
+      "section_bars": 8,
+      "bpm": 0,
+      "meter": 0
+    }
+  },
+  "s": {
+    "class_type": "SaveText",
+    "inputs": {
+      "text": [
+        "m",
+        1
+      ],
+      "filename_prefix": "valis/scores/yue2",
+      "format": "json"
+    }
+  }
+}

@@ -14,7 +14,7 @@ fs.mkdirSync(out, {recursive: true});
 const vamp = P.LOOKS.find(l => l.id === "vampire");
 const T = "his head";
 const flows = {
-  "01_keyframes_krea2": [G.keyframes({prompt: P.keyframePrompt({genre: P.GENRES[0], framing: P.FRAMING[0], lens: P.LENS[0], light: P.LIGHT[0], grade: P.GRADE[0],
+  "01_keyframes_krea2": [G.keyframes({prompt: P.keyframePrompt({genre: P.GENRES[0], framing: P.FRAMING[0], lens: P.LENS.find(l => l.id === "18"), light: P.LIGHT.find(l => l.id === "moon"), grade: P.GRADE[0],
     subject: "a pale woman in a white silk ballgown and a tall pale man in a black velvet tailcoat, frozen mid-waltz in an abandoned gothic ballroom at midnight"})}),
     "Create · Frame it: two Krea 2 turbo keyframes from the director's panel prompt."],
   "02_cast_character_krea2": [G.castCharacter({keyframe: "valis/keyframe.png", character: "valis/character.png",
@@ -96,6 +96,15 @@ const flows = {
     cueSheet: "bpm 112.94 4/4\nevery 1 beat from 0 to 20 kick\nevery 1/2 beat from 0 to 20 hat\nevery 1 bar from 0 to 20 downbeat",
     layers: [{effect: "Shockwave", on: "downbeat"}, {effect: "Punch", on: "kick"}, {effect: "Glitch", on: "hat"}, {effect: "Projector", on: "kick"}], prefix: "valis/fx_loop"}),
     "FX · on a loop: Valis Loop · Render plays the stack once round before the loop so every effect arrives at frame 0 as it would the second time, with the cues repeating every loop (2 bars at 112.94 BPM = one 4.25 s loop). MP4 and GIF."],
+  "00_stage_split_a_still": [G.stage({image: "valis/still.png", names: ["the sky", "the moon", "the temple", "the rocks", "the path", "the lamps"], name: "stage"}),
+    "Stage (Extras, experimental): SAM 3 finds every named thing (\"the lamps:20\" = all of them), Depth Anything 3 orders them, Valis Stage completes each layer behind the ones in front and writes output/valis/stage/<name>/ for the studio's live 2.5D camera."],
+  "33_score_from_a_song": [G.scoreMake({audio: "valis/song.flac", title: "my song", prefix: "valis/scores/my_song"}),
+    "Score · make one from any song: Valis Cues hears its beats, bars, kick, snare and hats and how loud and bright it is; Valis Score (make) lays out sections (named by loudness) and shots on whole bars; Save Text keeps it as JSON for the Score tab and Valis Score (load). Set bpm / meter on the make node if the analysis gets them wrong (a waltz needs meter 3)."],
+  "34_score_written_by_yue2": [G.songScore({style: "southern gothic, slow slide guitar, brushed drums, 84 BPM", lyrics: "[Instrumental]", seconds: 30, title: "slide guitar", prefix: "valis/scores/yue2"}),
+    "Score · YuE2 writes a song and plays it, and the score is made from its own sheet music (every note of melody, bass and chords as lanes) and its audio, in one job."],
+  "35_score_shot_with_the_library": [G.fx({clip: "valis/shot.mp4", source: "score", score: "valis/my_song_score.json", audio: "valis/song.flac",
+      layers: [{effect: "Punch", on: "kick", params: {}}, {effect: "Shockwave", on: "downbeat", params: {at: "center"}}], sound: true, seconds: 4.46, start: 8.9, prefix: "valis/score_s03"}),
+    "Score · one shot of a score rendered with the library: the score's lanes from 8.9 s on fire Punch on the kick and Shockwave on the downbeat; the effects' sounds are mixed with the song's own slice."],
   "32_stereo_hidden_in_noise": [G.stereo({video: "valis/clip.mp4", target: "the dancers", maxObjects: 2}),
     "Stereo · hidden in noise (the Black Is Good magic-eye video, from any clip): SAM 3 + Depth Anything 3 give the dancers a rounded depth, a spinning torus joins them, Valis Stereogram hides both in TV snow you free-view (parallel); Valis Kinetogram makes the version only motion shows, in live static; Valis Static sets what the static is for both (squares, halftone or ASCII; white, pink, brown, blue or violet grain; RGB, colour-TV or a palette); Valis Stereo Decode reads the depth back after H.264 capped at 4 Mb/s and scores it."],
 };

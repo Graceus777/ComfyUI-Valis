@@ -1,0 +1,44 @@
+{
+  "a": {
+    "class_type": "LoadAudio",
+    "inputs": {
+      "audio": "valis/song.flac"
+    }
+  },
+  "c": {
+    "class_type": "ValisCues",
+    "inputs": {
+      "cue_sheet": "",
+      "duration": 0,
+      "music": [
+        "a",
+        0
+      ]
+    }
+  },
+  "m": {
+    "class_type": "ValisScoreMake",
+    "inputs": {
+      "cues": [
+        "c",
+        0
+      ],
+      "title": "my song",
+      "shot_seconds": 4.458333333333333,
+      "section_bars": 8,
+      "bpm": 0,
+      "meter": 0
+    }
+  },
+  "s": {
+    "class_type": "SaveText",
+    "inputs": {
+      "text": [
+        "m",
+        1
+      ],
+      "filename_prefix": "valis/scores/my_song",
+      "format": "json"
+    }
+  }
+}

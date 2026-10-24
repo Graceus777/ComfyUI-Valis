@@ -82,7 +82,7 @@
       "offset": 0,
       "bpm_hint": 0,
       "abc": [
-        "501",
+        "510",
         0
       ],
       "music": [
@@ -195,11 +195,11 @@
     "class_type": "YuE2GenerateABC",
     "inputs": {
       "clip": [
-        "500",
+        "509",
         1
       ],
       "style": "dark cabaret waltz, accordion, upright bass, female vocal",
-      "lyrics": "[Instrumental]",
+      "lyrics": "[instrumental]",
       "seed": 1843,
       "mode": "full",
       "max_abc_tokens": 8192,
@@ -214,13 +214,13 @@
     "class_type": "YuE2GenerateMusic",
     "inputs": {
       "clip": [
-        "500",
+        "509",
         1
       ],
       "style": "dark cabaret waltz, accordion, upright bass, female vocal",
-      "lyrics": "[Instrumental]",
+      "lyrics": "[instrumental]",
       "abc": [
-        "501",
+        "510",
         0
       ],
       "seed": 1843,
@@ -306,11 +306,39 @@
     "class_type": "SaveText",
     "inputs": {
       "text": [
-        "501",
+        "510",
         0
       ],
       "filename_prefix": "valis/fx_song_song_abc",
       "format": "txt"
+    }
+  },
+  "509": {
+    "class_type": "LoraLoader",
+    "inputs": {
+      "model": [
+        "500",
+        0
+      ],
+      "clip": [
+        "500",
+        1
+      ],
+      "lora_name": "ar_lora_inst_v3abc_comfyui.safetensors",
+      "strength_model": 0,
+      "strength_clip": 1
+    }
+  },
+  "510": {
+    "class_type": "PlenioScoreTools",
+    "inputs": {
+      "operation": "voices",
+      "operation.vocal": "move Vocal melody to Ins",
+      "operation.conflict": "replace Ins",
+      "score": [
+        "501",
+        0
+      ]
     }
   }
 }
