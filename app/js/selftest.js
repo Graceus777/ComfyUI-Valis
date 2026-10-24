@@ -41,6 +41,8 @@ export const TESTS = [
   c("c12", "Loop (FastH3), Golden hour", "pier", {genre: "documentary", look: {id: "golden_hour"}, move: "static", action: "the net sways gently and the water ripples", opts: {loop: true, loopEngine: "fast"}}),
   c("c13", "Relight to contre-jour, then a light change shot", "market", {genre: "documentary", look: {id: "film_colors"}, move: "push_in", opts: {trained: false, lightChange: true}, relight: "contre_jour"}),
   c("c14", "Character from another keyframe (Krea identity edit), Kodak 2383", "street", {genre: "gothic", look: {id: "kodak_2383"}, move: "static", cast: "c03"}),
+  // c13's light change came out silent once (-91 dB): the same shot on another seed, to tell the model's chance from a broken graph
+  c("c15", "Light change again, another seed (c13 was silent)", "market", {genre: "documentary", look: {id: "film_colors"}, move: "push_in", seed: 51102, opts: {trained: false, lightChange: true}, relight: "golden"}),
 ];
 
 // Chains: what comes after Create, fed with the clips and stills the Create combinations made (this run's, or the last

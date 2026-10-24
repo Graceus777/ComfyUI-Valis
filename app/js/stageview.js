@@ -207,8 +207,8 @@ export class StageView {
       this.S.domeEngine = id;
       [...el.children].forEach(b => b.classList.toggle("on", b.dataset.id === id));
       const sub = $("#st-domesub");
-      if (sub) sub.textContent = id === "krea" ? "the world past the frame · Krea 2 + AnyPaint, 30% more on each side · ~1 min"
-        : "the world past the frame and behind the people and things in it · Qwen Image 2.1 · ~2 min";
+      if (sub) sub.textContent = id === "krea" ? "the world past the frame · Krea 2 + AnyPaint, 30% more on each side"
+        : "the world past the frame and behind the people and things in it · Qwen Image 2.1";
     };
     el.replaceChildren(...opts.map(([id, n]) => h("button", {class: id === this.S.domeEngine ? "on" : "", "data-id": id,
       disabled: id === "krea" && !caps.kreaDome, title: id === "krea" && !caps.kreaDome ? "needs the Krea 2 AnyPaint nodes and LoRA, and a ComfyUI restart" : "",
@@ -231,8 +231,8 @@ export class StageView {
     try {
       const caps = await this.caps(), erase = caps.erase;
       const job = await this.api.submit(this.G.stage({image: this.S.image, names, name, far: +this.$("#sg-far").value, sharpen, erase, caps}), `Stage: ${names.join(", ")}`, "stage");
-      this.toast(sharpen ? `Splitting the still: SeedVR2 sharpens it to ${SHARP_TO}p (~1 min), SAM 3 finds each name${erase ? ", Krea 2 erases the things standing in it (~2 min)" : ""}, Depth Anything 3 orders them`
-        : short && short < 1000 ? `This still is only ${short} px on its short side: 1080p exports will be soft` : `Splitting the still: SAM 3 finds each name${erase ? ", Krea 2 erases the things standing in it (~2 min)" : ""}, Depth Anything 3 orders them`);
+      this.toast(sharpen ? `Splitting the still: SeedVR2 sharpens it to ${SHARP_TO}p, SAM 3 finds each name${erase ? ", Krea 2 erases the things standing in it" : ""}, Depth Anything 3 orders them`
+        : short && short < 1000 ? `This still is only ${short} px on its short side: 1080p exports will be soft` : `Splitting the still: SAM 3 finds each name${erase ? ", Krea 2 erases the things standing in it" : ""}, Depth Anything 3 orders them`);
       await this.until(job);
       const sub = `valis/stage/${name}`;
       await this.listStages(sub);

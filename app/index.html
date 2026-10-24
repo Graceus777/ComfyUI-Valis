@@ -334,13 +334,13 @@
       <div class="drop" id="sg-still">Drop a still: a keyframe, a painting, a photo</div>
       <textarea id="sg-prompt" rows="3" spellcheck="true" style="margin-top:8px" placeholder="…or describe one: a vampire lord at a stone table, two braziers burning, a brick arch behind him"></textarea>
       <button class="btn" id="sg-make" style="margin-top:6px;width:100%">Make the set from words<span class="sub">Krea 2 paints the still, then sharpen and split · one GPU job</span></button>
-      <div class="row" style="margin-top:6px"><label class="hint" style="margin:0;flex:0 0 auto" title="the same seed paints the same still: change a name or a setting and make it again to compare">seed</label><input type="number" id="st-seed" value="7101" min="0" step="1" style="flex:1"><button class="btn" id="st-reseed" style="flex:0 0 auto" title="a new random seed, then make the set">Try another seed</button></div>
+      <div class="row" style="margin-top:6px"><label class="hint" style="margin:0;flex:0 0 auto" data-tip="the same seed paints the same still: change a name or a setting and make it again to compare">seed</label><input type="number" id="st-seed" value="7101" min="0" step="1" style="flex:1"><button class="btn" id="st-reseed" style="flex:0 0 auto" data-tip="a new random seed, then make the set">Try another seed</button></div>
       <select id="sg-open" style="margin-top:8px"></select>
       <h2>What's in it</h2>
       <textarea id="sg-names" rows="6" spellcheck="false" placeholder="one per line: the sky, the woman, the lamps…"></textarea>
       <p class="hint">Name the things that should move on their own. SAM 3 finds every one of each ("the lamps" finds all the lamps); everything else becomes <i>the rest</i>.</p>
-      <div class="row" style="margin-top:10px"><label class="hint" style="margin:0">depth</label><input type="number" id="sg-far" value="6" min="1.5" max="30" step="0.5" title="how deep the scene is: the farthest point is this many times farther than the nearest"></div>
-      <label class="check" style="margin-top:8px" title="A still under 1300 px on its short side is sharpened to 1440p with SeedVR2 before it is split, so 1080p exports and push-ins stay crisp"><input type="checkbox" id="sg-sharp" checked> Sharpen small stills to 1440p <span class="hint" style="margin:0">SeedVR2 · about a minute</span></label>
+      <div class="row" style="margin-top:10px"><label class="hint" style="margin:0">depth</label><input type="number" id="sg-far" value="6" min="1.5" max="30" step="0.5" data-tip="how deep the scene is: the farthest point is this many times farther than the nearest"></div>
+      <label class="check" style="margin-top:8px" data-tip="A still under 1300 px on its short side is sharpened to 1440p with SeedVR2 before it is split, so 1080p exports and push-ins stay crisp"><input type="checkbox" id="sg-sharp" checked> Sharpen small stills to 1440p <span class="hint" style="margin:0">SeedVR2 · about a minute</span></label>
       <div class="row" style="margin-top:12px"><button class="btn primary" id="sg-split" disabled>Split it<span class="sub">SAM 3 + Depth Anything 3 · one short GPU job</span></button></div>
       <div id="sg-controls" style="display:none">
         <h2>Camera</h2>
@@ -354,7 +354,7 @@
         <input type="range" id="sg-sec" min="1" max="12" step="0.5" value="4" style="width:100%">
         <div class="seg" id="sg-ease" style="margin-top:10px"></div>
         <div class="seg" id="sg-edge" style="margin-top:8px"></div>
-        <div class="seg" id="st-domeeng" style="margin-top:8px" title="which model paints the world past the frame"></div>
+        <div class="seg" id="st-domeeng" style="margin-top:8px" data-tip="which model paints the world past the frame"></div>
         <button class="btn" id="sg-paintdome" style="margin-top:8px;width:100%">Paint what the camera uncovers<span class="sub" id="st-domesub">the world past the frame and behind the people and things in it · Qwen Image 2.1</span></button>
         <div class="row" style="margin-top:10px"><label class="hint" style="margin:0;flex:0 0 auto">move starts at</label><input type="number" id="sg-camstart" value="0" min="0" step="0.05"><select id="sg-punch"><option value="none">no punch</option></select></div>
         <div class="map" id="sg-then" style="margin-top:8px"></div>
