@@ -62,7 +62,7 @@ export async function submit(graph, label = "job", kind = "render") {
   try { j = await sdk.submit(sdk.workflows.fromJson(await respell(graph, inputsOf))); }
   catch (e) { throw new Error(`ComfyUI refused the graph: ${why(e)}`); }
   const job = {id: j.id, label, kind, status: "queued", value: 0, max: 1, frac: 0, step: null, steps: null, node: null, outputs: [], error: null,
-               t0: Date.now(), sdkJob: j, subs: subfolders(graph), w: weights(graph)};
+               t0: Date.now(), sdkJob: j, subs: subfolders(graph), w: weights(graph), graph};
   jobs.set(job.id, job);
   emit({type: "job", job});
   follow(job);
@@ -140,12 +140,36 @@ async function finish(job) {
     const rec = await low.getJob(j.id).catch(() => null);          // the raw record carries each output's link
     for (const o of rec?.outputs || []) addOutput(job, o);
     job.status = "done"; job.frac = 1;
+    // how long it ran (not counting its wait in the queue), for the time estimates
+    try {
+      const h = (await json(await fetch(`/history/${j.id}`)))?.[j.id];
+      const m = h?.status?.messages || [], a = m.find(x => x[0] === "execution_start")?.[1]?.timestamp, b = m.find(x => x[0] === "execution_success")?.[1]?.timestamp;
+      if (a && b) job.ranSeconds = (b - a) / 1000;
+    } catch { /* not in history */ }
   } else {
     job.status = "error";
     const er = j.error;
     job.error = er ? `${er.class_type ? er.class_type + ": " : ""}${er.message || er.code}` : j.status;
   }
   emit({type: "job", job});
+}
+
+// resolves with the job once it is done or has failed
+export function waitFor(job) {
+  return new Promise((res) => {
+    if (job.status === "done" || job.status === "error") return res(job);
+    const off = on((ev) => {
+      if (ev.type === "job" && ev.job.id === job.id && (ev.job.status === "done" || ev.job.status === "error")) { off(); res(ev.job); }
+    });
+  });
+}
+// ComfyUI's per-user file store (user/default/...): small JSON the studio keeps between sessions (timings, the bin, test runs)
+export async function readUser(path, fallback = null) {
+  try { const r = await fetch(`/api/userdata/${encodeURIComponent(path)}`); return r.ok ? await r.json() : fallback; } catch { return fallback; }
+}
+export async function writeUser(path, data) {
+  const r = await fetch(`/api/userdata/${encodeURIComponent(path)}?overwrite=true`, {method: "POST", body: JSON.stringify(data)});
+  if (!r.ok) throw new Error(`couldn't save ${path}: ${r.status}`);
 }
 
 export async function cancel(id) {
@@ -162,6 +186,8 @@ export async function upload(file) {
 }
 export const inputRef = (asset) => asset;
 export const outputRef = (f) => `${f.subfolder ? f.subfolder + "/" : ""}${f.filename} [output]`;
+// a file of ComfyUI's ({filename, subfolder, type: output | input}) as a loader input
+export const fileRef = (f) => f && typeof f === "object" && f.filename ? `${f.subfolder ? f.subfolder + "/" : ""}${f.filename} [${f.type === "input" ? "input" : "output"}]` : f;
 // On this machine, play results straight from ComfyUI's /view (range requests, no second hop); elsewhere follow the v2 link.
 const LOCAL = BASE === location.origin;
 export const viewUrl = (f) => (LOCAL || !f.url) ? `/view?filename=${encodeURIComponent(f.filename)}&subfolder=${encodeURIComponent(f.subfolder || "")}&type=${f.type || "output"}` : f.url;

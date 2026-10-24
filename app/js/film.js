@@ -61,67 +61,139 @@ export async function planFilm({idea, shots = 6, genre = null}, io) {
   return {...plan, tag, idea, genre: genre?.id || null};
 }
 
-// A run stopped halfway resumes: a stage whose files are already in ComfyUI's output (same plan, same tag) is not run
-// again. io.exists says whether a saved file is there; without it every stage runs.
-export async function makeFilm(plan, io, {genre = null, onStage = () => {}} = {}) {
-  const tag = plan.tag || Date.now().toString(36), n = plan.shots.length, pre = `valis/film_${tag}`;
-  const saved = async (names) => {
-    if (!io.exists) return null;
-    const files = names.map(name => ({filename: name, subfolder: "valis", type: "output"}));
-    for (const f of files) if (!(await io.exists(f))) return null;
-    return {outputs: files};
-  };
-  const stage = async (names, label, graph) => (await saved(names)) || await io.run(graph(), label);
-  // a shot's still: the genre's look, the shot, the looks of the cast who are in it (all of them when the plan doesn't say), the place
-  const inShot = (s) => (plan.cast || []).filter(c => !s.who || !c.name || s.who.some(w => w.toLowerCase().includes(c.name.toLowerCase()) || c.name.toLowerCase().includes(w.toLowerCase())));
-  const still = (s) => [genre?.style || "", s.keyframe, ...inShot(s).map(c => c.look), plan.place].filter(Boolean).join(" ");
-  const push = P.MOVES.find(m => m.id === "push");
-  const free = async () => { if (io.free) await io.free().catch(() => {}); };
-  await free();
+// ---------------------------------------------------------------------------------------------------------- steps
+// The film is made in steps, and every step can be run alone from the Film tab: the song, every shot's keyframe (review
+// them, re-roll one, open one in Create and send it back), the shots, the effects, the cut. A step only makes what the
+// plan doesn't have yet, so the whole film is the steps in order (makeFilm), and a stopped run picks up where it was.
+// What each shot has is kept in the plan itself: shot.key (its still), shot.clip (its H3 shot), shot.fx (with effects).
+// Results put there by hand (a still made in Create, a clip from the bin) are used as they are.
+//
+// io: {run(graph, label) -> {outputs}, text(file), ref(file), free?(), has?(node), exists?(file)}
+const pre = (plan) => `valis/film_${plan.tag || (plan.tag = Date.now().toString(36))}`;
+const base = (plan) => pre(plan).slice("valis/".length);
+async function saved(io, names) {
+  if (!io.exists) return null;
+  const files = names.map(name => ({filename: name, subfolder: "valis", type: "output"}));
+  for (const f of files) if (!(await io.exists(f))) return null;
+  return {outputs: files};
+}
+// a shot's still: the genre's look, the shot, the looks of the cast who are in it (all of them when the plan doesn't say), the place
+export function stillPrompt(plan, s, genre = null) {
+  const inShot = (plan.cast || []).filter(c => !s.who || !c.name || s.who.some(w => w.toLowerCase().includes(c.name.toLowerCase()) || c.name.toLowerCase().includes(w.toLowerCase())));
+  return [genre?.style || "", s.keyframe, ...inShot.map(c => c.look), plan.place].filter(Boolean).join(" ");
+}
+export const sizeOf = (plan) => plan.size || {w: 768, h: 1344};
+const keySeed = (s, k) => s.keySeed ?? 7101 + k;
+const free = async (io) => { if (io.free) await io.free().catch(() => {}); };
+
+// the song: YuE2 writes and plays it (or your own: plan.song.file, read for its tempo); its bar sets every shot's length
+export async function makeSong(plan, io, {onStage = () => {}} = {}) {
+  if (plan.music?.audio) return plan.music;
+  const n = plan.shots.length, b = base(plan);
+  await free(io);
+  if (plan.song.file) {                                // your own song: Valis hears its tempo and bars
+    onStage("song", "Reading your song's tempo and bars");
+    const r = await io.run(G.scoreMake({audio: plan.song.file, title: plan.title, prefix: `${pre(plan)}_score`}), "Film · read the song");
+    const sc = JSON.parse(await io.text(r.outputs.find(o => /\.json$/i.test(o.filename))));
+    const bar = {bpm: sc.bpm, beats: Number(String(sc.meter).split("/")[0]) || 4, seconds: sc.bar_seconds};
+    return (plan.music = {audio: plan.song.file, own: true, abc: "", bar, cut: shotSeconds(bar.seconds)});
+  }
   onStage("song", "YuE2 writes the sheet music and performs it");
-  const base = pre.slice("valis/".length);
-  const song = await stage([`${base}_song_00001.flac`, `${base}_song_abc_00001.txt`], "Film · song",
-    () => G.song({style: plan.song.style, lyrics: plan.song.lyrics, seconds: Math.min(60, Math.ceil(n * SHOT_SECONDS + 2)), seed: 1843, prefix: `${pre}_song`}).graph);
+  const song = await saved(io, [`${b}_song_00001.flac`, `${b}_song_abc_00001.txt`]) || await io.run(
+    G.song({style: plan.song.style, lyrics: plan.song.lyrics, seconds: Math.min(60, Math.ceil(n * SHOT_SECONDS + 2)), seed: plan.song.seed ?? 1843, prefix: `${pre(plan)}_song`}).graph, "Film · song");
   const audio = song.outputs.find(o => /\.(flac|wav|mp3)$/i.test(o.filename)), abcFile = song.outputs.find(isText);
   if (!audio) throw new Error("YuE2 saved no audio");
   const abc = abcFile ? await io.text(abcFile) : "";
-  const bar = barSeconds(abc), cut = shotSeconds(bar.seconds);
-  await free();
-  onStage("keyframes", `Krea 2 frames ${n} shots`);
-  const keys = await stage(plan.shots.map((_, k) => `${base}_key_${k + 1}_00001_.png`), "Film · keyframes",
-    () => G.filmKeyframes({prompts: plan.shots.map(still), seed: 7101, prefix: `${pre}_key`}));
-  const keyOf = (k) => keys.outputs.find(o => new RegExp(`_key_${k + 1}_\\d+_\\.png$`).test(o.filename));
-  const clips = [];
-  for (let k = 0; k < n; k++) {
-    if (k === 0) await free();
-    onStage("shots", `MiniMax H3 shoots shot ${k + 1} of ${n}`, k);
-    const key = keyOf(k);
-    if (!key) throw new Error(`no keyframe for shot ${k + 1}`);
-    const r = await stage([`${base}_shot_${k + 1}_00001_.mp4`], `Film · shot ${k + 1}`,
-      () => G.shot({image: io.ref(key), motion: P.motionPrompt({genre, move: push, action: plan.shots[k].motion}), seconds: SHOT_SECONDS, seed: 51101 + k, prefix: `${pre}_shot_${k + 1}`}));
-    const v = r.outputs.find(isVideo);
-    if (!v) throw new Error(`shot ${k + 1} saved no video`);
-    clips.push(v);
+  const bar = barSeconds(abc);
+  return (plan.music = {audio, abc, bar, cut: shotSeconds(bar.seconds)});
+}
+
+// keyframes for the shots that have none (only: shot indexes to make again, with a new seed if asked)
+export async function frameShots(plan, io, {genre = null, only = null, onStage = () => {}} = {}) {
+  const want = plan.shots.map((s, k) => k).filter(k => only ? only.includes(k) : !plan.shots[k].key);
+  if (!want.length) return plan;
+  const {w, h} = sizeOf(plan), b = base(plan);
+  await free(io);
+  onStage("keyframes", `Krea 2 frames ${want.length} shot${want.length > 1 ? "s" : ""}`);
+  if (!only && want.length === plan.shots.length && !plan.shots.some(s => s.keySeed != null)) {
+    // the whole film in one graph (Krea loads once), named so a stopped run finds them again
+    const keys = await saved(io, plan.shots.map((_, k) => `${b}_key_${k + 1}_00001_.png`)) || await io.run(
+      G.filmKeyframes({prompts: plan.shots.map(s => stillPrompt(plan, s, genre)), seed: 7101, width: w, height: h, prefix: `${pre(plan)}_key`}), "Film · keyframes");
+    want.forEach(k => { plan.shots[k].key = keys.outputs.find(o => new RegExp(`_key_${k + 1}_\\d+_\\.png$`).test(o.filename)) || null; });
+  } else {
+    for (const k of want) {
+      const s = plan.shots[k];
+      const r = await io.run(G.keyframes({prompt: stillPrompt(plan, s, genre), width: w, height: h, seeds: [keySeed(s, k)], prefix: `${pre(plan)}_key_${k + 1}_s${keySeed(s, k)}`}), `Film · keyframe ${k + 1}`);
+      s.key = r.outputs.find(o => /\.png$/i.test(o.filename)) || null;
+      s.clip = null; s.fx = null;                      // a new still means the shot is made again
+    }
   }
-  const fxed = [];
-  for (let k = 0; k < n; k++) {
+  const miss = want.filter(k => !plan.shots[k].key);
+  if (miss.length) throw new Error(`no keyframe for shot ${miss.map(k => k + 1).join(", ")}`);
+  return plan;
+}
+
+export async function shootShots(plan, io, {genre = null, only = null, onStage = () => {}} = {}) {
+  const want = plan.shots.map((s, k) => k).filter(k => only ? only.includes(k) : !plan.shots[k].clip);
+  const {w, h} = sizeOf(plan), b = base(plan), push = P.MOVES.find(m => m.id === "push");
+  if (want.length) await free(io);
+  for (const k of want) {
+    const s = plan.shots[k];
+    if (!s.key) throw new Error(`shot ${k + 1} has no keyframe yet`);
+    onStage("shots", `MiniMax H3 shoots shot ${k + 1} of ${plan.shots.length}`, k);
+    const seed = s.shotSeed ?? 51101 + k, fresh = only || s.shotSeed != null || plan.size;
+    const r = (!fresh && await saved(io, [`${b}_shot_${k + 1}_00001_.mp4`])) || await io.run(
+      G.shot({image: io.ref(s.key), motion: P.motionPrompt({genre, move: push, action: s.motion}), seconds: SHOT_SECONDS, width: w, height: h, seed,
+              prefix: `${pre(plan)}_shot_${k + 1}${fresh ? `_s${seed}` : ""}`}), `Film · shot ${k + 1}`);
+    s.clip = r.outputs.find(isVideo) || null; s.fx = null;
+    if (!s.clip) throw new Error(`shot ${k + 1} saved no video`);
+  }
+  return plan;
+}
+
+export async function effectShots(plan, io, {only = null, onStage = () => {}} = {}) {
+  const m = plan.music; if (!m?.audio) throw new Error("make the song first");
+  const want = plan.shots.map((s, k) => k).filter(k => only ? only.includes(k) : !plan.shots[k].fx);
+  const b = base(plan);
+  if (want.length) await free(io);
+  for (const k of want) {
     const s = plan.shots[k], lib = G.LIBRARY.find(l => l.id === s.effect);
-    if (k === 0) await free();
-    onStage("effects", `effects and sound on shot ${k + 1} of ${n}`, k);
+    if (!s.clip) throw new Error(`shot ${k + 1} isn't shot yet`);
+    onStage("effects", `effects and sound on shot ${k + 1} of ${plan.shots.length}`, k);
     const layers = lib ? [{effect: lib.id, on: s.on, params: lib.params || {}}] : [];
     const subject = lib && ((lib.needs || []).includes("subject") || lib.params?.at === "subject") ? s.subject : "";
-    const r = await stage([`${base}_fx_${k + 1}_00001_.mp4`], `Film · effects ${k + 1}`,
-      () => G.fx({clip: io.ref(clips[k]), subject, source: "song", audio: io.ref(audio), abc, layers, sound: true, seconds: SHOT_SECONDS,
-                  start: k * cut.seconds, prefix: `${pre}_fx_${k + 1}`}));
-    const v = r.outputs.find(isVideo);
-    if (!v) throw new Error(`effects on shot ${k + 1} saved no video`);
-    fxed.push(v);
+    const r = (!only && !s._custom && await saved(io, [`${b}_fx_${k + 1}_00001_.mp4`])) || await io.run(
+      G.fx({clip: io.ref(s.clip), subject, source: "song", audio: io.ref(m.audio), abc: m.abc, layers, sound: true, seconds: SHOT_SECONDS,
+            start: k * m.cut.seconds, prefix: `${pre(plan)}_fx_${k + 1}${only ? "_" + Date.now().toString(36) : ""}`}), `Film · effects ${k + 1}`);
+    s.fx = r.outputs.find(isVideo) || null;
+    if (!s.fx) throw new Error(`effects on shot ${k + 1} saved no video`);
   }
-  onStage("cut", `cutting ${n} shots on the bars (${cut.bars} bar${cut.bars > 1 ? "s" : ""} each at ${bar.bpm} BPM)`);
-  // the title card at the end needs the Valis Title Card node (a pack loaded before it existed has no such node until a restart)
-  const card = io.has && await io.has("ValisTitleCard") ? {text: plan.title, song: io.ref(audio), start: n * cut.seconds, seconds: 3, width: 768, height: 1344} : null;
-  const r = await io.run(G.filmCut({shots: fxed.map(v => ({file: io.ref(v), seconds: cut.seconds})), title: card, prefix: `${pre}_film`}), "Film · cut");
-  const film = r.outputs.find(isVideo);
-  if (!film) throw new Error("the cut saved no video");
-  return {film, song: audio, abc, bar, cut, keys: keys.outputs.filter(o => /\.png$/i.test(o.filename)), clips, fxed, tag};
+  return plan;
+}
+
+export async function cutFilm(plan, io, {onStage = () => {}} = {}) {
+  const m = plan.music, n = plan.shots.length;
+  const miss = plan.shots.map((s, k) => s.fx ? null : k + 1).filter(Boolean);
+  if (miss.length) throw new Error(`shot ${miss.join(", ")} has no effects pass yet`);
+  onStage("cut", `cutting ${n} shots on the bars (${m.cut.bars} bar${m.cut.bars > 1 ? "s" : ""} each at ${m.bar.bpm} BPM)`);
+  const {w, h} = sizeOf(plan);
+  const card = io.has && await io.has("ValisTitleCard") ? {text: plan.title, song: io.ref(m.audio), start: n * m.cut.seconds, seconds: 3, width: w, height: h} : null;
+  const r = await io.run(G.filmCut({shots: plan.shots.map(s => ({file: io.ref(s.fx), seconds: m.cut.seconds})), title: card, prefix: `${pre(plan)}_film${plan.cuts ? "_" + plan.cuts : ""}`}), "Film · cut");
+  plan.cuts = (plan.cuts || 0) + 1;
+  plan.film = r.outputs.find(isVideo) || null;
+  if (!plan.film) throw new Error("the cut saved no video");
+  return plan;
+}
+
+// the whole film: every step in order, each making only what is still missing
+export async function makeFilm(plan, io, {genre = null, onStage = () => {}, onStep = () => {}} = {}) {
+  plan.tag = plan.tag || Date.now().toString(36);
+  await makeSong(plan, io, {onStage}); onStep(plan);
+  await frameShots(plan, io, {genre, onStage}); onStep(plan);
+  await shootShots(plan, io, {genre, onStage}); onStep(plan);
+  await effectShots(plan, io, {onStage}); onStep(plan);
+  await cutFilm(plan, io, {onStage}); onStep(plan);
+  const m = plan.music;
+  return {film: plan.film, song: m.audio, abc: m.abc, bar: m.bar, cut: m.cut, keys: plan.shots.map(s => s.key), clips: plan.shots.map(s => s.clip),
+          fxed: plan.shots.map(s => s.fx), tag: plan.tag};
 }

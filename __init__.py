@@ -42,6 +42,13 @@ except Exception as e:
     print(f"[valis] loop nodes not loaded: {e}")
 
 try:
+    from .nodes_stage import NODE_CLASS_MAPPINGS as _NG, NODE_DISPLAY_NAME_MAPPINGS as _DG
+    NODE_CLASS_MAPPINGS.update(_NG)
+    NODE_DISPLAY_NAME_MAPPINGS.update(_DG)
+except Exception as e:
+    print(f"[valis] stage nodes not loaded: {e}")
+
+try:
     from .nodes_stereo import NODE_CLASS_MAPPINGS as _NS, NODE_DISPLAY_NAME_MAPPINGS as _DS
     NODE_CLASS_MAPPINGS.update(_NS)
     NODE_DISPLAY_NAME_MAPPINGS.update(_DS)
@@ -86,6 +93,18 @@ try:
         _model_routes(routes)
     except Exception as e:
         print(f"[valis] model routes not registered: {e}")
+
+    try:
+        from .machine_routes import register as _machine_routes
+        _machine_routes(routes)
+    except Exception as e:
+        print(f"[valis] machine route not registered: {e}")
+
+    try:
+        from .stage_routes import register as _stage_routes
+        _stage_routes(routes)
+    except Exception as e:
+        print(f"[valis] stage routes not registered: {e}")
 
     from .sdk_api import mount
     mount(routes, server.PromptServer.instance.app)

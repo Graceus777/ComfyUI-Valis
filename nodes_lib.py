@@ -100,6 +100,31 @@ class ValisCues:
         return (c, summ)
 
 
+class ValisScoreMake:
+    """Make a Valis score from cues (Valis Cues: any music, YuE2's sheet music, a cue sheet): tempo, every lane's hits,
+    the curves, sections named by how loud they are, and shots cut on whole bars. The Score tab draws and edits it, and
+    Valis Score (load) reads it back. Wire `json` into Save Text (format json) to keep it."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"cues": ("VALIS_CUES",),
+                             "title": ("STRING", {"default": "untitled"}),
+                             "shot_seconds": ("FLOAT", {"default": 107 / 24, "min": 0.5, "max": 60.0, "step": .01, "tooltip": "a shot is as many whole bars as fit in this (one MiniMax H3 clip = 4.46 s)"}),
+                             "section_bars": ("INT", {"default": 8, "min": 1, "max": 64, "tooltip": "bars per section (sections are named by how loud they are: intro, verse, build, chorus, drop, breakdown, outro)"})},
+                "optional": {"bpm": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 300.0, "step": .1, "tooltip": "your own tempo (0 = what the source says or the analysis hears)"}),
+                             "meter": ("INT", {"default": 0, "min": 0, "max": 12, "tooltip": "beats per bar (0 = the source's; music analysis assumes 4, so a waltz needs 3)"})}}
+
+    RETURN_TYPES = ("VALIS_SCORE", "STRING")
+    RETURN_NAMES = ("score", "json")
+    FUNCTION = "make"
+    CATEGORY = "Valis/library"
+
+    def make(self, cues, title, shot_seconds, section_bars, bpm=0.0, meter=0):
+        from .valis_fx.lib.score_make import make_score
+        sc = make_score(cues, title=title, shot_seconds=shot_seconds, section_bars=section_bars, bpm=bpm, meter=meter)
+        return (sc, json.dumps(sc))
+
+
 class ValisLayer:
     @classmethod
     def INPUT_TYPES(cls):
@@ -224,7 +249,7 @@ class ValisColorPalette:
         from .valis_fx.lib.palette import LOOKS
         return {"required": {"images": ("IMAGE",), "look": (list(LOOKS) + ["custom"], {"default": "film_colors"}),
                              "strength": ("FLOAT", {"default": 1.0, "min": 0, "max": 1, "step": .05})},
-                "optional": {"hex": ("STRING", {"default": "", "tooltip": "custom: 2-6 colours, darkest to lightest or any order, e.g. '#0b1d2a, #c8553d, #f2d0a4'"}),
+                "optional": {"hex": ("STRING", {"default": "", "tooltip": "2-6 colours, e.g. '#0b1d2a, #c8553d, #f2d0a4'. With look = custom: only these colours. With a named look: the look with these colours mapped through it (its contrast, glow and grain kept)"}),
                              "grain": ("FLOAT", {"default": -1.0, "min": -1, "max": 1, "step": .05, "tooltip": "-1 keeps the look's own grain"}),
                              "seed": ("INT", {"default": 0, "min": 0, "max": 2 ** 31})}}
 
@@ -234,10 +259,12 @@ class ValisColorPalette:
 
     def apply(self, images, look, strength, hex="", grain=-1.0, seed=0):
         import torch
-        from .valis_fx.lib.palette import LOOKS, Look, grade, hex_look
+        from .valis_fx.lib.palette import LOOKS, Look, grade, hex_look, own_look
+        cols = [c for c in hex.replace(";", ",").split(",") if c.strip()]
         if look == "custom":
-            cols = [c for c in hex.replace(";", ",").split(",") if c.strip()]
             lk = hex_look(cols) if len(cols) >= 2 else LOOKS["natural"]
+        elif len(cols) >= 2:
+            lk = own_look(look, cols)
         else:
             lk = Look(LOOKS[look])
         if grain >= 0:
@@ -556,10 +583,10 @@ class ValisVoiceTurn:
         return ({"waveform": torch.from_numpy(out[None].astype(np.float32)), "sample_rate": sr},)
 
 
-NODE_CLASS_MAPPINGS = {"ValisCues": ValisCues, "ValisLayer": ValisLayer, "ValisRender": ValisRender, "ValisSoundDesign": ValisSoundDesign, "ValisTitleCard": ValisTitleCard,
+NODE_CLASS_MAPPINGS = {"ValisScoreMake": ValisScoreMake, "ValisCues": ValisCues, "ValisLayer": ValisLayer, "ValisRender": ValisRender, "ValisSoundDesign": ValisSoundDesign, "ValisTitleCard": ValisTitleCard,
                        "ValisSwapCheck": ValisSwapCheck, "ValisSwapMatch": ValisSwapMatch, "ValisVoiceTurn": ValisVoiceTurn,
                        "ValisColorPalette": ValisColorPalette, "ValisTrimHold": ValisTrimHold, "ValisDollyZoom": ValisDollyZoom, "ValisWhipPan": ValisWhipPan, "ValisCanny": ValisCanny, "ValisPoseCheck": ValisPoseCheck}
-NODE_DISPLAY_NAME_MAPPINGS = {"ValisCues": "Valis Cues (score / music / sheet music / voice / cue sheet)", "ValisLayer": "Valis Layer (library effect)",
+NODE_DISPLAY_NAME_MAPPINGS = {"ValisScoreMake": "Valis Score (make)", "ValisCues": "Valis Cues (score / music / sheet music / voice / cue sheet)", "ValisLayer": "Valis Layer (library effect)",
                               "ValisRender": "Valis Render (library stack)", "ValisSoundDesign": "Valis Sound Design",
                               "ValisSwapCheck": "Valis Swap Check (pre)", "ValisSwapMatch": "Valis Swap Match (post)",
                               "ValisVoiceTurn": "Valis Voice Turn", "ValisColorPalette": "Valis Color Palette (looks / HEX)",

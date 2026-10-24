@@ -31,6 +31,8 @@ export const MODELS = {
   h3AVAE: "minimax_h3_audio_vae_fp32.safetensors", pdd: "MiniMax-H3-FL2VA-Acc-8Step.safetensors",
   qwen: "qwen_image_2.1-Q6_K.gguf", qwenTE: "qwen3vl_8b_w4a8.safetensors", qwenVAE: "qwen_image_2.1_vae_bf16.safetensors",
   sam: "sam3.1_multiplex_fp16.safetensors",
+  qwenOutpaint: "qwen-image-2.1-outpaint-v2.safetensors",              // Stage: the world past the frame
+  kreaAnyPaint: "krea2_anypaint_rank32.safetensors",                   // yijunwang2/krea2-anypaint (Krea 2 Community License), with its ComfyUI nodes
   da3: "depth_anything_3_small.safetensors",
   llm: "qwen3vl_8b_w4a8.safetensors",                 // the film planner: ComfyUI's text generation on Qwen Image's own encoder
   funCN: "minimax_h3_fun_controlnet_union_pruned_int8_convrot.safetensors",
@@ -43,6 +45,12 @@ export const MODELS = {
 const N = (class_type, inputs) => ({class_type, inputs});
 const frames24 = (sec) => { const n = Math.round(sec * 24); return Math.max(22, Math.round((n - 5) / 17) * 17 + 5); };  // H3: 17k+5
 export { frames24 };
+// The colour grade on a result: a look's name, or {look, hex, strength} (a look with your own colours mapped through it,
+// or look "custom" for the colours alone).
+export function palNode(images, look) {
+  const l = typeof look === "string" ? {look} : look;
+  return N("ValisColorPalette", {images, look: l.look, strength: l.strength ?? 1.0, ...(l.hex ? {hex: l.hex} : {})});
+}
 
 // ---------------------------------------------------------------- keyframes
 // loras: [{name, strength}] style LoRAs on Krea 2 (THE FOURTEENTH SHELL's look: Krea2\\V1 at 0.8, prompts that start
@@ -127,7 +135,7 @@ function shotGraph({image, motion, width = 768, height = 1344, seconds = 4.46, s
     ...(dolly ? dollyZoom(th, dolly) : {}),
     // whip pan: the shot is a steady real pan; Valis Whip Pan speed-ramps it into a whip with the camera's own motion blur
     ...(whip ? {"wp": N("ValisWhipPan", {images: dz, fps: 24.0, mode: whip.mode || "return", speed: whip.speed || 0, smear: whip.smear || 0.15, shutter: whip.shutter || 1.0})} : {}),
-    ...(look ? {"pal": N("ValisColorPalette", {images: wp, look, strength: 1.0})} : {}),
+    ...(look ? {"pal": palNode(wp, look)} : {}),
     ...endAnchor({end, last, width, height, prefix}),
   };
 }
@@ -164,7 +172,7 @@ export function orbit360({image, loras, raw, width = 768, height = 1344, mode = 
   let img = ["cat", 0];
   g["cat"] = N("ImageBatch", {image1: ["a_th", 0], image2: ["b_th", 0]});
   g["acat"] = N("AudioConcat", {audio1: ["a_ad", 0], audio2: ["b_ad", 0], direction: "after"});
-  if (look) { g["pal"] = N("ValisColorPalette", {images: img, look, strength: 1.0}); img = ["pal", 0]; }
+  if (look) { g["pal"] = palNode(img, look); img = ["pal", 0]; }
   g["out"] = N("CreateVideo", {images: img, fps: 24.0, audio: ["acat", 0]});
   g["save"] = N("SaveVideo", {video: ["out", 0], filename_prefix: prefix, format: "auto", codec: "auto"});
   return g;
@@ -218,7 +226,7 @@ export function wanMove({image, move, scene = "", subject = "the subject", width
   // a LoRA that only learned one direction: run it on the mirrored keyframe and mirror the shot back (arc left = arc right, flipped)
   if (move.mirror) Object.assign(g, {"mf": N("ImageFlip", {image: ["fs", 0], flip_method: "y-axis: horizontally"}),
                                      "mb": N("ImageFlip", {image: ["dec", 0], flip_method: "y-axis: horizontally"})});
-  if (look) g["pal"] = N("ValisColorPalette", {images: move.mirror ? ["mb", 0] : ["dec", 0], look, strength: 1.0});
+  if (look) g["pal"] = palNode(move.mirror ? ["mb", 0] : ["dec", 0], look);
   return g;
 }
 
@@ -285,7 +293,7 @@ export function loopShot({image = null, prompt, width = 768, height = 1344, leng
     "ld": N("MiniMaxH3LoopDecode", {samples: ["11", 0], vae: ["3", 0], audio_vae: ["av", 0], pad_clips: padClips}),
   };
   let img = ["ld", 0];
-  if (look) { g["pal"] = N("ValisColorPalette", {images: img, look, strength: 1.0}); img = ["pal", 0]; }
+  if (look) { g["pal"] = palNode(img, look); img = ["pal", 0]; }
   g["13"] = N("CreateVideo", {images: img, fps: 24.0, audio: ["ld", 1]});
   g["14"] = N("SaveVideo", {video: ["13", 0], filename_prefix: prefix, format: "auto", codec: "auto"});
   g["gif"] = N("ValisLoopSave", {images: img, filename_prefix: prefix, format: "gif", fps: 24.0, gif_width: gifWidth});
@@ -639,6 +647,24 @@ export function song({style, lyrics, seconds = 30, seed = 1843, base = 500, pref
   return {graph: g, audio: [i(6), 0], abc: instrumental ? [i(10), 0] : [i(1), 0]};
 }
 
+// A Valis score made from any music (or YuE2's sheet music, or a cue sheet, or several): Valis Cues hears it, Valis
+// Score (make) lays it out in bars, sections and shots, and it is saved as JSON for the Score tab and Valis Score (load).
+// audio: a file to load, or music: a link to audio made in the same graph; abc: sheet music (text or a link)
+export function scoreMake({audio = null, music = null, abc = "", cueSheet = "", title = "untitled", bpm = 0, meter = 0, shotSeconds = 107 / 24, sectionBars = 8,
+                           prefix = "valis/scores/score"}) {
+  const g = {};
+  if (audio) { g["a"] = N("LoadAudio", {audio}); music = ["a", 0]; }
+  g["c"] = N("ValisCues", {cue_sheet: cueSheet, duration: 0, ...(music ? {music} : {}), ...(abc ? {abc} : {})});
+  g["m"] = N("ValisScoreMake", {cues: ["c", 0], title, shot_seconds: shotSeconds, section_bars: sectionBars, bpm, meter});
+  g["s"] = N("SaveText", {text: ["m", 1], filename_prefix: prefix, format: "json"});
+  return g;
+}
+// YuE2 writes a song and plays it, and the score is made from its own sheet music and its audio, in one job
+export function songScore({style, lyrics = "[Instrumental]", seconds = 30, seed = 1843, title = "untitled", prefix = "valis/scores/song"}) {
+  const s = song({style, lyrics, seconds, seed, prefix});
+  return {...s.graph, ...scoreMake({music: s.audio, abc: s.abc, title, prefix})};
+}
+
 // The FX tab: a clip (+ another clip, a subject), cues from a song / a written song / a cue sheet / a score, a stack of
 // library layers, and every layer's own sound mixed with the music.
 export function fx({clip, other = null, subject = "", source = "sheet", audio = null, abc = "", songSpec = null, cueSheet = "", score = null,
@@ -651,10 +677,11 @@ export function fx({clip, other = null, subject = "", source = "sheet", audio = 
   // design gets the song from there, so a film's shots can each take their place in one song.
   const cues = {cue_sheet: source === "sheet" ? cueSheet : "", duration: 0, offset: -start, bpm_hint: 0, ...(abc ? {abc} : {})};
   let music = null;
-  if (source === "song" && audio) { g["45"] = N("LoadAudio", {audio}); music = ["45", 0]; }
+  // a score's song: the cues come from the score, the song is only mixed under the effects' sounds
+  if ((source === "song" || source === "score") && audio) { g["45"] = N("LoadAudio", {audio}); music = ["45", 0]; }
   if (source === "write" && songSpec) { const s = song({...songSpec, prefix: prefix + "_song"}); Object.assign(g, s.graph); music = s.audio; cues.abc = s.abc; }
   if (source === "score" && score) { g["70"] = N("ValisScoreLoad", {score}); cues.score = ["70", 0]; }
-  if (music) cues.music = music;
+  if (music && source !== "score") cues.music = music;
   g["50"] = N("ValisCues", cues);
   let prev = null;
   layers.forEach((l, k) => {
@@ -941,6 +968,143 @@ export function filmCut({shots, title = null, prefix = "valis/film"}) {
   return g;
 }
 
+// ---------------------------------------------------------------- stage
+// One still -> named depth layers. SAM 3 finds each name ("the lamps:20" = up to 20 of them), Depth Anything 3 Small
+// orders them, Valis Stage completes each layer behind the ones in front and writes output/valis/stage/<name>/.
+// The world past the frame, painted: Valis Stage Surround puts the stage's still in the middle of a canvas twice as wide
+// and tall (solid gray around it), Qwen Image 2.1 + the outpaint LoRA paints the gray out as a continuation of the
+// scene (its trained instruction, ~1 min on 12 GB), and Valis Stage Dome writes the painting into the stage's dome.png.
+export const OUTPAINT = "Outpaint the image: replace the solid gray areas with a seamless continuation of the scene, keeping the existing picture unchanged.";
+// plate: the same job also paints behind the things standing in the scene. Valis Stage Clean Plate hands Krea 2 edit
+// (the identity-edit LoRA, 10 steps) the still and "Remove the man and the fire from the picture…", plus the biggest
+// thing alone, and Valis Stage Plate checks what really went, then puts the clean plate under every layer where those
+// things stood, so a move uncovers real paint instead of a smear. At rest nothing changes.
+// engine "krea": Krea 2 turbo + the AnyPaint adapter paints the margin of a canvas 30% bigger on each side (~1.6 MP,
+// the margin filled with the still's own edge colours; 8 steps), instead of Qwen on a gray canvas twice the size.
+// Krea 2's licence is cleaner than Qwen Image 2.1's research licence, and Krea is already loaded for the erase.
+export const KREA_SURROUND = "the scene continuing naturally past its edges: a complete coherent image, consistent lighting, perspective and detail";
+export function stagePaint({stage, seed = 101, steps = 25, dome = true, plate = true, engine = "qwen", prompt = "", pad = 0.3, megapixels = 1.6}) {
+  const g = {};
+  if (dome && engine === "krea") {
+    Object.assign(g, kreaLoaders(), {
+      "204": N("LoraLoaderModelOnly", {model: ["200", 0], lora_name: MODELS.kreaAnyPaint, strength_model: 1.0}),
+      "205": N("Krea2AnyPaintModelPatch", {model: ["204", 0], kv_cache: true}),
+      "sur": N("ValisStageSurround", {stage, megapixels, pad}),
+      "kp": N("Krea2AnyPaintPrepare", {source: ["sur", 1], left: ["sur", 2], top: ["sur", 3], right: ["sur", 4], bottom: ["sur", 5],
+        reference_max_edge: 384, boundary_redraw_px: 32}),
+      "ke": N("Krea2AnyPaintEncode", {clip: ["201", 0], prompt: `${prompt ? prompt.replace(/[.\s]+$/, "") + ", " : ""}${KREA_SURROUND}`, vae: ["202", 0],
+        semantic_reference: ["kp", 0], known_image: ["kp", 1], keep_mask: ["kp", 3], vlm_reference: true}),
+      "kn": N("CLIPTextEncode", {text: "", clip: ["201", 0]}),
+      "ks": N("KSampler", {model: ["205", 0], positive: ["ke", 0], negative: ["kn", 0], latent_image: ["ke", 1], seed, steps: 8, cfg: 1.0,
+        sampler_name: "euler", scheduler: "simple", denoise: 1.0}),
+      "dec": N("VAEDecode", {samples: ["ks", 0], vae: ["202", 0]}),
+      "dome": N("ValisStageDome", {stage, painted: ["dec", 0]}),
+    });
+    dome = false;
+  }
+  if (plate) Object.assign(g, kreaLoaders(), {
+    "cp": N("ValisStageCleanPlate", {stage, megapixels: 1.0}),
+    ...kreaEdit(300, ["cp", 0], ["cp", 1], seed + 1, null, 1.0),
+    // the biggest thing alone too: asked for four things at once, Krea kept the lighthouse (and Qwen once kept a man)
+    ...kreaEdit(320, ["cp", 0], ["cp", 3], seed + 2, null, 1.0),
+    "plate": N("ValisStagePlate", {stage, plate: ["312", 0], removed: ["cp", 2], plate_main: ["332", 0], removed_main: ["cp", 4]}),
+  });
+  if (dome) Object.assign(g, {
+    "250": N("UnetLoaderGGUF", {unet_name: MODELS.qwen}),
+    "251": N("CLIPLoader", {clip_name: MODELS.qwenTE, type: "qwen_image", device: "default"}),
+    "252": N("VAELoader", {vae_name: MODELS.qwenVAE}),
+    "253": N("LoraLoaderModelOnly", {model: ["250", 0], lora_name: MODELS.qwenOutpaint, strength_model: 1.0}),
+    "sur": N("ValisStageSurround", {stage, megapixels: 1.03}),
+    "enc": N("TextEncodeQwenImage21", {clip: ["251", 0], prompt: OUTPAINT, negative_prompt: "", resolution: 0, "images.image_1": ["sur", 0], vae: ["252", 0]}),
+    "ks": N("KSampler", {model: ["253", 0], positive: ["enc", 0], negative: ["enc", 1], latent_image: ["enc", 2], seed, steps, cfg: 1, sampler_name: "euler", scheduler: "simple", denoise: 1}),
+    "dec": N("VAEDecode", {samples: ["ks", 0], vae: ["252", 0]}),
+    "dome": N("ValisStageDome", {stage, painted: ["dec", 0]}),
+  });
+  return g;
+}
+export const stageDome = (o) => stagePaint({...o, plate: false});
+
+// sharpen: a still smaller than the export gets SeedVR2 (3B Q8, the same settings as Upscale) to this many px on its
+// short side first. SAM 3 and Depth Anything still look at the original (they work below 1008 px anyway); only the
+// layers' paint comes from the sharp copy, which is also saved into the stage folder as still_*.png.
+// prompt: no still yet, so Krea 2 turbo paints one first (16:9, `size`), in the same job: words in, a set out.
+// caps: what the loaded Valis nodes can do (the studio reads /object_info): retry = Valis Erase's lazy retry plate and
+// footprints; matte = a BiRefNet file for Valis Stage Erased's soft edges; prompt = the words kept in stage.json
+export function stage({image, names, name = "stage", far = 6, band = 0.025, threshold = 0.35, perName = 20, sharpen = 0,
+                       prompt = null, size = [1792, 1008], seed = 7101, erase = false, caps = {}}) {
+  const g = {
+    "1": prompt ? N("VAEDecode", {samples: ["k5", 0], vae: ["k3", 0]}) : N("LoadImage", {image}),
+    "2": N("LoadDA3Model", {model_name: MODELS.da3, weight_dtype: "default"}),
+    "3": N("DA3Inference", {da3_model: ["2", 0], image: ["1", 0], resolution: 1008, resize_method: "upper_bound_resize", mode: "mono"}),
+    "4": N("DA3Render", {da3_geometry: ["3", 0], output: "depth", "output.normalization": "min_max", "output.apply_sky_clip": false}),
+    "5": N("CheckpointLoaderSimple", {ckpt_name: MODELS.sam}),
+  };
+  const st = {image: ["1", 0], depth: ["4", 0], names: names.join("\n"), stage_name: name, far, band};
+  names.slice(0, 12).forEach((n, i) => {
+    const b = 100 + 10 * i, id = (j) => String(b + j);
+    g[id(0)] = N("CLIPTextEncode", {text: `${n.replace(/[,:]/g, " ")}:${perName}`, clip: ["5", 1]});
+    g[id(1)] = N("SAM3_Detect", {model: ["5", 0], image: ["1", 0], conditioning: [id(0), 0], threshold, refine_iterations: 2, individual_masks: true});
+    st[`mask_${i + 1}`] = [id(1), 0];
+  });
+  if (prompt) {
+    Object.assign(g, {
+      "k1": N("UNETLoader", {unet_name: MODELS.krea, weight_dtype: "default"}),
+      "k2": N("CLIPLoader", {clip_name: MODELS.kreaTE, type: "krea2", device: "default"}),
+      "k3": N("VAELoader", {vae_name: MODELS.kreaVAE}),
+      "k4": N("EmptySD3LatentImage", {width: size[0], height: size[1], batch_size: 1}),
+      "k6": N("CLIPTextEncode", {text: prompt, clip: ["k2", 0]}),
+      "k7": N("ConditioningZeroOut", {conditioning: ["k6", 0]}),
+      "k5": N("KSampler", {model: ["k1", 0], positive: ["k6", 0], negative: ["k7", 0], latent_image: ["k4", 0], seed, steps: 10, cfg: 1.0, sampler_name: "euler", scheduler: "simple", denoise: 1.0}),
+      "k8": N("SaveImage", {images: ["1", 0], filename_prefix: `valis/stage/${name}/krea`}),
+    });
+  }
+  if (sharpen) {
+    g["s1"] = N("SeedVR2LoadDiTModel", {model: "seedvr2_ema_3b-Q8_0.gguf", device: "cuda:0", offload_device: "cpu", blocks_to_swap: 16});
+    g["s2"] = N("SeedVR2LoadVAEModel", {model: "ema_vae_fp16.safetensors", device: "cuda:0", offload_device: "cpu", encode_tiled: true, decode_tiled: true});
+    g["s3"] = N("SeedVR2VideoUpscaler", {image: ["1", 0], dit: ["s1", 0], vae: ["s2", 0], seed: 42, resolution: sharpen, max_resolution: 0, batch_size: 1,
+      uniform_batch_size: false, color_correction: "lab", offload_device: "cpu"});
+    g["s4"] = N("SaveImage", {images: ["s3", 0], filename_prefix: `valis/stage/${name}/still`});
+    st.image = ["s3", 0];
+  }
+  if (erase) {
+    // erase first: Krea 2 edit erases the things standing in the still (all of them, and the biggest alone), SAM 3
+    // checks the first edit for a thing it only moved, Valis Erase builds the erased picture, SAM 3 and Depth Anything 3
+    // read the scenery in it, and Valis Stage Erased puts the things back on top as cutouts from the still
+    const still = st.image, eNames = names.join("\n");
+    const ms = {}, pms = {}, ems = {};
+    Object.assign(g, kreaLoaders());
+    g["e1"] = N("ValisEraseSetup", {image: still, names: eNames, megapixels: 1.0});
+    Object.assign(g, kreaEdit(300, ["e1", 0], ["e1", 1], seed + 11, null, 1.0), kreaEdit(320, ["e1", 0], ["e1", 2], seed + 12, null, 1.0));
+    // the others again, with a new seed: Valis Erase asks for it (and for the biggest alone) only when the first edit
+    // left one of them standing, so a clean first edit costs one edit and a failed one gets one retry
+    if (caps.retry) Object.assign(g, kreaEdit(340, ["e1", 0], ["e1", 4], seed + 13, null, 1.0));
+    names.slice(0, 12).forEach((n, i) => {
+      const b = 100 + 10 * i, id = (j) => String(b + j);
+      ms[`mask_${i + 1}`] = [id(1), 0];
+      g[id(2)] = N("SAM3_Detect", {model: ["5", 0], image: ["312", 0], conditioning: [id(0), 0], threshold, refine_iterations: 2, individual_masks: true});
+      pms[`pmask_${i + 1}`] = [id(2), 0];
+      g[id(3)] = N("SAM3_Detect", {model: ["5", 0], image: ["e2", 0], conditioning: [id(0), 0], threshold, refine_iterations: 2, individual_masks: true});
+      ems[`emask_${i + 1}`] = [id(3), 0];
+    });
+    Object.assign(g["e1"].inputs, ms);
+    g["e2"] = N("ValisErase", {image: still, plan: ["e1", 3], plate_all: ["312", 0], plate_main: ["332", 0], names: eNames, ...ms, ...pms,
+      ...(caps.retry ? {plate_rest: ["352", 0]} : {})});
+    g["e3"] = N("DA3Inference", {da3_model: ["2", 0], image: ["e2", 0], resolution: 1008, resize_method: "upper_bound_resize", mode: "mono"});
+    g["e4"] = N("DA3Render", {da3_geometry: ["e3", 0], output: "depth", "output.normalization": "min_max", "output.apply_sky_clip": false});
+    const extra = {};
+    if (caps.retry) extra.footprints = ["e2", 2];
+    if (caps.matte) { g["bm"] = N("LoadBackgroundRemovalModel", {bg_removal_name: caps.matte}); extra.bg_model = ["bm", 0]; }
+    if (caps.prompt && prompt) extra.prompt = prompt;
+    g["900"] = N("ValisStageErased", {image: still, depth: st.depth, erased: ["e2", 0], erased_depth: ["e4", 0], report: ["e2", 1],
+      names: eNames, stage_name: name, far, band, ...ms, ...ems, ...extra});
+    return g;
+  }
+  if (caps.prompt && prompt) st.prompt = prompt;
+  g["900"] = N("ValisStage", st);
+  return g;
+}
+
+
 // ---------------------------------------------------------------- stereo: pictures hidden in noise (nodes_stereo.py)
 // SAM 3 finds the thing and Depth Anything 3 gives its relief; Valis Mask Depth rounds the silhouette; a spinning solid
 // joins it (Valis Depth Shape / Place); Valis Stereogram hides it all in a field of dots that you free-view; Valis
@@ -948,7 +1112,7 @@ export function filmCut({shots, title = null, prefix = "valis/film"}) {
 export function stereo({video, target = "person", maxObjects = 2, viewing = "parallel", shape = "torus", shapeFrames = 96,
                         look = "squares", cell = 4, noise = "white", color = "black & white", palette = "neon", charset = "minimal",
                         refresh = 1, mbps = 4, prefix = "valis/stereo"}) {
-  return {
+  const g = {
     "1": N("LoadVideo", {file: video}),
     "2": N("GetVideoComponents", {video: ["1", 0]}),
     "3": N("CheckpointLoaderSimple", {ckpt_name: MODELS.sam}),
@@ -963,7 +1127,7 @@ export function stereo({video, target = "person", maxObjects = 2, viewing = "par
     "11": N("ValisDepthShape", {shape, frames: shapeFrames, width: 512, height: 512, size: 0.85, spin_x: 0.5, spin_y: 1.0, spin_z: 0.0, tilt_x: 20, edge: 0.35, near: 0.9}),
     "12": N("ValisDepthPlace", {depth: ["11", 0], mask: ["11", 1], scene: ["10", 0], width: 0, height: 0, x: 0.2, y: 0.32, scale: 0.42, x_end: 0.32, y_end: 0.28,
       scale_end: 0, depth_gain: 1.0, depth_offset: 0.0, start_frame: 0, when_shorter: "loop", field: "flat", field_depth: 0.0, field_amount: 0.15}),
-    "13": N("ValisStereogram", {depth: ["12", 0], static: ["23", 0], period: 0, strength: 0.18, viewing, anchor: "center", kind: "dots", dot_size: cell,
+    "13": N("ValisStereogram", {depth: [shape === "none" ? "10" : "12", 0], static: ["23", 0], period: 0, strength: 0.18, viewing, anchor: "center", kind: "dots", dot_size: cell,
       refresh_every: refresh, drift: 0.0, guide_dots: true, seed: 0, width: 0, height: 0, depth_far_is_white: false}),
     "14": N("CreateVideo", {images: ["13", 0], fps: ["2", 2]}),
     "15": N("SaveVideo", {video: ["14", 0], filename_prefix: `${prefix}_${viewing}`, format: "auto", codec: "auto"}),
@@ -979,4 +1143,6 @@ export function stereo({video, target = "person", maxObjects = 2, viewing = "par
       custom_characters: " .oO@", paper: "#000000", cell_height: 0}),
     "24": N("PreviewImage", {images: ["23", 1]}),
   };
+  if (shape === "none") { delete g["11"]; delete g["12"]; g["16"].inputs.depth = ["10", 0]; }
+  return g;
 }

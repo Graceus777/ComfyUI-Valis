@@ -1,37 +1,29 @@
 import * as api from "./api.js";
 import * as G from "./graphs.js";
 import * as P from "./presets.js";
+import * as CR from "./create.js";
+import * as EST from "./estimate.js";
 import {PALETTES} from "./palettes.js";
+import {lookParams, gradeImageData} from "./grade.js";
+import {palettePicker} from "./palettepick.js";
 import {ScoreView} from "./score.js";
 import {FxView} from "./fx.js";
 import {checkSetup} from "./check.js";
-import {planFilm, makeFilm} from "./film.js";
+import {planFilm, makeFilm, makeSong, frameShots, shootShots, effectShots, cutFilm} from "./film.js";
 import * as R from "./refengine.js";
+import {Bin} from "./bin.js";
+import * as MC from "./machine.js";
+import {$, $$, h, esc, toast, chips, cards, seg, slider, section, dropzone, fillDrop, media, initTips, ASSETS, VID} from "./ui.js";
+export {toast};
 
-const $ = (s, el = document) => el.querySelector(s);
-const $$ = (s, el = document) => [...el.querySelectorAll(s)];
-const h = (tag, attrs = {}, ...kids) => {
-  const el = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    if (k === "class") el.className = v; else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
-    else if (k === "style") el.style.cssText = v; else if (v !== false && v != null) el.setAttribute(k, v === true ? "" : v);
-  }
-  for (const c of kids.flat()) if (c != null) el.append(c.nodeType ? c : document.createTextNode(c));
-  return el;
-};
-const ASSETS = "/valis/app/assets";
-const VID = /\.(mp4|webm|mov|mkv)$/i;
-
-export function toast(msg, bad = false) {
-  const t = h("div", {class: "toast" + (bad ? " bad" : "")}, msg);
-  $("#toasts").append(t);
-  setTimeout(() => t.remove(), bad ? 9000 : 4500);
-}
+initTips();
 
 // ------------------------------------------------------------------ tabs
 function show(view) {
+  const id = view === "extras" ? `extras-${XMODE}` : view;
   $$(".tab").forEach(b => b.classList.toggle("on", b.dataset.view === view));
-  $$(".view").forEach(v => v.classList.toggle("on", v.id === `view-${view}`));
+  $$(".view").forEach(v => v.classList.toggle("on", v.id === `view-${id}`));
+  if (view === "extras") extrasOpen();
   if (view === "renders") Renders.refresh();
   if (view === "score") Score.ensure();
   if (view === "fx") Fx.refreshClips();
@@ -40,51 +32,10 @@ function show(view) {
 $$(".tab").forEach(b => b.addEventListener("click", () => show(b.dataset.view)));
 addEventListener("keydown", (e) => {
   if (e.target.matches("input, textarea, select")) return;
-  const v = {"0": "film", "1": "create", "2": "edit", "3": "score", "4": "fx", "5": "renders", "6": "genjutsu"}[e.key];
+  const v = {"0": "film", "1": "create", "2": "edit", "3": "score", "4": "fx", "5": "renders", "6": "genjutsu", "7": "extras"}[e.key];
   if (v) show(v);
 });
 
-// ------------------------------------------------------------------ widgets
-function chips(el, items, onPick, initial) {
-  let cur = initial ?? items[0]?.id;
-  el.replaceChildren(...items.map(it => h("button", {class: "chip" + (it.id === cur ? " on" : ""), "data-id": it.id,
-    onclick: () => { cur = it.id; $$(".chip", el).forEach(c => c.classList.toggle("on", c.dataset.id === cur)); onPick(it); }}, it.name)));
-  onPick(items.find(i => i.id === cur));
-}
-function cards(el, items, onPick, initial) {
-  let cur = initial;
-  const thumb = (it) => it.thumb ? h("img", {src: `${ASSETS}/thumbs/${it.thumb}`, alt: "", onerror: (e) => e.target.replaceWith(ph(it))}) : ph(it);
-  const ph = (it) => { const d = h("div", {class: "ph"}); const hue = [...it.id].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
-    d.style.setProperty("--c1", it.c1 || `hsl(${hue} 30% 24%)`); d.style.setProperty("--c2", it.c2 || `hsl(${(hue + 40) % 360} 30% 7%)`); return d; };
-  el.replaceChildren(...items.map(it => h("div", {class: "card" + (it.id === cur ? " on" : ""), "data-id": it.id,
-    onclick: () => { cur = it.id; $$(".card", el).forEach(c => c.classList.toggle("on", c.dataset.id === cur)); onPick(it); }},
-    thumb(it), h("div", {class: "lbl"}, it.name))));
-  if (cur) onPick(items.find(i => i.id === cur));
-}
-function seg(el, items, onPick, initial) {
-  let cur = initial ?? items[0].id;
-  el.replaceChildren(...items.map(it => h("button", {class: it.id === cur ? "on" : "", "data-id": it.id,
-    onclick: () => { cur = it.id; $$("button", el).forEach(b => b.classList.toggle("on", b.dataset.id === cur)); onPick(it); }}, it.name || it.id)));
-  onPick(items.find(i => i.id === cur));
-}
-function dropzone(el, accept, onFile) {
-  const input = h("input", {type: "file", accept, style: "display:none"});
-  el._input = input;
-  el.append(input);
-  el.addEventListener("click", () => input.click());
-  input.addEventListener("change", () => input.files[0] && onFile(input.files[0]));
-  el.addEventListener("dragover", (e) => { e.preventDefault(); el.classList.add("over"); });
-  el.addEventListener("dragleave", () => el.classList.remove("over"));
-  el.addEventListener("drop", (e) => { e.preventDefault(); el.classList.remove("over"); const f = e.dataTransfer.files[0]; if (f) onFile(f); });
-}
-// show what was dropped, keeping the zone's file input so it can be clicked again
-function fillDrop(el, ...kids) { el.replaceChildren(...kids, ...(el._input ? [el._input] : [])); }
-function media(f, {controls = true, autoplay = true} = {}) {
-  const url = typeof f === "string" ? f : api.viewUrl(f);
-  return /\.(mp4|webm|mov)(\?|$)/i.test(typeof f === "string" ? f : f.filename)
-    ? h("video", {src: url, controls, autoplay, loop: true, muted: autoplay, playsinline: true})
-    : h("img", {src: url, alt: ""});
-}
 function progressFor(job, el) {
   const bar = h("i");
   el.replaceChildren(h("div", {class: "empty"}, h("b", {}, job.label), h("span", {class: "jobtxt"}, "queued"), h("div", {class: "prog", style: "width:260px;margin:12px auto 0"}, bar)));
@@ -99,6 +50,12 @@ api.on((ev) => {
   if (ev.type === "job") {
     const w = waiters.get(ev.job.id);
     if (w) w(ev.job);
+    if (ev.job.status === "done" && !ev.job._binned) {
+      ev.job._binned = true;
+      if (ev.job.ranSeconds) EST.record(ev.job.id, ev.job.graph, ev.job.ranSeconds);
+      // every result goes in the bin (not the masks, overlays, anchors and control videos made along the way)
+      for (const f of ev.job.outputs) if (!/matte|overlay|anchor|_end_|_mask|control|_part_|\.txt$|\.json$/i.test(f.filename)) Bin.add(f, {from: ev.job.kind, label: ev.job.label});
+    }
     Renders.onJob(ev.job);
   }
   if (ev.type === "connection") { $("#conn").classList.toggle("up", ev.up); $("#connText").textContent = ev.up ? "ComfyUI connected" : "ComfyUI offline"; }
@@ -147,132 +104,215 @@ function finishBar(el, f, viewer, strip) {
 }
 
 // ------------------------------------------------------------------ CREATE
-const C = {genre: null, framing: null, lens: null, light: null, grade: null, move: null, body: null, kit: null, era: null, setup: null, emotion: null, tempo: null, palette: null, aspect: P.ASPECTS[0], seconds: 4.46, character: null, picked: null, keys: []};
-cards($("#c-genre"), P.GENRES, (g) => { C.genre = g; promptsPreview(); }, "gothic");
-chips($("#c-framing"), P.FRAMING, (x) => { C.framing = x; promptsPreview(); }, "wide");
-chips($("#c-lens"), P.LENS, (x) => { C.lens = x; promptsPreview(); }, "35");
-chips($("#c-light"), P.LIGHT, (x) => { C.light = x; promptsPreview(); }, "moon");
-chips($("#c-grade"), P.GRADE, (x) => { C.grade = x; promptsPreview(); }, "none");
-chips($("#c-move"), P.CAMERA_MOVES, (x) => { C.move = x; promptsPreview(); }, "push_in");
-chips($("#c-body"), P.BODIES, (x) => { C.body = x; promptsPreview(); }, "digital");
-chips($("#c-kit"), P.LENS_KITS, (x) => { C.kit = x; promptsPreview(); }, "spherical");
-chips($("#c-era"), P.ERAS, (x) => { C.era = x; promptsPreview(); }, "today");
-chips($("#c-setup"), P.LIGHTING, (x) => { C.setup = x; promptsPreview(); }, "auto");
-chips($("#c-emotion"), P.EMOTIONS, (x) => { C.emotion = x; promptsPreview(); }, "neutral");
-chips($("#c-tempo"), P.TEMPO, (x) => { C.tempo = x; promptsPreview(); }, "single");
-chips($("#c-palette"), PALETTES, (x) => { C.palette = x; promptsPreview(); }, "natural");
-seg($("#c-aspect"), P.ASPECTS.map(a => ({...a, name: a.id})), (a) => { C.aspect = a; });
-const LENGTHS = [{id: "4bars", name: "4 bars", s: 107 / 24}, {id: "5s", name: "5 s", s: 5.0}, {id: "10s", name: "10 s", s: 10.0}];
-seg($("#c-length"), LENGTHS, (l) => { C.seconds = l.s; $("#c-length-hint").textContent = l.id === "4bars" ? "4 bars of 3/4 at 161.5 BPM: one shot lands exactly on the score's bar lines." : `${G.frames24(l.s)} frames at 24 fps.`; });
-dropzone($("#c-char"), "image/*", async (f) => {
-  try { const u = await api.upload(f); C.character = api.inputRef(u);
-    fillDrop($("#c-char"), h("img", {src: URL.createObjectURL(f)}), h("span", {}, f.name)); toast("Character ready"); }
-  catch (e) { toast(e.message, true); }
-});
-["#c-subject", "#c-action"].forEach(s => $(s).addEventListener("input", promptsPreview));
-function promptsPreview() {
-  // the director's panel and the Cinema Studio controls: body, lens kit, era, lighting setup and palette go in the
-  // keyframe; the move, the emotion and the tempo go in the motion prompt
-  const extra = [C.body?.words, C.kit?.words, C.setup?.words, C.palette?.words].filter(Boolean).join(", ");
-  const era = C.era?.words ? C.era.words[0].toUpperCase() + C.era.words.slice(1) + "." : "";
-  const key = [P.keyframePrompt({...C, subject: $("#c-subject").value.trim()}), era, extra ? extra[0].toUpperCase() + extra.slice(1) + "." : ""].filter(Boolean).join(" ");
-  const action = [$("#c-action").value.trim(), C.emotion?.words].filter(Boolean).join("; ");
-  const mot = [P.motionPrompt({genre: C.genre, move: C.move, action}), C.tempo?.words].filter(Boolean).join(" ");
-  $("#c-prompts").textContent = `KEYFRAME (Krea 2)\n${key}\n\nMOTION (MiniMax H3)\n${mot}`;
-  return {key, mot};
+// The panel's state; create.js turns it into prompts and graphs (the same code the end-to-end test runs).
+const C = {genre: null, framing: null, focal: null, light: null, setup: null, body: null, kit: null, era: null, emotion: null, tempo: null, move: null,
+           look: {id: "auto"}, gradeShot: true, aspect: "9:16", short: CR.NATIVE_SHORT, seconds: 107 / 24, seed: 7101, shotSeed: 51101,
+           opts: {trained: true, anchor: false, trim: true, lightChange: false}, character: null, picked: null, relit: null, keys: []};
+const cstate = () => ({...C, subject: $("#c-subject").value, action: $("#c-action").value, who: $("#c-who").value});
+const env = {hasNode: (n) => api.hasNode(n), hasLora: (n) => api.hasLora(n)};
+const cs = {};                                         // the panel's sections, by key
+const lab = (t, tip = null) => h("h3", {class: "lab", tip}, t);
+const box = (id, cls = "chips") => h("div", {class: cls, id});
+const check = (id, label, tip, on = false) => h("label", {class: "check", tip}, h("input", {type: "checkbox", id, ...(on ? {checked: true} : {})}), h("span", {}, label));
+const nm = (x) => x && x.id !== "auto" ? x.name : null;
+function buildCreate() {
+  const sec = (key, title, tip, ...kids) => (cs[key] = section(title, {id: `c-sec-${key}`, tip}, ...kids));
+  const moveTip = (m) => {
+    const t = P.CAMERA_LORAS[m.id];
+    return t ? (t.lora ? `A trained move: a camera LoRA learned it (${t.source}). Used when "trained moves" is on and the LoRA is installed.` : `Shot as ${t.source}.`) : "";
+  };
+  $("#c-sections").replaceChildren(
+    sec("genre", "Genre", "A starting look. Its words fill every slot below that you leave on <b>From genre</b>.", box("c-genre", "cards")),
+    sec("camera", "Camera", "Framing, focal length, camera body and lens: words in the keyframe prompt.",
+      lab("Framing"), box("c-framing"), lab("Focal length"), box("c-focal"), lab("Camera body", "What the picture was shot on: grain, sharpness, colour, the era of the image itself."),
+      box("c-body"), lab("Lens kit"), box("c-kit")),
+    sec("move", "Camera move", "How the camera moves during the shot (the motion prompt). ✦ = a trained move: a camera LoRA does it for real instead of from words.",
+      box("c-move"),
+      check("c-trained", "trained moves (✦): use a camera LoRA when one is installed for this move", "A LoRA trained on one move does it properly: a full 360, a real push-in, a crash zoom. Off: H3 does every move from words.", true),
+      check("c-anchor", "end on the subject: pin the last frame so the move finishes on them", "For moves that leave the subject behind (crane up, FPV, arcs): the shot's last frame is made first (a Qwen Image edit of the keyframe, seen from where the camera ends) and H3 is pinned to it."),
+      check("c-trim", "trim the hold: cut the frozen end a pinned last frame leaves", "A pinned last frame makes H3 arrive early and hold still. This keeps a quarter second of the hold and cuts the rest.", true)),
+    sec("light", "Light", "Light source and lighting setup go in the keyframe prompt. Relight changes the light of a finished keyframe.",
+      lab("Light source"), box("c-light"), lab("Lighting setup"), box("c-setup"),
+      lab("Relight a keyframe", "Qwen Image 2.1 edit: the same picture, the same people, new light."), h("div", {class: "row"}, h("select", {id: "c-relight"}),
+        h("button", {class: "btn", id: "c-relight-go", disabled: true, type: "button"}, "Relight", h("span", {class: "sub", id: "c-relight-sub"}, "Qwen edit"))),
+      check("c-lightchange", "light change: the shot starts in the keyframe's light and ends in the relit one", "H3 runs from the keyframe to its relit version: the light shifts during the shot.")),
+    sec("look", "Era & colour", "When it's set, and its colours. The palette's words go in the keyframe; with 'grade the shot' the finished shot is graded in it too (Valis Color Palette).",
+      lab("Era"), box("c-era"), h("p", {class: "hint", id: "c-era-hint"}),
+      lab("Colour palette", "Hover a look to see it on your keyframe. Click a colour of the chosen look to change it."), h("div", {class: "pp", id: "c-palette"}),
+      check("c-grade-shot", "grade the shot in this palette too", "The finished shot is colour-graded in the chosen look (Valis Color Palette, on the CPU, seconds). Off: only the keyframe's prompt carries the look.", true)),
+    sec("perf", "Performance", "How they feel and how fast things move: words in the motion prompt.", lab("Emotion"), box("c-emotion"), lab("Tempo"), box("c-tempo")),
+    sec("format", "Format", "Shape, size and length of the shot, and the seeds.",
+      lab("Aspect"), h("div", {class: "seg", id: "c-aspect"}), h("div", {id: "c-res", class: "ctl"}), h("div", {id: "c-len", class: "ctl"}),
+      h("p", {class: "hint", id: "c-len-hint"}),
+      lab("Seeds", "Same seed + same settings = the same picture. Roll for a different one."),
+      h("div", {class: "row seeds"}, h("label", {class: "mini", tip: "Keyframe seed (the second keyframe uses this + 101)"}, "keyframes", h("input", {type: "number", id: "c-seed", min: 0, value: C.seed})),
+        h("button", {class: "dice", type: "button", tip: "Roll a new keyframe seed", onclick: () => { $("#c-seed").value = Math.floor(Math.random() * 1e6); $("#c-seed").dispatchEvent(new Event("input")); }}, "⚄"),
+        h("label", {class: "mini", tip: "Shot seed"}, "shot", h("input", {type: "number", id: "c-shot-seed", min: 0, value: C.shotSeed})),
+        h("button", {class: "dice", type: "button", tip: "Roll a new shot seed", onclick: () => { $("#c-shot-seed").value = Math.floor(Math.random() * 1e6); $("#c-shot-seed").dispatchEvent(new Event("input")); }}, "⚄"))),
+    sec("char", "Character", "Optional. A face or character sheet, pulled into both keyframes with the Krea 2 identity edit (it replaces 'who the camera is about').",
+      h("div", {class: "drop", id: "c-char"}, "Drop a character sheet or face", h("br"), h("span", {class: "hint"}, "it replaces the person named in 'who the camera is about'"))),
+  );
+  cards($("#c-genre"), P.GENRES, (g) => { C.genre = g; cchanged(); }, "gothic");
+  chips($("#c-framing"), P.FRAMING, (x) => { C.framing = x; cchanged(); }, "wide");
+  chips($("#c-focal"), P.LENS, (x) => { C.focal = x; cchanged(); }, "auto");
+  chips($("#c-body"), P.BODIES, (x) => { C.body = x; cchanged(); }, "auto");
+  chips($("#c-kit"), P.LENS_KITS, (x) => { C.kit = x; cchanged(); }, "auto");
+  chips($("#c-move"), P.CAMERA_MOVES.map(m => ({...m, tip: moveTip(m)})), (x) => { C.move = x; cchanged(); }, "push_in",
+        {where: "motion", grouped: true, badge: (it) => P.CAMERA_LORAS[it.id]?.lora ? h("span", {class: "tm", "data-lora": P.CAMERA_LORAS[it.id].lora}, "✦") : null});
+  chips($("#c-light"), P.LIGHT, (x) => { C.light = x; cchanged(); }, "auto");
+  chips($("#c-setup"), P.LIGHTING, (x) => { C.setup = x; cchanged(); }, "auto");
+  chips($("#c-era"), P.ERAS, (x) => { C.era = x; eraHint(); cchanged(); }, "auto");
+  chips($("#c-emotion"), P.EMOTIONS, (x) => { C.emotion = x; cchanged(); }, "neutral", {where: "motion"});
+  chips($("#c-tempo"), P.TEMPO, (x) => { C.tempo = x; cchanged(); }, "single", {where: "motion"});
+  CPal = palettePicker($("#c-palette"), {initial: C.look, onChange: (l) => { C.look = l; cchanged(); }, onHover: viewerGrade,
+    source: () => $("#c-viewer > img") || PREF, renderWidth: () => CR.shotSize(C.aspect, C.short).w});
+  seg($("#c-aspect"), Object.keys(CR.KEY_SIZES).map(id => ({id, name: id, tip: `Keyframes at ${CR.KEY_SIZES[id].w}×${CR.KEY_SIZES[id].h}`})), (a) => { C.aspect = a.id; resCtl?.set(C.short); cchanged(); });
+  resCtl = slider($("#c-res"), {label: "Resolution (shot)", min: 320, max: 1024, step: 32, value: C.short,
+    tip: "The shot's size; keyframes are always made at full size. Lower renders much faster (time grows faster than the pixel count). H3 was trained around 768 on the short side; above that it's untested and needs more memory. For 1080p, render at 768 and use Upscale.",
+    fmt: (v) => { const s = CR.shotSize(C.aspect, v); return `${s.w}×${s.h}${v === CR.NATIVE_SHORT ? " · native" : v < 512 ? " · draft" : v > CR.NATIVE_SHORT ? " · above training" : ""}`; },
+    marks: [{name: "draft", value: 384, tip: "384 px: fast tests"}, {name: "512", value: 512}, {name: "640", value: 640}, {name: "native", value: 768, tip: "768 px: what H3 was trained on"}]},
+    (v) => { C.short = v; cchanged(); });
+  lenCtl = slider($("#c-len"), {label: "Length", min: 2, max: 15, step: 0.1, value: C.seconds,
+    tip: "Seconds of shot. H3 renders in steps of 17 frames (plus 5) at 24 fps, so the length snaps to the nearest one it can make. Time grows with length.",
+    fmt: (v) => { const f = CR.frames(v); return `${(f / 24).toFixed(2)} s · ${f} frames`; },
+    marks: [{name: "3 s", value: 3}, {name: "4.5 s", value: 107 / 24, tip: "107 frames: one standard H3 clip"}, {name: "5 s", value: 5.2}, {name: "10 s", value: 10}, {name: "15 s", value: 15}]},
+    (v) => { C.seconds = v; const f = CR.frames(v);
+      $("#c-len-hint").textContent = f < CR.TRAINED_FRAMES[0] ? `Shorter than H3's training (5.2–15 s): fine for tests and quick beats; fast moves can feel rushed.` : f > CR.TRAINED_FRAMES[1] ? "Longer than H3 was trained on: untested." : "";
+      cchanged(); });
+  ["c-trained", "c-anchor", "c-trim", "c-lightchange", "c-grade-shot"].forEach(id => $(`#${id}`).addEventListener("change", () => {
+    C.opts = {trained: $("#c-trained").checked, anchor: $("#c-anchor").checked, trim: $("#c-trim").checked, lightChange: $("#c-lightchange").checked};
+    C.gradeShot = $("#c-grade-shot").checked; cchanged(); }));
+  $("#c-seed").addEventListener("input", (e) => { C.seed = Number(e.target.value) || 0; cchanged(); });
+  $("#c-shot-seed").addEventListener("input", (e) => { C.shotSeed = Number(e.target.value) || 0; cchanged(); });
+  ["#c-subject", "#c-action", "#c-who"].forEach(s => $(s).addEventListener("input", cchanged));
+  // which trained moves are installed here: ✦ for installed, dimmed ✦ for not
+  for (const t of $$("#c-move .tm")) api.hasLora(t.dataset.lora).then(ok => { t.classList.toggle("off", !ok); if (!ok) t.closest(".chip").dataset.tip += "<br><b>Its LoRA isn't installed here</b>: H3 does it from words."; });
+  const RL = $("#c-relight");
+  RL.replaceChildren(...P.RELIGHT.map(r => h("option", {value: r.id}, r.name)));
+  $("#c-relight-go").addEventListener("click", relight);
+  dropzone($("#c-char"), "image/*", async (f) => {
+    const u = await api.upload(f); C.character = api.inputRef(u);
+    fillDrop($("#c-char"), h("img", {src: URL.createObjectURL(f)}), h("span", {}, f.name)); toast("Character ready: it goes into the next keyframes"); cchanged();
+  });
+  // your own still as the first frame: drop it on the viewer
+  dropzone($("#c-viewer"), "image/*", async (f) => {
+    const u = await api.upload(f), ref = api.inputRef(u), url = URL.createObjectURL(f);
+    const t = h("div", {class: "thumb"}, h("img", {src: url}), h("div", {class: "meta"}, "your still"));
+    const it = {ref, url, filename: f.name};
+    t.onclick = () => pickKey(it, t); $("#c-strip").prepend(t); pickKey(it, t);
+  });
 }
-// Relight a keyframe (Qwen Image edit); with "light change" the shot runs from the keyframe to its relit version.
-const RL = $("#c-relight");
-RL.replaceChildren(...P.RELIGHT.map(r => h("option", {value: r.id}, r.name)));
-$("#c-relight-go").addEventListener("click", () => {
+let CPal = null, resCtl = null, lenCtl = null;
+// the picture looks are previewed on before there's a keyframe: a sunlit market with skin, a red dress, sky and shade
+const PREF = new Image(); PREF.src = `${ASSETS}/palette_ref.jpg`; PREF.onload = () => CPal?.refresh();
+function eraHint() {
+  const e = C.era, look = e?.look && e.look !== "natural" ? PALETTES.find(p => p.id === e.look) : null;
+  const el = $("#c-era-hint"); if (!el) return;
+  el.replaceChildren(...(look && C.look.id !== look.id ? [`${e.name} pairs with `, h("button", {class: "linkbtn", type: "button", onclick: () => { CPal.set({id: look.id}); eraHint(); }}, look.name), " colour."] : []));
+}
+// a look on the keyframe in the viewer while you hover it (grade.js; the shot gets the same grade)
+function viewerGrade(look) {
+  const v = $("#c-viewer"), img = $("#c-viewer > img");
+  v.querySelector(".gradeprev")?.remove();
+  if (!look || !img || !img.naturalWidth) return;
+  const r = img.getBoundingClientRect(), vr = v.getBoundingClientRect(), W = Math.min(Math.round(r.width), 480), H = Math.round(W * img.naturalHeight / img.naturalWidth);
+  const cv = h("canvas", {class: "gradeprev", width: W, height: H, style: `left:${r.left - vr.left}px;top:${r.top - vr.top}px;width:${r.width}px;height:${r.height}px`});
+  const x = cv.getContext("2d", {willReadFrequently: true});
+  x.drawImage(img, 0, 0, W, H);
+  if (look.id !== "auto" && look.id !== "natural") x.putImageData(gradeImageData(x.getImageData(0, 0, W, H), lookParams(look.id, look.hex), {scale: W / CR.shotSize(C.aspect, C.short).w}), 0, 0);
+  v.append(cv, h("span", {class: "gradeprev tag", style: "left:12px;top:12px"}, `preview · ${PALETTES.find(p => p.id === look.id)?.name || look.id}`));
+}
+let ctimer = null;
+function cchanged() {
+  if (!cs.genre) return;
+  const S = cstate(), size = CR.shotSize(C.aspect, C.short), f = CR.frames(C.seconds);
+  cs.genre.setValue(C.genre?.name || "");
+  cs.camera.setValue([C.framing?.name, nm(C.focal), nm(C.body), nm(C.kit)].filter(Boolean).join(" · "));
+  cs.move.setValue(`${C.move?.name || ""}${P.CAMERA_LORAS[C.move?.id]?.lora && C.opts.trained ? " ✦" : ""}${C.opts.anchor ? " · ends on subject" : ""}`);
+  cs.light.setValue([nm(C.light) || "from genre", C.setup?.id !== "auto" ? C.setup?.name : null, C.opts.lightChange ? "light change" : null].filter(Boolean).join(" · "));
+  const lk = C.look.id === "auto" ? "genre colour" : `${C.look.id === "custom" ? "Your colours" : PALETTES.find(p => p.id === C.look.id)?.name || C.look.id}${C.look.hex && C.look.id !== "custom" ? " (edited)" : ""}`;
+  cs.look.setValue([nm(C.era), lk, C.gradeShot && C.look.id !== "auto" && C.look.id !== "natural" ? "graded" : null].filter(Boolean).join(" · "));
+  cs.perf.setValue([C.emotion?.id !== "neutral" ? C.emotion?.name : null, C.tempo?.name].filter(Boolean).join(" · "));
+  cs.format.setValue(`${C.aspect} · ${size.w}×${size.h} · ${(f / 24).toFixed(1)} s`);
+  cs.char.setValue(C.character ? "set" : "none");
+  $("#c-prompts").textContent = `KEYFRAME (Krea 2)\n${CR.keyframePrompt(S)}\n\nMOTION (MiniMax H3)\n${CR.motionPrompt(S)}`;
+  clearTimeout(ctimer); ctimer = setTimeout(cestimates, 250);
+}
+async function cestimates() {
+  const S = cstate();
+  const k = await EST.estimate(CR.keyframesGraph(S, {seeds: [C.seed, C.seed + 101]}));
+  $("#c-frame-sub").textContent = `2 keyframes · ${EST.fmt(k)}`; $("#c-frame-sub").parentElement.dataset.tip = `Krea 2, ${CR.KEY_SIZES[C.aspect].w}×${CR.KEY_SIZES[C.aspect].h}. Time: ${k.basis}.`;
+  try {
+    const p = await CR.planShot({...S, image: "x.png", seed: C.shotSeed, relit: C.opts.lightChange && C.relit ? "y.png" : null}, env);
+    const e = await EST.estimate(p.graph);
+    $("#c-shoot-sub").textContent = `${p.kind === "wan" ? "Wan 2.2" : "H3"} · ${p.width}×${p.height} · ${p.seconds.toFixed(1)} s · ${EST.fmt(e)}`;
+    $("#c-shoot").dataset.tip = `${esc(p.label)}. Time: ${e.basis}.${p.notes.length ? "<br>" + p.notes.map(esc).join("<br>") : ""}`;
+  } catch (e) { $("#c-shoot-sub").textContent = e.message; }
+  const rl = await EST.estimate(G.relightImage({image: "x.png", prompt: "x"}));
+  $("#c-relight-sub").textContent = `Qwen edit · ${EST.fmt(rl)}`;
+}
+function relight() {
   if (!C.picked) return toast("Frame it first, then pick a keyframe", true);
-  const r = P.RELIGHT.find(x => x.id === RL.value), orig = C.picked, tag = Date.now().toString(36);
-  run(G.relightImage({image: api.outputRef(orig), prompt: `Relight this photo: ${r.words}.${P.RELIGHT_KEEP}`, prefix: `valis/relight_${tag}`}),
+  const RL = $("#c-relight"), r = P.RELIGHT.find(x => x.id === RL.value), orig = C.picked, tag = Date.now().toString(36);
+  run(G.relightImage({image: fileRef(orig), prompt: `Relight this photo: ${r.words}.${P.RELIGHT_KEEP}`, prefix: `valis/relight_${tag}`}),
       `Relight · ${r.name}`, null, {onDone: (j) => j.outputs.filter(o => /\.(png|jpg|webp)$/i.test(o.filename)).forEach(o => {
         C.relit = {orig, relit: o, name: r.name};
         const t = h("div", {class: "thumb"}, media(o), h("div", {class: "meta"}, `relit · ${r.name}`));
         t.onclick = () => pickKey(o, t); $("#c-strip").append(t);
+        Bin.add(o, {from: "Create", label: `relit · ${r.name}`});
         toast(`Relit (${r.name}). Pick it to shoot in the new light, or keep the original picked and tick "light change"`);
       })});
-});
+}
+// a file the studio made ({filename, subfolder, type}) or a dropped one ({ref, url}) -> what a graph's loader takes
+const fileRef = (f) => f?.ref || api.fileRef(f);
+const fileUrl = (f) => f?.url && !f.subfolder ? f.url : api.viewUrl(f);
 function pickKey(f, el) {
   C.picked = f;
   $("#c-relight-go").disabled = false;
   $$(".thumb", $("#c-strip")).forEach(t => t.classList.toggle("on", t === el));
-  $("#c-viewer").replaceChildren(media(f));
+  const img = h("img", {src: fileUrl(f), alt: ""});
+  img.addEventListener("load", () => CPal?.refresh());
+  $("#c-viewer").replaceChildren(img, ...($("#c-viewer")._input ? [$("#c-viewer")._input] : []));
   $("#c-shoot").disabled = false;
 }
+export function useAsFirstFrame(f) { pickKey(f, null); show("create"); }
 $("#c-frame").addEventListener("click", () => {
-  const {key} = promptsPreview();
-  if (!$("#c-subject").value.trim()) return toast("Describe the shot first", true);
+  const S = cstate();
+  if (!S.subject.trim()) return toast("Describe the shot first", true);
   const tag = Date.now().toString(36);
-  run(G.keyframes({prompt: key, width: C.aspect.w, height: C.aspect.h, prefix: `valis/key_${tag}`}), "Keyframes", $("#c-viewer"), {onDone: (j) => {
+  run(CR.keyframesGraph(S, {seeds: [C.seed, C.seed + 101], prefix: `valis/key_${tag}`}), "Keyframes", $("#c-viewer"), {onDone: (j) => {
     const imgs = j.outputs.filter(f => /\.(png|jpg|webp)$/i.test(f.filename));
     C.keys = imgs;
+    imgs.forEach(f => Bin.add(f, {from: "Create", label: "keyframe", prompt: CR.keyframePrompt(S)}));
     $("#c-strip").replaceChildren(...imgs.map(f => { const t = h("div", {class: "thumb"}, media(f), h("div", {class: "meta"}, "keyframe")); t.onclick = () => pickKey(f, t); return t; }));
     if (imgs[0]) pickKey(imgs[0], $("#c-strip .thumb"));
-    const who = $("#c-who").value.trim() || "the person";
+    const who = S.who.trim() || "the person";
     if (C.character) imgs.forEach((f, k) => run(G.castCharacter({keyframe: api.outputRef(f), character: C.character, refBoost: 0.5,
       prompt: `Turn ${who} into the character from the second image: the same face, hair, skin and outfit as the reference. Keep ${who}'s pose and position, everyone else, the framing, the room and the lighting exactly the same.`,
       prefix: `valis/cast_${tag}_${k}`}), "Cast character", null, {onDone: (jj) => jj.outputs.forEach(o => {
+        Bin.add(o, {from: "Create", label: "with character"});
         const t = h("div", {class: "thumb"}, media(o), h("div", {class: "meta"}, "with character")); t.onclick = () => pickKey(o, t); $("#c-strip").append(t); })}));
   }});
 });
 $("#c-shoot").addEventListener("click", async () => {
   if (!C.picked) return;
-  const {mot} = promptsPreview();
-  const look = $("#c-grade-shot").checked && C.palette && C.palette.id !== "natural" ? C.palette.id : null;
-  const prefix = `valis/shot_${Date.now().toString(36)}`;
-  const image = api.outputRef(C.picked), width = C.aspect.w, height = C.aspect.h;
+  const S = cstate();
+  let plan;
+  try {
+    plan = await CR.planShot({...S, image: fileRef(C.picked), seed: C.shotSeed, prefix: `valis/shot_${Date.now().toString(36)}`,
+      relit: C.opts.lightChange && C.relit && C.relit.orig === C.picked ? api.outputRef(C.relit.relit) : null}, env);
+  } catch (e) { return toast(e.message, true); }
+  plan.notes.forEach(n => toast(n));
   const onDone = (j) => {
     const v = j.outputs.find(f => VID.test(f.filename));
-    if (v) { $("#c-viewer").replaceChildren(media(v)); finishBar($("#c-finish"), v, $("#c-viewer"), $("#c-strip"));
-      const t = h("div", {class: "thumb"}, media(v, {controls: false}), h("div", {class: "meta"}, "shot")); t.onclick = () => { $("#c-viewer").replaceChildren(media(v)); finishBar($("#c-finish"), v, $("#c-viewer"), $("#c-strip")); }; $("#c-strip").prepend(t); }
+    if (!v) return;
+    Bin.add(v, {from: "Create", label: C.move?.name || "shot", prompt: CR.motionPrompt(S)});
+    $("#c-viewer").replaceChildren(media(v)); finishBar($("#c-finish"), v, $("#c-viewer"), $("#c-strip"));
+    const t = h("div", {class: "thumb"}, media(v, {controls: false}), h("div", {class: "meta"}, "shot"));
+    t.onclick = () => { $("#c-viewer").replaceChildren(media(v)); finishBar($("#c-finish"), v, $("#c-viewer"), $("#c-strip")); };
+    $("#c-strip").prepend(t);
   };
-  // Loop: H3 renders a shot that plays forever (MiniMax H3 Loop, a separate pack). No camera move; the keyframe is the reference.
-  if ($("#c-loop").checked) {
-    if (!(await api.hasNode("MiniMaxH3Loop")))
-      return toast("Loop needs the MiniMax H3 Loop pack: git clone https://github.com/pxl-pshr/ComfyUI-MiniMaxH3-Loop into custom_nodes, then restart ComfyUI", true);
-    const length = G.loopLength(C.seconds), engine = $("#c-loop-engine").value;
-    const prompt = G.loopPrompt({subject: $("#c-subject").value.trim(), action: $("#c-action").value.trim()});
-    return run(G.loopShot({image, prompt, width, height, length, engine, look, prefix: prefix.replace("/shot_", "/loop_")}),
-               `Loop · ${((length - 5) / 24).toFixed(2)} s (${engine === "full" ? "25 steps" : "FastH3"})`, $("#c-viewer"), {onDone});
-  }
-  // a trained move (camera LoRA) when one is installed for this move; otherwise H3 from words, with an optional end anchor
-  const tm = $("#c-trained").checked ? P.CAMERA_LORAS[C.move?.id] : null;
-  const trained = tm && (!tm.lora || await api.hasLora(tm.lora)) ? tm : null;     // lora: null = H3 words + a post step (dolly lock, whip ramp)
-  const who = $("#c-who").value.trim() || "the subject";
-  const scene = [$("#c-subject").value.trim(), $("#c-action").value.trim()].filter(Boolean).join(" ");
-  // the 360 orbit: one 8.8 s shot pinned back to its first frame (a 4.5 s one swings out and back); graphs.js orbit360
-  if (trained?.orbit && trained.lora)
-    return run(G.orbit360({image, loras: [{name: trained.lora, strength: trained.strength}], raw: trained.raw({subject: who, scene}), width, height,
-                           look, prefix}), `Shot · ${C.move.name} (trained, full turn)`, $("#c-viewer"), {onDone});
-  if (trained?.engine === "wan")
-    return run(G.wanMove({image, move: trained, strength: trained.strength, subject: who, scene, width, height, look, prefix}),
-               `Shot · ${C.move.name} (trained, Wan 2.2)`, $("#c-viewer"), {onDone});
-  // light change: the relit version of the picked keyframe is pinned as the last frame (H3 runs between the two lights)
-  const lightLast = $("#c-lightchange").checked && C.relit && C.relit.orig === C.picked ? api.outputRef(C.relit.relit) : null;
-  if ($("#c-lightchange").checked && !lightLast) toast("Light change needs the picked keyframe relit first: shooting without it");
-  const end = trained ? (trained.end || null) : $("#c-anchor").checked ? (P.END_ANCHORS[C.move?.id] || null) : null;
-  const seconds = trained ? C.seconds : Math.max(C.seconds, P.MOVE_SECONDS[C.move?.id] || 0);
-  if (seconds > C.seconds) toast(`${C.move.name} needs ${seconds} s to complete`);
-  const trimHold = !!end && !trained && $("#c-trim").checked && await api.hasNode("ValisTrimHold");
-  // dolly zoom: a real push or pull, then the subject is locked to one size (SAM 3 finds them by the words in "who")
-  let dolly = null;
-  if (trained?.dolly) {
-    if (await api.hasNode("ValisDollyZoom")) dolly = {target: who.replace(/^(the|a|an)\s+/i, "").replace(/^subject$/i, "person"), ...trained.dolly};
-    else toast("Valis Dolly Zoom isn't loaded yet (restart ComfyUI): shooting the plain move");
-  }
-  // whip pan: a steady real pan, speed-ramped into a whip afterwards (the model can't whip without dissolving)
-  let whip = null;
-  if (trained?.whip) {
-    if (await api.hasNode("ValisWhipPan")) whip = trained.whip;
-    else toast("Valis Whip Pan isn't loaded yet (restart ComfyUI): shooting the plain pan");
-  }
-  const motion = trained?.words && C.move?.words ? mot.replace(C.move.words, trained.words.replaceAll("{subject}", who)) : mot;
-  run(G.shot({image, motion, width, height, seconds: whip ? Math.max(seconds, 5) : seconds, look, end: lightLast ? null : end, last: lightLast, trimHold: trimHold && !lightLast, dolly, whip, prefix,
-              ...(trained?.lora ? {loras: [{name: trained.lora, strength: trained.strength}], raw: trained.raw({subject: who, scene})} : {})}),
-      trained ? `Shot · ${C.move.name} (${trained.lora ? "trained" : whip ? "ramped" : "locked"})` : "Shot", $("#c-viewer"), {onDone});
+  run(plan.graph, plan.label, $("#c-viewer"), {onDone});
 });
 
 // ------------------------------------------------------------------ GENJUTSU
@@ -304,15 +344,15 @@ function gjPrompt() {
   $("#g-prompt").value = P.genjutsuPrompt({mode: GJ.mode, refs: GJ.refs, style: GJ.style, target: $("#g-target").value.trim(), text: ""});
 }
 $("#g-target").addEventListener("input", gjPrompt);
-dropzone($("#g-clip"), "video/*", async (f) => {
-  try {
-    const u = await api.upload(f); GJ.clip = api.inputRef(u); GJ.clipUrl = URL.createObjectURL(f);
-    fillDrop($("#g-clip"), h("video", {src: GJ.clipUrl, muted: true, autoplay: true, loop: true, playsinline: true}), h("span", {}, f.name));
-    $("#g-viewer").replaceChildren(h("video", {src: GJ.clipUrl, controls: true, autoplay: true, loop: true, muted: true, playsinline: true}));
-    $("#g-run").disabled = false; $("#g-check").disabled = false;
-    GJ.window = null; $("#g-report").replaceChildren();
-  } catch (e) { toast(e.message, true); }
-});
+function gjSetClip(ref, url, label) {
+  GJ.clip = ref; GJ.clipUrl = url;
+  fillDrop($("#g-clip"), h("video", {src: url, muted: true, autoplay: true, loop: true, playsinline: true}), h("span", {}, label));
+  $("#g-viewer").replaceChildren(h("video", {src: url, controls: true, autoplay: true, loop: true, muted: true, playsinline: true}));
+  $("#g-run").disabled = false; $("#g-check").disabled = false;
+  GJ.window = null; $("#g-report").replaceChildren();
+}
+dropzone($("#g-clip"), "video/*", async (f) => { const u = await api.upload(f); gjSetClip(api.inputRef(u), URL.createObjectURL(f), f.name); });
+$("#g-clip")._onItem = (it) => it.kind === "clip" && gjSetClip(api.fileRef(it.file), api.viewUrl(it.file), it.label || it.file.filename);
 // Source check: only the pose step (~1 min). Motion Transfer sees nothing but this skeleton, so a clip where the body
 // can't be read (hidden legs, a spin, leaving the frame) warps; find that out before a 20-minute render.
 $("#g-check").addEventListener("click", async () => {
@@ -534,11 +574,140 @@ function compare(a, b) {
 }
 
 // ------------------------------------------------------------------ SCORE
-const Score = new ScoreView({$, h, toast, assets: ASSETS, api, G, run});
+const Score = new ScoreView({run, onFilm: (sv) => {
+  // a film on this score's song: the Film tab gets the song and as many shots as the score has (up to 12)
+  if (!sv.audioRef) return toast("This score has no song to make a film on", true);
+  M.ownSong = {ref: sv.audioRef, name: sv.sc.title || "the score's song", url: sv.audioUrl};
+  M.songSrc = "own"; $$("#m-song-src button").forEach(b => b.classList.toggle("on", b.dataset.id === "own")); $("#m-song-drop").style.display = "";
+  fillDrop($("#m-song-drop"), h("span", {}, M.ownSong.name)); fsec.song.setValue(M.ownSong.name);
+  M.shots = Math.min(12, sv.sc.shots.length); $$("#m-shots-n button").forEach(b => b.classList.toggle("on", Number(b.dataset.id) === M.shots));
+  show("film"); toast("Film: the song is set. Say what the film is about and press Plan it");
+}});
 
 // ------------------------------------------------------------------ FX
 const Fx = new FxView({$, h, toast, assets: ASSETS, api, G, run, VID});
 
+
+// ------------------------------------------------------------------ EXTRAS: stereograms, loops, Stage (experimental)
+const XMODES = [{id: "stereo", name: "Stereogram", tip: "Hide a moving thing in a field of dots: a magic-eye stereogram and a motion-only kinetogram"},
+  {id: "loop", name: "Loop", tip: "A shot that plays forever (MiniMax H3 Loop)"}, {id: "stage", name: "Stage · experimental", tip: "One still split into depth layers, played by a live 2.5D camera"}];
+let XMODE = "stereo";
+try { XMODE = localStorage.getItem("valis.extras") || "stereo"; } catch { /* */ }
+let StageTab = null, xready = false;
+$$(".seg.xmode").forEach(el => seg(el, XMODES, (x) => { if (xready && x.id !== XMODE) { XMODE = x.id; try { localStorage.setItem("valis.extras", XMODE); } catch { /* */ } show("extras"); } }, el.dataset.x));
+xready = true;
+async function extrasOpen() {
+  if (XMODE === "stage" && !StageTab) {
+    try { const {StageView} = await import("./stageview.js"); StageTab = new StageView({$, h, toast, api, G}); window.valisStage = StageTab; }
+    catch (e) { toast(`Stage didn't load: ${e.message}`, true); }
+  }
+}
+// ---- stereogram
+const X = {clip: null, url: null};
+function xSetClip(ref, url, label) {
+  X.clip = ref; X.url = url;
+  fillDrop($("#x-clip"), h("video", {src: url, muted: true, autoplay: true, loop: true, playsinline: true}), h("span", {}, label));
+  $("#x-viewer").replaceChildren(h("video", {src: url, controls: true, autoplay: true, loop: true, muted: true, playsinline: true}));
+  $("#x-run").disabled = false;
+}
+dropzone($("#x-clip"), "video/*", async (f) => { const u = await api.upload(f); xSetClip(api.inputRef(u), URL.createObjectURL(f), f.name); });
+$("#x-clip")._onItem = (it) => it.kind === "clip" && xSetClip(Bin.ref(it), Bin.url(it), it.label || it.file.filename);
+const XS = {viewing: "parallel", shape: "none", look: "squares", cell: 4, noise: "white", color: "black & white", palette: "neon", charset: "minimal", refresh: 1, mbps: 4};
+(function buildStereo() {
+  const xs = {};
+  const sec = (key, title, tip, ...kids) => (xs[key] = section(title, {id: `x-sec-${key}`, tip}, ...kids));
+  $("#x-sections").replaceChildren(
+    sec("view", "Viewing", "How the stereogram is free-viewed, and an optional spinning solid that joins the hidden thing.",
+      lab("Free-view"), h("div", {class: "seg", id: "x-viewing"}), lab("A spinning shape too", "A solid turning in the field next to the hidden thing (Valis Depth Shape)"), h("div", {class: "chips", id: "x-shape"})),
+    sec("static", "The dots", "What the field of dots is made of (Valis Static): squares, halftone or letters; the grain of the noise; its colours.",
+      lab("Drawn as"), h("div", {class: "seg", id: "x-look"}), h("div", {id: "x-cell", class: "ctl"}),
+      lab("Noise", "white = TV snow; pink and brown = soft clumps; blue and violet = fine even grain"), h("div", {class: "chips", id: "x-noise"}),
+      lab("Colour"), h("div", {class: "chips", id: "x-color"}), h("select", {id: "x-palette", style: "margin-top:6px"}), h("select", {id: "x-charset", style: "margin-top:6px"}),
+      h("div", {id: "x-refresh", class: "ctl"})),
+    sec("check", "Upload check", "Valis Stereo Decode reads the depth back out of the stereogram after an H.264 round trip at this bitrate: if the decoded picture is clean, it survives an upload.",
+      h("div", {id: "x-mbps", class: "ctl"})),
+  );
+  const upd = () => { xs.view.setValue(`${XS.viewing}${XS.shape !== "none" ? " · " + XS.shape : ""}`); xs.static.setValue(`${XS.look} · ${XS.cell}px · ${XS.noise} · ${XS.color}`); xs.check.setValue(`${XS.mbps} Mbps`); xest(); };
+  seg($("#x-viewing"), [{id: "parallel", name: "Parallel", tip: "Look through the screen, as if at something far behind it"}, {id: "cross", name: "Cross-eyed", tip: "Cross your eyes slightly in front of the screen"}], (x) => { XS.viewing = x.id; upd(); });
+  chips($("#x-shape"), ["none", "cube", "torus", "octahedron", "heart", "star", "blob"].map(id => ({id, name: id === "none" ? "None" : id, tip: id === "none" ? "Only the hidden thing" : `A spinning ${id} joins it`})), (x) => { XS.shape = x.id; upd(); }, "none");
+  seg($("#x-look"), [{id: "squares", name: "Squares"}, {id: "halftone", name: "Halftone"}, {id: "ascii", name: "Letters"}], (x) => { XS.look = x.id; $("#x-charset").style.display = x.id === "ascii" ? "" : "none"; upd(); });
+  slider($("#x-cell"), {label: "Dot size", min: 1, max: 16, step: 1, value: XS.cell, fmt: (v) => `${v} px`, tip: "Bigger dots survive upload compression better (6 at 1080p)"}, (v) => { XS.cell = v; upd(); });
+  chips($("#x-noise"), ["white", "pink", "brown", "blue", "violet"].map(id => ({id, name: id})), (x) => { XS.noise = x.id; upd(); }, "white");
+  chips($("#x-color"), ["black & white", "grey", "rgb", "rgb 8", "tv", "palette"].map(id => ({id, name: id})), (x) => { XS.color = x.id; $("#x-palette").style.display = x.id === "palette" ? "" : "none"; upd(); }, "black & white");
+  slider($("#x-refresh"), {label: "New dots every", min: 0, max: 8, step: 1, value: 1, fmt: (v) => v === 0 ? "never (one field)" : v === 1 ? "frame (TV snow)" : `${v} frames`,
+    tip: "1 = live TV snow; more = fewer bits to upload; never = the same dots throughout (cheapest, but a moving thing shows as copies)"}, (v) => { XS.refresh = v; upd(); });
+  slider($("#x-mbps"), {label: "Upload bitrate", min: 1, max: 20, step: 1, value: 4, fmt: (v) => `${v} Mbps`}, (v) => { XS.mbps = v; upd(); });
+  api.objectInfo("ValisStatic").then(oi => {
+    const ins = oi?.ValisStatic?.input?.required || {}, opts = (k) => ins[k]?.[1]?.options || ins[k]?.[0] || [];
+    $("#x-palette").replaceChildren(...opts("palette").map(p => h("option", {value: p, selected: p === XS.palette}, `palette: ${p}`)));
+    $("#x-charset").replaceChildren(...opts("charset").map(p => h("option", {value: p, selected: p === XS.charset}, `letters: ${p}`)));
+  }).catch(() => {});
+  $("#x-palette").addEventListener("change", (e) => { XS.palette = e.target.value; upd(); });
+  $("#x-charset").addEventListener("change", (e) => { XS.charset = e.target.value; upd(); });
+  $("#x-palette").style.display = "none"; $("#x-charset").style.display = "none";
+})();
+async function xest() { const e = await EST.estimate(G.stereo({video: "x.mp4"})); $("#x-run-sub").textContent = `stereogram + kinetogram + decode check · ${EST.fmt(e)}`; }
+$("#x-run").addEventListener("click", () => {
+  if (!X.clip) return toast("Drop a clip first", true);
+  const tag = Date.now().toString(36);
+  run(G.stereo({video: X.clip, target: $("#x-target").value.trim() || "person", maxObjects: Number($("#x-max").value) || 2, ...XS, prefix: `valis/stereo_${tag}`}),
+    "Stereogram", $("#x-viewer"), {onDone: (j) => {
+      const vids = j.outputs.filter(f => VID.test(f.filename));
+      const name = (f) => /_decoded/.test(f.filename) ? "decoded (upload check)" : /_kinetogram/.test(f.filename) ? "kinetogram" : `stereogram (${XS.viewing})`;
+      const main = vids.find(f => !/_decoded|_kinetogram/.test(f.filename)) || vids[0];
+      if (main) $("#x-viewer").replaceChildren(media(main));
+      vids.forEach(v => Bin.add(v, {from: "Extras", label: name(v)}));
+      $("#x-strip").replaceChildren(...vids.map(v => { const t = h("div", {class: "thumb wide"}, media(v, {controls: false}), h("div", {class: "meta"}, name(v))); t.onclick = () => $("#x-viewer").replaceChildren(media(v)); return t; }));
+    }});
+});
+// ---- loop
+const LP = {image: null, url: null, length: 107, engine: "fast", short: 384, look: "natural", views: 2};
+function lSetImage(ref, url, label) {
+  LP.image = ref; LP.url = url;
+  fillDrop($("#l-image"), h("img", {src: url}), h("span", {}, label));
+  $("#l-viewer").replaceChildren(h("img", {src: url, alt: ""}));
+  $("#l-run").disabled = false; lest();
+}
+dropzone($("#l-image"), "image/*", async (f) => { const u = await api.upload(f); lSetImage(api.inputRef(u), URL.createObjectURL(f), f.name); });
+$("#l-image")._onItem = (it) => it.kind === "still" && lSetImage(Bin.ref(it), Bin.url(it), it.label || it.file.filename);
+Bin.action({id: "loop", label: "Extras · loop it", kinds: ["still"], run: (it) => { lSetImage(Bin.ref(it), Bin.url(it), it.label || it.file.filename); XMODE = "loop"; show("extras"); }});
+Bin.action({id: "stereo", label: "Extras · hide it in noise", kinds: ["clip"], run: (it) => { xSetClip(Bin.ref(it), Bin.url(it), it.label || it.file.filename); XMODE = "stereo"; show("extras"); }});
+(function buildLoop() {
+  const ls = {};
+  const sec = (key, title, tip, ...kids) => (ls[key] = section(title, {id: `l-sec-${key}`, tip}, ...kids));
+  $("#l-sections").replaceChildren(
+    sec("shape", "Length, size and engine", "How long one pass is, how big, and which H3.",
+      lab("One pass"), h("div", {class: "seg", id: "l-len"}), h("div", {id: "l-res", class: "ctl"}),
+      lab("Engine", "FastH3 (8 steps) for drafts; H3 ref2va (25 steps) for the final, about 3x longer"), h("div", {class: "seg", id: "l-engine"}),
+      h("label", {class: "check", tip: "Also samples the loop turned half round and takes the sound near the join from it: H3 garbles the sound next to the wrap otherwise. About 1.8x the time."},
+        h("input", {type: "checkbox", id: "l-views", checked: true}), h("span", {}, "clean sound across the join (1.8x time)"))),
+    sec("look", "Grade", "Optional: grade the loop in a colour palette (Valis Color Palette).", h("select", {id: "l-look"})),
+  );
+  const upd = () => { const s = CR.shotSize("9:16", LP.short); ls.shape.setValue(`${((LP.length - 5) / 24).toFixed(2)} s · ${s.w}×${s.h} · ${LP.engine === "full" ? "H3 25 steps" : "FastH3"}`); ls.look.setValue(LP.look === "natural" ? "none" : PALETTES.find(p => p.id === LP.look)?.name || LP.look); lest(); };
+  seg($("#l-len"), G.LOOP_LENGTHS.map(x => ({id: String(x.frames), name: `${x.s} s`, tip: `${x.frames} frames: a ${x.frames - 5}-frame loop`})), (x) => { LP.length = Number(x.id); upd(); }, "107");
+  slider($("#l-res"), {label: "Size", min: 320, max: 768, step: 32, value: LP.short, fmt: (v) => { const s = CR.shotSize("9:16", v); return `${s.w}×${s.h}`; }, marks: [{name: "draft", value: 384}, {name: "native", value: 768}]}, (v) => { LP.short = v; upd(); });
+  seg($("#l-engine"), [{id: "fast", name: "Draft · FastH3"}, {id: "full", name: "Final · H3 25 steps"}], (x) => { LP.engine = x.id; upd(); });
+  $("#l-views").addEventListener("change", (e) => { LP.views = e.target.checked ? 2 : 1; upd(); });
+  $("#l-look").replaceChildren(...PALETTES.map(p => h("option", {value: p.id}, p.id === "natural" ? "no grade" : p.name)));
+  $("#l-look").addEventListener("change", (e) => { LP.look = e.target.value; upd(); });
+  upd();
+})();
+function loopGraph(prefix = "valis/loop_x") {
+  const s = CR.shotSize("9:16", LP.short);
+  return G.loopShot({image: LP.image || "x.png", prompt: G.loopPrompt({subject: $("#l-subject").value.trim(), action: $("#l-action").value.trim()}), width: s.w, height: s.h,
+    length: LP.length, engine: LP.engine, views: LP.views, look: LP.look === "natural" ? null : LP.look, prefix});
+}
+async function lest() { const e = await EST.estimate(loopGraph()); $("#l-run-sub").textContent = `MiniMax H3 Loop · ${EST.fmt(e)}`; $("#l-run").dataset.tip = `Time: ${e.basis}`; }
+$("#l-run").addEventListener("click", async () => {
+  if (!LP.image) return toast("Drop a still first", true);
+  if (!(await api.hasNode("MiniMaxH3Loop"))) return toast("Loop needs the MiniMax H3 Loop pack: git clone https://github.com/pxl-pshr/ComfyUI-MiniMaxH3-Loop into custom_nodes, then restart ComfyUI", true);
+  run(loopGraph(`valis/loop_${Date.now().toString(36)}`), `Loop · ${((LP.length - 5) / 24).toFixed(2)} s`, $("#l-viewer"), {onDone: (j) => {
+    const v = j.outputs.find(f => /\.mp4$/i.test(f.filename)), gif = j.outputs.find(f => /\.gif$/i.test(f.filename));
+    if (v) { $("#l-viewer").replaceChildren(media(v)); Bin.add(v, {from: "Extras", label: "loop"}); }
+    $("#l-finish").replaceChildren(...(v ? [h("button", {class: "btn", type: "button", onclick: () => { Fx.setClip(api.fileRef(v), api.viewUrl(v), v.filename); $("#f-loop").checked = true; show("fx"); }}, "Add effects that loop", h("span", {class: "sub"}, "FX, with Loop on"))] : []),
+      ...(gif ? [h("a", {class: "btn", href: api.viewUrl(gif), target: "_blank", rel: "noopener"}, "Open the GIF")] : []));
+  }});
+});
 
 // ------------------------------------------------------------------ RENDERS
 const Renders = {
@@ -565,7 +734,7 @@ const Renders = {
       const t = h("div", {class: "thumb"}, media(f, {controls: false}), h("div", {class: "meta"}, f.filename.replace(/_\d+_\.\w+$/, "")));
       t.onclick = () => {
         if (isVid) { setClip(api.outputRef(f), api.viewUrl(f), f.filename); show("edit"); toast("Loaded into Edit"); }
-        else { C.picked = f; $("#c-viewer").replaceChildren(media(f)); $("#c-shoot").disabled = false; show("create"); toast("Set as the first frame"); }
+        else { useAsFirstFrame(f); toast("Set as the first frame"); }
       };
       if (isVid) { const v = t.querySelector("video"); t.onmouseenter = () => v.play(); t.onmouseleave = () => v.pause(); v.muted = true; v.autoplay = false; }
       return t;
@@ -576,14 +745,79 @@ const Renders = {
 $("#r-free").addEventListener("click", async () => { await api.free(); toast("Models unloaded and memory freed"); });
 $("#r-stop").addEventListener("click", async () => { await api.interrupt(); toast("Stopped the current job"); });
 
+// ------------------------------------------------------------------ BIN: one strip of everything, sendable to any tab
+Bin.mount($("#bin"));
+Bin.load();
+Bin.action({id: "create", label: "Create · first frame", kinds: ["still"], run: (it) => { useAsFirstFrame(it.file); toast("Set as the first frame"); }});
+Bin.action({id: "edit", label: "Edit", kinds: ["clip"], run: (it) => { setClip(Bin.ref(it), Bin.url(it), it.label || it.file.filename); show("edit"); }});
+Bin.action({id: "fx", label: "FX", kinds: ["clip"], run: (it) => { Fx.setClip(Bin.ref(it), Bin.url(it), it.label || it.file.filename); show("fx"); }});
+Bin.action({id: "genjutsu", label: "Genjutsu · source", kinds: ["clip"], run: (it) => { gjSetClip(Bin.ref(it), Bin.url(it), it.label || it.file.filename); show("genjutsu"); }});
+const binToggle = $("#binBtn");
+const binCount = () => { binToggle.querySelector("b").textContent = Bin.items.length; };
+Bin.on(binCount);
+binToggle.addEventListener("click", () => { document.body.classList.toggle("binopen"); try { localStorage.setItem("valis.bin", document.body.classList.contains("binopen") ? "1" : "0"); } catch { /* */ } });
+try { if (localStorage.getItem("valis.bin") === "1") document.body.classList.add("binopen"); } catch { /* storage off */ }
+Bin.load().then(binCount);
+
+// ---- the machine: what it is, what it can do, and the defaults that follow
+let MACH = null;
 async function machine() {
   const s = await api.systemStats().catch(() => null);
   if (!s?.devices) return;
   const d = s.devices[0];
   const free = (d.vram_free / 2 ** 30).toFixed(1), tot = (d.vram_total / 2 ** 30).toFixed(1);
   $("#vramPill").textContent = `VRAM ${free}/${tot} GB free`;
-  $("#r-machine").innerHTML = `${d.name}<br>RAM ${(s.system.ram_free / 2 ** 30).toFixed(1)} / ${(s.system.ram_total / 2 ** 30).toFixed(1)} GB free<br>ComfyUI ${s.system.comfyui_version || ""}`;
+  $("#vramPill").dataset.tip = `GPU memory free right now. RAM ${(s.system.ram_free / 2 ** 30).toFixed(1)} of ${(s.system.ram_total / 2 ** 30).toFixed(1)} GB free.`;
 }
+async function detectMachine({apply = false} = {}) {
+  const x = MACH = await MC.detect(), a = MC.advise(x);
+  const row = (k, v, tip) => v == null || v === "" ? null : h("div", {class: "mrow", tip}, h("span", {}, k), h("b", {}, String(v)));
+  const flags = x.flags ? Object.entries(x.flags).map(([k, v]) => v === true ? `--${k.replaceAll("_", "-")}` : `--${k.replaceAll("_", "-")} ${v}`).join(" ") : x.argv.slice(1).join(" ");
+  const k = x.kernels ? Object.entries(x.kernels).filter(([, v]) => v.installed).map(([n, v]) => `${n}${v.version ? " " + v.version : ""}`).join(", ") || "none" : null;
+  $("#r-machine").replaceChildren(...[
+    row("GPU", x.gpu), row("memory", x.vramGB && `${x.vramGB} GB${x.vramFreeGB != null ? ` (${x.vramFreeGB} free)` : ""}`),
+    row("compute", x.capability && `${x.capability}${x.fp8 ? " · fp8" : ""}${x.bf16 ? " · bf16" : ""}`),
+    row("driver", x.driver && `${x.driver} · CUDA ${x.driverCuda}`), row("PyTorch", x.torch && `${x.torch}${x.cudnn ? " · cuDNN " + x.cudnn : ""}`),
+    row("attention", x.attention, "Which attention kernel ComfyUI uses for every model"), row("kernels", k, "Installed attention and compile packages"),
+    row("memory mode", x.vramState), row("RAM", x.ramGB && `${x.ramGB} GB${x.ramFreeGB != null ? ` (${x.ramFreeGB} free)` : ""}`),
+    row("ComfyUI", x.comfy && `${x.comfy} · Python ${x.python}`), row("launch", flags || "(defaults)", "ComfyUI's command-line flags"),
+    h("div", {class: "advice"}, h("div", {class: "adv ok"}, `Safe shot size: ${CR.shotSize("9:16", a.short).w}×${CR.shotSize("9:16", a.short).h} (${a.why})`),
+      ...a.notes.map(n => h("div", {class: `adv ${n.level}`}, n.text)))].filter(Boolean));
+  if (apply) { resCtl?.set(a.short); M.res?.set(a.short); toast(`Create's shot size set to ${a.short} px on the short side for this GPU`); }
+  return a;
+}
+$("#r-detect").addEventListener("click", () => detectMachine({apply: true}));
+// the first time the studio opens on a machine, its shot size follows the GPU
+(async () => {
+  let done = false; try { done = localStorage.getItem("valis.machineDefaults") === "1"; } catch { /* */ }
+  const a = await detectMachine({apply: false});
+  if (!done && a) { resCtl?.set(a.short); M.res?.set(a.short); try { localStorage.setItem("valis.machineDefaults", "1"); } catch { /* */ } }
+})();
+
+// ---- the end-to-end test (selftest.js), shown under Renders
+async function testsUI(report) {
+  report = report || await api.readUser("valis/selftest/latest.json", null);
+  const T = await import("./selftest.js");
+  const byId = Object.fromEntries((report?.tests || []).map(t => [t.id, t]));
+  const icon = {pass: "✓", fail: "✗", error: "!", running: "…", waiting: "·"};
+  $("#r-tests").replaceChildren(...T.TESTS.map(t => { const r = byId[t.id];
+    return h("div", {class: `trow ${r?.status || ""}`, tip: esc(t.label)}, h("span", {class: "ti"}, icon[r?.status] || "·"), h("span", {class: "tn"}, `${t.id} ${t.label}`)); }));
+  const res = (report?.tests || []).filter(t => t.status && t.status !== "waiting");
+  $("#r-test-results").replaceChildren(...(res.length ? [h("h2", {class: "tr-h"}, `End-to-end test · ${report.run}${report.finished ? "" : " (running)"} · ${res.filter(t => t.status === "pass").length} of ${res.length} passed`),
+    h("div", {class: "tgrid"}, ...res.map(t => h("div", {class: `tcard ${t.status}`},
+      h("div", {class: "tt"}, h("b", {}, `${t.id} `), t.label, h("span", {class: "ts"}, ` ${t.status}${t.seconds ? ` · ${Math.round(t.seconds)} s` : ""}`)),
+      t.strip ? h("img", {src: t.strip, alt: ""}) : t.keyframe ? h("img", {src: api.viewUrl(t.keyframe), alt: "", class: "tk"}) : null,
+      h("div", {class: "tc"}, ...(t.checks || []).map(c => h("span", {class: c.pass ? "ok" : "bad", tip: esc(c.detail)}, `${c.pass ? "✓" : "✗"} ${c.name}`))),
+      t.error ? h("div", {class: "terr"}, t.error) : null,
+      t.prompts ? h("details", {}, h("summary", {}, "prompts"), h("pre", {}, `${t.prompts.keyframe}\n\n${t.prompts.motion}`)) : null)))] : []));
+}
+$("#r-test-run").addEventListener("click", async () => {
+  const T = await import("./selftest.js");
+  toast("End-to-end test started: the queue fills one combination at a time");
+  T.run({onUpdate: (r) => testsUI(r)}).then((r) => toast(`End-to-end test: ${r.tests.filter(t => t.status === "pass").length} of ${r.tests.length} passed`));
+});
+$("#r-test-stop").addEventListener("click", async () => { (await import("./selftest.js")).stop(); toast("The test stops after the current combination"); });
+testsUI();
 
 async function setup() {
   const pill = $("#setupPill");
@@ -652,11 +886,8 @@ $("#r-engine-get").addEventListener("click", async () => {
 engineUI();
 
 api.connect();
-// ------------------------------------------------------------------ FILM: one line, one film (film.js runs the chain)
-const M = {genre: null, shots: 6, plan: null, busy: false};
-cards($("#m-genre"), P.GENRES, (g) => { M.genre = g; }, "gothic");
-seg($("#m-shots"), [{id: "4", name: "4 shots"}, {id: "6", name: "6 shots"}, {id: "8", name: "8 shots"}], (x) => { M.shots = Number(x.id); }, "6");
-// the chain's view of the studio: submit a graph and wait for its results, read a saved text, name a result for a loader
+// ------------------------------------------------------------------ FILM: one line, one film, step by step (film.js runs each step)
+const M = {genre: null, shots: 6, plan: null, busy: false, short: CR.NATIVE_SHORT};
 const filmIO = {
   run: (graph, label) => new Promise((res, rej) => {
     api.submit(graph, label, "film").then((job) => {
@@ -669,23 +900,188 @@ const filmIO = {
     }).catch(rej);
   }),
   text: async (f) => (await fetch(api.viewUrl(f))).text(),
-  ref: (f) => api.outputRef(f),
+  ref: (f) => api.fileRef(f),
   free: () => api.free(),
   has: async (node) => !!(await api.objectInfo(node))[node],
   exists: async (f) => (await fetch(api.viewUrl(f), {method: "HEAD"})).ok,
 };
-function drawPlan() {
+const fsec = {};
+function buildFilm() {
+  const sec = (key, title, tip, ...kids) => (fsec[key] = section(title, {id: `m-sec-${key}`, tip}, ...kids));
+  $("#m-sections").replaceChildren(
+    sec("genre", "Genre", "The film's look: every keyframe starts with the genre's words.", h("div", {class: "cards", id: "m-genre"})),
+    sec("shape", "Shots and size", "How many shots, and the size H3 shoots them at.",
+      lab("Shots", "Each shot is one MiniMax H3 clip, cut to whole bars of the song."), h("div", {class: "seg", id: "m-shots-n"}),
+      h("div", {id: "m-res", class: "ctl"})),
+    sec("song", "Song", "Qwen3's song brief goes to YuE2, which writes the sheet music and plays it. Or use your own song: Valis hears its tempo and bars.",
+      h("div", {class: "seg", id: "m-song-src"}),
+      h("div", {class: "drop", id: "m-song-drop", style: "margin-top:8px; display:none"}, "Drop your song (wav, flac, mp3)", h("br"), h("span", {class: "hint"}, "the shots are cut on its bars, the effects fire on its beats"))),
+  );
+  cards($("#m-genre"), P.GENRES, (g) => { M.genre = g; fsec.genre.setValue(g.name); }, "gothic");
+  seg($("#m-shots-n"), [4, 6, 8, 10, 12].map(n => ({id: String(n), name: String(n)})), (x) => { M.shots = Number(x.id); fshape(); }, "6");
+  M.res = slider($("#m-res"), {label: "Shot size", min: 320, max: 1024, step: 32, value: M.short,
+    tip: "The size H3 shoots every shot at (keyframes too). Smaller is much faster: try a draft at 384, then the film at native.",
+    fmt: (v) => { const s = CR.shotSize("9:16", v); return `${s.w}×${s.h}${v === CR.NATIVE_SHORT ? " · native" : v < 512 ? " · draft" : ""}`; },
+    marks: [{name: "draft", value: 384}, {name: "512", value: 512}, {name: "native", value: 768}]}, (v) => { M.short = v; fshape(); });
+  seg($("#m-song-src"), [{id: "yue", name: "YuE2 writes it"}, {id: "own", name: "My song"}], (x) => {
+    M.songSrc = x.id; $("#m-song-drop").style.display = x.id === "own" ? "" : "none"; fsec.song.setValue(x.id === "own" ? (M.ownSong ? M.ownSong.name : "your song") : "YuE2");
+  }, "yue");
+  dropzone($("#m-song-drop"), "audio/*", async (f) => {
+    const u = await api.upload(f); M.ownSong = {ref: api.inputRef(u), name: f.name, url: URL.createObjectURL(f)};
+    fillDrop($("#m-song-drop"), h("audio", {src: M.ownSong.url, controls: true, style: "width:100%"}), h("span", {}, f.name));
+    fsec.song.setValue(f.name);
+    if (M.plan) { M.plan.song.file = M.ownSong.ref; M.plan.song.fileName = f.name; M.plan.music = null; fsave(); fdraw(); }
+  });
+  $("#m-song-drop")._onItem = (it) => { if (it.kind !== "audio") return; M.ownSong = {ref: Bin.ref(it), name: it.file.filename, url: Bin.url(it)}; fsec.song.setValue(it.file.filename); };
+}
+function fshape() { const s = CR.shotSize("9:16", M.short); fsec.shape?.setValue(`${M.shots} shots · ${s.w}×${s.h}`); if (M.plan && !M.busy) { M.plan.size = {w: s.w, h: s.h}; fsteps(); } }
+// ---- the plan, kept in ComfyUI/user/default/valis/films/<tag>.json so a reload (or another day) picks it up
+let fsaveT = null;
+function fsave() {
+  if (!M.plan) return;
+  clearTimeout(fsaveT);
+  const plan = JSON.parse(JSON.stringify(M.plan, (k, v) => (v && typeof v === "object" && v.commit && !v.filename) ? undefined : v));
+  fsaveT = setTimeout(() => api.writeUser(`valis/films/${M.plan.tag}.json`, {...plan, genre: M.genre?.id, saved: Date.now()}).then(frecent).catch(() => {}), 600);
+}
+async function frecent() {
+  let list = [];
+  try { list = await (await fetch(`/api/userdata?dir=${encodeURIComponent("valis/films")}&recurse=false&full_info=true`)).json(); } catch { /* none */ }
+  list = (Array.isArray(list) ? list : []).filter(f => /\.json$/.test(f.path || f)).sort((a, b) => (b.modified || 0) - (a.modified || 0)).slice(0, 8);
+  $("#m-recent").replaceChildren(...(list.length ? [h("span", {class: "hint"}, "Recent: "), ...list.map(f => {
+    const p = f.path || f, tag = p.replace(/^.*\//, "").replace(/\.json$/, "");
+    return h("button", {class: "chip" + (M.plan?.tag === tag ? " on" : ""), type: "button", onclick: () => fopen(p)}, tag);
+  })] : []));
+  for (const b of $$("#m-recent .chip")) {               // name them by title
+    const p = `valis/films/${b.textContent}.json`;
+    api.readUser(p).then(pl => { if (pl?.title) { b.textContent = pl.title; b.dataset.tip = esc(pl.logline || ""); } });
+  }
+}
+async function fopen(path) {
+  const pl = await api.readUser(path.startsWith("valis/") ? path : `valis/films/${path}`);
+  if (!pl) return toast("Couldn't read that film's plan", true);
+  M.plan = pl; M.genre = P.GENRES.find(g => g.id === pl.genre) || M.genre;
+  $("#m-idea").value = pl.idea || "";
+  fdraw(); frecent();
+  if (pl.film) { $("#m-viewer").replaceChildren(media(pl.film)); finishBar($("#m-finish"), pl.film, $("#m-viewer"), null); }
+}
+// ---- the steps panel: what each step makes, how much is done, a button to run it alone
+const STEPS = [
+  {id: "song", name: "Song", tip: "YuE2 writes and plays the song (or Valis reads yours). Its bar sets every shot's length."},
+  {id: "keys", name: "Keyframes", tip: "Krea 2 frames every shot. Look at them before anything is shot: re-roll one, edit its words, or open it in Create."},
+  {id: "shots", name: "Shots", tip: "MiniMax H3 shoots each keyframe."},
+  {id: "fx", name: "Effects", tip: "SAM 3 finds each shot's subject; its effect fires on the song's lane, with its sound, in the song's key."},
+  {id: "cut", name: "Cut", tip: "Every shot trimmed to its bars and joined on the song, with a title card at the end."},
+];
+async function fsteps() {
+  const p = M.plan, el = $("#m-steps");
+  if (!p) { el.replaceChildren(h("p", {class: "hint"}, "Plan the film first: nothing renders until you press a step.")); return; }
+  const n = p.shots.length, cnt = (f) => p.shots.filter(f).length;
+  const state = {song: p.music?.audio ? 1 : 0, keys: cnt(s => s.key) / n, shots: cnt(s => s.clip) / n, fx: cnt(s => s.fx) / n, cut: p.film ? 1 : 0};
+  const label = {song: p.music?.audio ? `${p.music.bar.bpm} BPM · ${p.music.cut.bars} bar${p.music.cut.bars > 1 ? "s" : ""} a shot` : p.song.file ? "your song" : "YuE2",
+    keys: `${cnt(s => s.key)} of ${n}`, shots: `${cnt(s => s.clip)} of ${n}`, fx: `${cnt(s => s.fx)} of ${n}`, cut: p.film ? "done" : ""};
+  const {w, hh = sizeOfPlan(p).h} = sizeOfPlan(p);
+  const est = {
+    song: await EST.estimate(p.song.file ? G.scoreMake({audio: "x"}) : G.song({style: "x", lyrics: "x", seconds: Math.min(60, Math.ceil(n * 4.46 + 2))}).graph),
+    keys: await EST.estimate(G.filmKeyframes({prompts: p.shots.filter(s => !s.key).map(() => "x"), width: w, height: hh})),
+    shots: await EST.estimate(G.shot({image: "x", motion: "x", width: w, height: hh, seconds: 107 / 24})),
+    fx: await EST.estimate(G.fx({clip: "x", layers: [{effect: "Punch", on: "kick"}]})), cut: {seconds: 20, measured: false},
+  };
+  const left = {song: 1 - state.song, keys: n - cnt(s => s.key), shots: n - cnt(s => s.clip), fx: n - cnt(s => s.fx), cut: 1 - state.cut};
+  const t = (id) => { const e = est[id]; if (!left[id]) return ""; const k = id === "song" || id === "cut" || id === "keys" ? 1 : left[id]; return EST.fmt({...e, seconds: e.seconds * k}); };
+  el.replaceChildren(...STEPS.map(st => h("div", {class: "step" + (state[st.id] >= 1 ? " done" : state[st.id] > 0 ? " part" : ""), tip: st.tip},
+    h("i", {class: "sdot"}), h("div", {class: "sn"}, h("b", {}, st.name), h("span", {}, label[st.id])),
+    h("button", {class: "btn small", type: "button", disabled: M.busy, onclick: () => fstep(st.id)}, state[st.id] >= 1 ? "again" : "run", h("span", {class: "sub"}, t(st.id) || "")))));
+  const total = Object.keys(left).reduce((a, k) => a + (left[k] ? est[k].seconds * (k === "shots" || k === "fx" ? left[k] : 1) : 0), 0);
+  $("#m-make-sub").textContent = total ? `every step still missing · ${EST.fmt({seconds: total, measured: Object.values(est).every(e => e.measured)})}` : "all done";
+  $("#m-make").disabled = M.busy;
+}
+const sizeOfPlan = (p) => p.size || (() => { const s = CR.shotSize("9:16", M.short); return {w: s.w, h: s.h}; })();
+async function fstep(id, only = null) {
+  if (!M.plan || M.busy) return;
+  M.busy = true; fsteps(); fdraw();
+  const p = M.plan, onStage = (stage, msg) => { $("#m-status").textContent = msg; };
+  p.size = p.size || sizeOfPlan(p);
+  try {
+    if (id === "song") { if (!only) p.music = null; await makeSong(p, filmIO, {onStage}); }
+    if (id === "keys") await frameShots(p, filmIO, {genre: M.genre, only, onStage});
+    if (id === "shots") await shootShots(p, filmIO, {genre: M.genre, only, onStage});
+    if (id === "fx") { if (!p.music?.audio) await makeSong(p, filmIO, {onStage}); await effectShots(p, filmIO, {only, onStage}); }
+    if (id === "cut") { await cutFilm(p, filmIO, {onStage}); $("#m-viewer").replaceChildren(media(p.film)); finishBar($("#m-finish"), p.film, $("#m-viewer"), null); Bin.add(p.film, {from: "Film", label: p.title}); }
+    $("#m-status").textContent = "";
+  } catch (e) { toast(e.message, true); $("#m-status").textContent = e.message; }
+  finally { M.busy = false; $("#m-progress").replaceChildren(); fsave(); fdraw(); fsteps(); }
+}
+// ---- the script and the shot cards
+function fdraw() {
   const p = M.plan, box = $("#m-planbox");
-  if (!p) { box.replaceChildren(); return; }
-  const field = (label, get, set) => h("div", {class: "maprow"}, h("label", {}, label), h("input", {type: "text", value: get(), oninput: (e) => set(e.target.value)}));
-  box.replaceChildren(h("h2", {}, p.title), h("p", {class: "hint"}, p.logline),
-    ...p.cast.map(c => field(c.name || "cast", () => c.look, (v) => { c.look = v; })), field("place", () => p.place, (v) => { p.place = v; }), field("song", () => p.song.style, (v) => { p.song.style = v; }),
-    ...p.shots.map((sh, k) => h("div", {class: "shot"}, h("b", {}, String(k + 1)),
-      h("textarea", {rows: 2, title: sh.who ? `the still frame · in it: ${sh.who.join(", ") || "no one"}` : "the still frame", oninput: (e) => { sh.keyframe = e.target.value; }}, sh.keyframe),
-      h("input", {type: "text", value: sh.motion, placeholder: "what moves", title: "what moves in the shot", oninput: (e) => { sh.motion = e.target.value; }}),
-      h("input", {type: "text", value: sh.subject, placeholder: "subject", title: "what SAM 3 tracks", oninput: (e) => { sh.subject = e.target.value; }}),
-      h("select", {title: "the effect", onchange: (e) => { sh.effect = e.target.value; }}, ...G.FILM_EFFECTS.map(x => h("option", {value: x, selected: x === sh.effect}, x))),
-      h("select", {title: "the lane that fires it", onchange: (e) => { sh.on = e.target.value; }}, ...G.FILM_LANES.map(x => h("option", {value: x, selected: x === sh.on}, `on ${x}`))))));
+  filmActions();
+  if (!p) { box.replaceChildren(); $("#m-shots").replaceChildren(); fsteps(); return; }
+  const field = (label, get, set, tip) => h("div", {class: "maprow", tip}, h("label", {}, label), h("input", {type: "text", value: get() || "", oninput: (e) => { set(e.target.value); fsave(); }}));
+  box.replaceChildren(
+    h("div", {class: "ptitle"}, h("input", {class: "title", type: "text", value: p.title, oninput: (e) => { p.title = e.target.value; fsave(); }}),
+      h("span", {class: "hint"}, `${p.shots.length} shots · ${sizeOfPlan(p).w}×${sizeOfPlan(p).h}`)),
+    h("input", {class: "logline", type: "text", value: p.logline || "", oninput: (e) => { p.logline = e.target.value; fsave(); }}),
+    ...p.cast.map((c, i) => field(c.name || `cast ${i + 1}`, () => c.look, (v) => { c.look = v; }, "How this character looks: goes into every keyframe they're in, so they stay the same from shot to shot")),
+    field("place", () => p.place, (v) => { p.place = v; }, "The setting: goes into every keyframe"),
+    p.song.file ? h("div", {class: "maprow"}, h("label", {}, "song"), h("span", {class: "hint"}, p.song.fileName || "your song"))
+      : field("song", () => p.song.style, (v) => { p.song.style = v; p.music = null; }, "YuE2's brief: genre, instruments, mood, tempo"),
+    p.music?.audio ? h("audio", {src: api.viewUrl(p.music.audio), controls: true, class: "songbar"}) : null);
+  const thumb = (f, label, empty) => f ? h("div", {class: "fm", tip: label, onclick: () => $("#m-viewer").replaceChildren(media(f))}, media(f, {controls: false, autoplay: false}), h("span", {}, label))
+    : h("div", {class: "fm empty"}, h("span", {}, empty));
+  $("#m-shots").replaceChildren(...p.shots.map((sh, k) => {
+    const card = h("div", {class: "fshot"},
+      h("div", {class: "fh"}, h("b", {}, String(k + 1)), h("span", {class: "who"}, (sh.who || []).join(", ") || "no one"),
+        h("span", {class: "fbtns"},
+          h("button", {class: "ibtn", type: "button", disabled: M.busy, tip: "A new keyframe for this shot (a new seed)", onclick: () => { sh.keySeed = (sh.keySeed ?? 7101 + k) + 101; fstep("keys", [k]); }}, "⟳ still"),
+          h("button", {class: "ibtn", type: "button", disabled: M.busy || !sh.key, tip: "Shoot (or re-shoot) this shot with H3", onclick: () => { if (sh.clip) sh.shotSeed = (sh.shotSeed ?? 51101 + k) + 1; fstep("shots", [k]); }}, "▶ shoot"),
+          h("button", {class: "ibtn", type: "button", tip: "Work on this shot in Create (camera, light, palette, trained moves), then send the still or the shot back here", onclick: () => toCreate(k)}, "Create ↗"))),
+      h("div", {class: "fmedia"}, thumb(sh.key, "keyframe", "no still yet"), thumb(sh.clip, "shot", "not shot"), thumb(sh.fx, "with effects", "no effects")),
+      h("textarea", {rows: 2, tip: "The still frame (Krea 2). The cast's looks and the place are added to it.", oninput: (e) => { sh.keyframe = e.target.value; fsave(); }}, sh.keyframe),
+      h("input", {type: "text", value: sh.motion, placeholder: "what moves", tip: "What moves in the shot (H3)", oninput: (e) => { sh.motion = e.target.value; fsave(); }}),
+      h("div", {class: "frow"},
+        h("input", {type: "text", value: sh.subject, placeholder: "subject", tip: "What SAM 3 tracks for the effect", oninput: (e) => { sh.subject = e.target.value; fsave(); }}),
+        h("select", {tip: "The effect", onchange: (e) => { sh.effect = e.target.value; sh.fx = null; fsave(); fsteps(); }}, ...G.FILM_EFFECTS.map(x => h("option", {value: x, selected: x === sh.effect}, x))),
+        h("select", {tip: "The lane of the song that fires it", onchange: (e) => { sh.on = e.target.value; sh.fx = null; fsave(); fsteps(); }}, ...G.FILM_LANES.map(x => h("option", {value: x, selected: x === sh.on}, `on ${x}`)))));
+    // drop a still or a clip from the bin onto a shot
+    card.addEventListener("dragover", (e) => { e.preventDefault(); card.classList.add("over"); });
+    card.addEventListener("dragleave", () => card.classList.remove("over"));
+    card.addEventListener("drop", (e) => { e.preventDefault(); card.classList.remove("over"); const raw = e.dataTransfer.getData("application/x-valis-item"); if (raw) toShot(k, JSON.parse(raw)); });
+    return card;
+  }));
+  fsteps();
+}
+function toShot(k, it) {
+  const sh = M.plan?.shots[k]; if (!sh) return;
+  if (it.kind === "still") { sh.key = it.file; sh.clip = null; sh.fx = null; toast(`Shot ${k + 1}: new keyframe`); }
+  else if (it.kind === "clip") { sh.clip = it.file; sh.fx = null; toast(`Shot ${k + 1}: new shot`); }
+  else return;
+  fsave(); fdraw();
+}
+// Open a shot in Create: its words, its still as the first frame; Create offers to send the result back
+let FILM_RETURN = null;
+function toCreate(k) {
+  const p = M.plan, sh = p.shots[k];
+  const cast = (p.cast || []).filter(c => !sh.who || sh.who.some(w => (c.name || "").toLowerCase().includes(w.toLowerCase()) || w.toLowerCase().includes((c.name || "").toLowerCase())));
+  $("#c-subject").value = [sh.keyframe, ...cast.map(c => c.look), p.place].filter(Boolean).join(" ");
+  $("#c-action").value = sh.motion || ""; $("#c-who").value = sh.subject || "";
+  FILM_RETURN = {tag: p.tag, k};
+  if (sh.key) pickKey(sh.key, null);
+  cchanged(); show("create"); filmReturnBar();
+}
+function filmReturnBar() {
+  const bar = $("#c-film-return");
+  if (!FILM_RETURN || FILM_RETURN.tag !== M.plan?.tag) { bar?.remove(); return; }
+  const k = FILM_RETURN.k, el = bar || h("div", {id: "c-film-return", class: "filmret"});
+  el.replaceChildren(h("span", {}, `Working on ${M.plan.title}, shot ${k + 1}`),
+    h("button", {class: "btn small", type: "button", tip: "The keyframe picked here becomes the film's still for this shot", onclick: () => {
+      if (!C.picked?.filename) return toast("Pick a keyframe first", true);
+      toShot(k, {kind: "still", file: C.picked}); show("film"); }}, "Use the picked still"),
+    h("button", {class: "btn small", type: "button", tip: "The last shot made here becomes the film's shot", onclick: () => {
+      const v = Bin.items.find(i => i.kind === "clip" && i.from === "Create");
+      if (!v) return toast("Shoot it here first", true);
+      toShot(k, v); show("film"); }}, "Use the last shot"),
+    h("button", {class: "linkbtn", type: "button", onclick: () => { FILM_RETURN = null; filmReturnBar(); }}, "done"));
+  if (!bar) $("#view-create .stage").prepend(el);
 }
 $("#m-plan").addEventListener("click", async () => {
   const idea = $("#m-idea").value.trim();
@@ -693,30 +1089,41 @@ $("#m-plan").addEventListener("click", async () => {
   if (M.busy) return;
   M.busy = true; $("#m-plan").disabled = true;
   try {
-    $("#m-status").textContent = "Qwen3 is writing the shot list and the song brief (about two minutes with the model load)";
+    $("#m-status").textContent = "Qwen3 is writing the cast, the song brief and the shot list";
     M.plan = await planFilm({idea, shots: M.shots, genre: M.genre}, filmIO);
-    drawPlan(); $("#m-make").disabled = false; $("#m-progress").replaceChildren();
-    $("#m-status").textContent = `Planned: ${M.plan.title}. Edit anything above, then make the film.`;
+    const s = CR.shotSize("9:16", M.short); M.plan.size = {w: s.w, h: s.h};
+    if (M.songSrc === "own" && M.ownSong) { M.plan.song.file = M.ownSong.ref; M.plan.song.fileName = M.ownSong.name; }
+    $("#m-progress").replaceChildren();
+    $("#m-status").textContent = `Planned: ${M.plan.title}. Edit anything, then run the steps one by one, or Make the rest.`;
+    fsave(); fdraw();
   } catch (e) { toast(e.message, true); $("#m-status").textContent = e.message; }
-  finally { M.busy = false; $("#m-plan").disabled = false; }
+  finally { M.busy = false; $("#m-plan").disabled = false; fsteps(); }
 });
 $("#m-make").addEventListener("click", async () => {
   if (!M.plan || M.busy) return;
-  M.busy = true; $("#m-make").disabled = true; $("#m-plan").disabled = true;
-  const t0 = Date.now();
+  M.busy = true; fsteps(); fdraw();
+  const t0 = Date.now(), p = M.plan;
+  p.size = p.size || sizeOfPlan(p);
   try {
-    const r = await makeFilm(M.plan, filmIO, {genre: M.genre, onStage: (stage, msg) => { $("#m-status").textContent = msg; }});
+    const r = await makeFilm(p, filmIO, {genre: M.genre, onStage: (stage, msg) => { $("#m-status").textContent = msg; }, onStep: () => { fsave(); fdraw(); }});
     $("#m-progress").replaceChildren();
-    $("#m-viewer").replaceChildren(media(r.film)); finishBar($("#m-finish"), r.film, $("#m-viewer"), $("#m-strip"));
-    $("#m-strip").replaceChildren(...r.fxed.map((v, k) => { const t = h("div", {class: "thumb"}, media(v, {controls: false}), h("div", {class: "meta"}, `shot ${k + 1}`)); t.onclick = () => $("#m-viewer").replaceChildren(media(v)); return t; }));
-    $("#m-status").textContent = `${M.plan.title}: ${r.fxed.length} shots of ${r.cut.bars} bar${r.cut.bars > 1 ? "s" : ""} at ${r.bar.bpm} BPM, ${Math.round((Date.now() - t0) / 60000)} min. Saved ${r.film.subfolder}/${r.film.filename}`;
+    $("#m-viewer").replaceChildren(media(r.film)); finishBar($("#m-finish"), r.film, $("#m-viewer"), null);
+    Bin.add(r.film, {from: "Film", label: p.title});
+    $("#m-status").textContent = `${p.title}: ${r.fxed.length} shots of ${r.cut.bars} bar${r.cut.bars > 1 ? "s" : ""} at ${r.bar.bpm} BPM, ${Math.round((Date.now() - t0) / 60000)} min. Saved ${r.film.subfolder}/${r.film.filename}`;
     toast(`Film saved: ${r.film.filename}`);
   } catch (e) { toast(e.message, true); $("#m-status").textContent = e.message; }
-  finally { M.busy = false; $("#m-make").disabled = false; $("#m-plan").disabled = false; }
+  finally { M.busy = false; fsave(); fdraw(); }
 });
+buildFilm(); frecent(); fsteps();
+EST.estimate(G.filmPlan({idea: "x"})).then(e => { $("#m-plan-sub").textContent = `Qwen3 · ${EST.fmt(e)}`; });
+// a still or clip from the bin straight onto a shot of the open film (one menu entry per shot)
+function filmActions() {
+  Bin.actions = Bin.actions.filter(a => !/^film\d+$/.test(a.id));
+  (M.plan?.shots || []).forEach((sh, k) => Bin.action({id: `film${k + 1}`, label: `Film · shot ${k + 1}`, kinds: ["still", "clip"], run: (it) => { toShot(k, it); show("film"); }}));
+}
 
-machine(); setInterval(machine, 8000);
-setup();
+buildCreate();
 show((location.hash || "#film").slice(1));
-promptsPreview();
 refreshPrompt();
+// estimates learn from ComfyUI's history once it's read; every button's time is worked out again then
+EST.learnFromHistory().then(() => { cchanged(); fsteps(); xest(); lest(); Score.estimates(); });
