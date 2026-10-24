@@ -6,7 +6,7 @@ const NODES = {
   create: {x: 225, y: 250, t: "Create", s: "keyframe → shot"},
   score: {x: 225, y: 430, t: "Score", s: "a song as lanes"},
   bin: {x: 450, y: 250, t: "Bin", s: "everything made", big: true},
-  edit: {x: 745, y: 70, t: "Edit", s: "find, change, swap, turn"},
+  edit: {x: 745, y: 70, t: "Edit", s: "change, remove, swap, turn"},
   genjutsu: {x: 745, y: 190, t: "Genjutsu", s: "motion, restyle, swap"},
   fx: {x: 745, y: 310, t: "FX", s: "effects on cue"},
   extras: {x: 745, y: 430, t: "Extras", s: "stereo, loops, stage"},
