@@ -5,10 +5,16 @@ import * as P from "./presets.js";
 
 const PACKS = [
   [/^Valis/, "ComfyUI-Valis: restart ComfyUI after installing"],
-  [/^Krea2/, "the Krea 2 identity-edit nodes"],
-  [/^(MiniMaxH3|H3)/, "the MiniMax H3 nodes"],
-  [/^SAM3_/, "the SAM 3 nodes"],
-  [/^MVEx_/, "MVEx"],
+  [/^Krea2AnyPaint/, "krea2-anypaint (github.com/alexw5702-afk/krea2-anypaint)"],
+  [/^Krea2/, "comfyui-krea2edit (the Krea 2 identity-edit nodes)"],
+  [/^MiniMaxH3Loop/, "ComfyUI-MiniMaxH3-Loop"],
+  [/^MiniMaxH3PDDAcc/, "ComfyUI-MiniMax-H3-PDD-Acc"],
+  [/^H3(IdentityAnchor|MaskVideoPrepare)/, "ComfyUI-ALLinONE-MinimaxH3"],
+  [/^SeedVR2/, "ComfyUI-SeedVR2_VideoUpscaler"],
+  [/^Plenio/, "Plenio Music Production System"],
+  [/^(MiniMaxH3|H3)/, "a newer ComfyUI (the MiniMax H3 nodes are built in)"],
+  [/^SAM3_/, "a newer ComfyUI (SAM 3 is built in)"],
+  [/^MVEx_/, "MaskVidExperiments (MVEx)"],
   [/^UnetLoaderGGUF/, "ComfyUI-GGUF"],
   [/^(TextEncodeQwenImage21|LTXV|CreateVideo|SaveVideo|LoadVideo|GetVideoComponents)/, "a newer ComfyUI (update)"],
 ];
