@@ -178,14 +178,14 @@ export const BODIES = [
   {id: "digital", name: "Digital cinema", words: "shot on a large-format digital cinema camera, clean and sharp"},
   {id: "35mm", name: "35mm film", words: "shot on 35mm film, natural grain, rich colour"},
   {id: "16mm", name: "16mm film", words: "shot on 16mm film, visible grain, soft and warm"},
-  {id: "super8", name: "Super 8", words: "Super 8 home movie, heavy grain, light leaks, gate weave"},
+  {id: "super8", name: "Super 8", words: "a frame of faded Super 8 home-movie film: heavy grain, warm light leaks, soft focus, gate weave"},
   {id: "imax", name: "IMAX 65mm", words: "IMAX 65mm photography, immense detail and scale"},
-  {id: "dv", name: "DV camcorder", words: "early-2000s DV camcorder footage, flat and sharp, clipped highlights"},
-  {id: "vhs", name: "VHS camcorder", words: "1980s VHS camcorder footage, smeared colour, soft"},
-  {id: "phone", name: "Phone", words: "smartphone video, natural and immediate"},
-  {id: "action", name: "Action cam", words: "action-camera footage, ultra-wide fisheye"},
-  {id: "cctv", name: "Security cam", words: "security camera footage, high fixed angle, grainy"},
-  {id: "silent", name: "Silent film", words: "a 1920s hand-cranked silent film, flicker, scratches"},
+  {id: "dv", name: "DV camcorder", words: "a frame of early-2000s DV camcorder video: flat digital colour, harsh sharpening, clipped white highlights, interlaced edges"},
+  {id: "vhs", name: "VHS camcorder", words: "a frame of worn 1980s VHS home video: low resolution, smeared bleeding colour, soft focus, tape noise and tracking lines"},
+  {id: "phone", name: "Phone", words: "a frame of vertical smartphone video: natural, immediate, slightly over-sharpened, auto exposure"},
+  {id: "action", name: "Action cam", words: "a frame of action-camera video: ultra-wide fisheye view, punchy colour, deep focus"},
+  {id: "cctv", name: "Security cam", words: "a frame of grainy security-camera video seen from a high fixed corner angle: washed-out colour, low resolution, a timestamp-free surveillance look"},
+  {id: "silent", name: "Silent film", words: "a frame of a 1920s hand-cranked silent film: flickering, scratched, soft black-and-white"},
 ];
 
 export const LENS_KITS = [

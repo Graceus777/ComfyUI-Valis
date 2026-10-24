@@ -87,7 +87,7 @@ for (const g of P.GENRES) for (const body of P.BODIES) for (const era of P.ERAS)
   const name = `prompt · ${g.name} · ${body.name} · ${era.name}`;
   ok(!/undefined|null|\[object/.test(k + m), `${name}: no undefined`, k);
   ok(!/\.\s*\./.test(k) && !/ {2}/.test(k) && !/,\s*[,.]/.test(k), `${name}: no doubled stops or spaces`, k);
-  if (body.id !== "auto") ok(k.indexOf(body.words.slice(0, 20)) < 5, `${name}: the camera body leads the prompt`, k.slice(0, 80));
+  if (body.id !== "auto") { const at = k.toLowerCase().indexOf(body.words.slice(0, 20).toLowerCase()); ok(at >= 0 && at < 5, `${name}: the camera body leads the prompt`, k.slice(0, 80)); }
   if (body.id !== "auto") ok(!k.includes(P.GENRE_SLOTS[g.id]?.medium || "\u0000"), `${name}: the genre's medium gives way to the body`, k.slice(0, 120));
   ok(k.toLowerCase().includes("fisheye"), `${name}: the lens kit is in it`);
   ok(new Set(words(k)).size > 8, `${name}: says something`);

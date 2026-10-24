@@ -451,3 +451,7 @@ body.binopen .view { height: calc(100vh - 56px - 168px); }
 .helpsvg .hl { fill: #7d8aa6; font: 10.5px Inter, sans-serif; }
 .helpbox ul { margin: 6px 0 0; padding-left: 18px; color: #c9c9d6; font-size: 13px; line-height: 1.55; display: grid; gap: 4px; }
 #helpBtn { font-weight: 700; width: 30px; padding: 4px 0; text-align: center; }
+
+.score-viewer { min-height: 0 !important; height: 46vh; flex: 0 0 auto; }
+.score-viewer canvas.livefx { max-height: 100%; }
+.tl-scroll { max-height: 34vh; overflow-y: auto; }

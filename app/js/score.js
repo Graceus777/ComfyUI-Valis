@@ -39,6 +39,7 @@ export class ScoreView {
     this.engine = "library"; this.rules = []; this.assign = {}; this.results = {}; this.thumbs = []; this.subject = "";
     this.canvas = $("#s-canvas"); this.t = 0; this.loaded = false; this.src = "song";
     this.live = new LivePreview($("#s-viewer"));
+    this.live.onReady = () => { if (this.audio.paused) this.preview(true); };     // a clip or still finished loading: draw it
     this.build();
   }
   build() {

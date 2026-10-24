@@ -82,7 +82,8 @@ export function stillPrompt(plan, s, genre = null) {
   const inShot = (plan.cast || []).filter(c => !s.who || !c.name || s.who.some(w => w.toLowerCase().includes(c.name.toLowerCase()) || c.name.toLowerCase().includes(w.toLowerCase())));
   return [genre?.style || "", s.keyframe, ...inShot.map(c => c.look), plan.place].filter(Boolean).join(" ");
 }
-export const sizeOf = (plan) => plan.size || {w: 768, h: 1344};
+export const sizeOf = (plan) => plan.size || {w: 768, h: 1344};            // the shots' size
+const KEY = {w: 768, h: 1344};                                                // stills are always painted at Krea's own size
 const keySeed = (s, k) => s.keySeed ?? 7101 + k;
 const free = async (io) => { if (io.free) await io.free().catch(() => {}); };
 
@@ -112,7 +113,7 @@ export async function makeSong(plan, io, {onStage = () => {}} = {}) {
 export async function frameShots(plan, io, {genre = null, only = null, onStage = () => {}} = {}) {
   const want = plan.shots.map((s, k) => k).filter(k => only ? only.includes(k) : !plan.shots[k].key);
   if (!want.length) return plan;
-  const {w, h} = sizeOf(plan), b = base(plan);
+  const {w, h} = KEY, b = base(plan);
   await free(io);
   onStage("keyframes", `Krea 2 frames ${want.length} shot${want.length > 1 ? "s" : ""}`);
   if (!only && want.length === plan.shots.length && !plan.shots.some(s => s.keySeed != null)) {

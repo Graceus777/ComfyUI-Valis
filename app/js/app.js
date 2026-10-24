@@ -1003,6 +1003,10 @@ async function fopen(path) {
   const pl = await api.readUser(path.startsWith("valis/") ? path : `valis/films/${path}`);
   if (!pl) return toast("Couldn't read that film's plan", true);
   M.plan = pl; M.genre = P.GENRES.find(g => g.id === pl.genre) || M.genre;
+  // the panel follows the plan: its genre, its shot count, its size
+  $$("#m-genre .card").forEach(c => c.classList.toggle("on", c.dataset.id === M.genre?.id)); fsec.genre.setValue(M.genre?.name || "");
+  M.shots = pl.shots.length; $$("#m-shots-n button").forEach(b => b.classList.toggle("on", Number(b.dataset.id) === M.shots));
+  if (pl.size) { const short = Math.min(pl.size.w, pl.size.h); M.short = short; M.res?.set(short); }
   $("#m-idea").value = pl.idea || "";
   fdraw(); frecent();
   if (pl.film) { $("#m-viewer").replaceChildren(media(pl.film)); finishBar($("#m-finish"), pl.film, $("#m-viewer"), null); }
@@ -1060,7 +1064,7 @@ function fdraw() {
   filmActions();
   if (!p) { box.replaceChildren(); $("#m-shots").replaceChildren(); fsteps(); return; }
   const field = (label, get, set, tip) => h("div", {class: "maprow", tip}, h("label", {}, label), h("input", {type: "text", value: get() || "", oninput: (e) => { set(e.target.value); fsave(); }}));
-  box.replaceChildren(
+  box.replaceChildren(...[
     h("div", {class: "ptitle"}, h("input", {class: "title", type: "text", value: p.title, oninput: (e) => { p.title = e.target.value; fsave(); }}),
       h("span", {class: "hint"}, `${p.shots.length} shots · ${sizeOfPlan(p).w}×${sizeOfPlan(p).h}`)),
     h("input", {class: "logline", type: "text", value: p.logline || "", oninput: (e) => { p.logline = e.target.value; fsave(); }}),
@@ -1068,7 +1072,7 @@ function fdraw() {
     field("place", () => p.place, (v) => { p.place = v; }, "The setting: goes into every keyframe"),
     p.song.file ? h("div", {class: "maprow"}, h("label", {}, "song"), h("span", {class: "hint"}, p.song.fileName || "your song"))
       : field("song", () => p.song.style, (v) => { p.song.style = v; p.music = null; }, "YuE2's brief: genre, instruments, mood, tempo"),
-    p.music?.audio ? h("audio", {src: api.viewUrl(p.music.audio), controls: true, class: "songbar"}) : null);
+    p.music?.audio ? h("audio", {src: api.viewUrl(p.music.audio), controls: true, class: "songbar"}) : null].filter(Boolean));
   const thumb = (f, label, empty) => f ? h("div", {class: "fm", tip: label, onclick: () => $("#m-viewer").replaceChildren(media(f))}, media(f, {controls: false, autoplay: false}), h("span", {}, label))
     : h("div", {class: "fm empty"}, h("span", {}, empty));
   $("#m-shots").replaceChildren(...p.shots.map((sh, k) => {

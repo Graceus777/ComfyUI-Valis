@@ -40,13 +40,14 @@ export class LivePreview {
     if (!url) { this.src = null; return; }
     if (kind === "video") {
       const v = document.createElement("video"); v.src = url; v.muted = true; v.playsInline = true; v.preload = "auto"; v.loop = true;
+      v.addEventListener("loadeddata", () => this.onReady?.(), {once: true});
       this.src = v;
-    } else { const i = new Image(); i.src = url; this.src = i; }
+    } else { const i = new Image(); i.onload = () => this.onReady?.(); i.src = url; this.src = i; }
   }
   // t: song time; local: time inside the shot; lanes: {lane: [times]}; rules: [{lane, effect}]; playing: is the song playing
   draw({t, local, lanes, rules, playing, note = ""}) {
     const cv = this.cv, x = this.x, el = this.el;
-    const W = Math.max(200, Math.round(el.clientWidth)), H = Math.max(200, Math.round(Math.min(el.clientHeight || 520, 560)));
+    const W = Math.max(200, Math.round(el.clientWidth - 2)), H = Math.max(200, Math.round((el.clientHeight || 520) - 2));
     if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
     const s = this.src;
     // keep the clip on the song's clock

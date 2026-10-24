@@ -205,8 +205,9 @@
     <div class="stage">
       <div>
         <h1>The score is the director</h1>
-        <p class="lede">A score is every hit in a song, lane by lane: kicks, snares, beats, bars, the notes of the sheet music, the cues you write. Make one from any song, have YuE2 write one, or write a cue sheet; then map lanes to effects and lay clips on the shots. The preview plays your clips on the music with the effects firing live; Render makes the real thing and Cut joins it on the bars.</p>
+        <p class="lede">A score is every hit in a song, lane by lane. Make one from any song, from a song YuE2 writes, or from a cue sheet; map lanes to effects, lay clips on the shots, and the preview plays them on the music with the effects firing live. Render makes the real thing; Cut joins it on the bars.</p>
       </div>
+      <div class="viewer score-viewer" id="s-viewer"><div class="empty"><b>Preview</b>Make or open a score, give its shots clips, and press Play.</div></div>
       <div class="timeline">
         <div class="tl-bar">
           <button class="btn small" id="s-play" type="button">▶ Play</button>
@@ -214,9 +215,8 @@
           <span class="time" id="s-section"></span>
           <span style="margin-left:auto" class="badge" id="s-tempo"></span>
         </div>
-        <canvas id="s-canvas" height="380"></canvas>
+        <div class="tl-scroll"><canvas id="s-canvas" height="380"></canvas></div>
       </div>
-      <div class="viewer" id="s-viewer" style="min-height:360px"><div class="empty"><b>Preview</b>Make or open a score, give its shots clips, and press Play.</div></div>
       <div class="finish" id="s-finish"></div>
       <audio id="s-audio" preload="auto"></audio>
     </div>

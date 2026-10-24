@@ -39,13 +39,14 @@ score-driven pass can be played without generating anything.
 
 | Tab | What it does |
 |---|---|
-| **Film** | One line to a film: the plan (Qwen3), the song (YuE2), the keyframes (Krea 2), the shots (MiniMax H3), the effects and sound (SAM 3 and the Valis library, on the song's lanes), the cut (on the bars). The plan is shown and editable before anything expensive runs. |
-| **Create** (Cinema Studio) | A director's panel: describe the shot, pick genre, framing, lens, camera body, era, light, emotion, tempo, colour palette and one of 44 camera moves. *Frame it* makes two Krea 2 keyframes; drop a character sheet to cast it in. *Shoot it* turns the keyframe into a MiniMax H3 shot. **Trained moves**: with a camera LoRA installed, the move is learned, not described (360 orbit, bullet time, push-in, crane up, FPV on H3; crash zoom and arcs on Wan 2.2). **Dolly zoom** is a real trained push re-framed by *Valis Dolly Zoom* so the subject keeps its size. **Whip pan** is a steady H3 pan speed-ramped by *Valis Whip Pan* with the camera's own motion blur. **Relight** (Qwen Image edit, 10 presets) and **light change** (H3 from the keyframe to its relit version). **Loop**: a shot that plays forever, with H3 joining its end to its start while it renders ([MiniMax H3 Loop](https://github.com/pxl-pshr/ComfyUI-MiniMaxH3-Loop)); saved as MP4 and GIF. Under every result: **Extend**, **Upscale** (SeedVR2) and a **Color Palette** grade. |
+| **Film** | One line to a film, in steps you can see and stop: the plan (Qwen3) is a script you edit; then the song (YuE2, or **your own song**, read for its tempo and bars), every shot's keyframe (Krea 2) to look at before anything is shot (re-roll one, edit its words, or **open it in Create** and send the still or shot back), the shots (MiniMax H3), the effects and sound (SAM 3 and the Valis library, on the song's lanes), the cut (on the bars). Each step runs alone or *Make the rest* runs what's missing; a draft size makes a whole film fast. Plans are kept and reopen from *Recent*. |
+| **Create** (Cinema Studio) | A director's panel in sections: genre, framing, focal length, camera body, lens kit, era, light source and setup, emotion, tempo, a **colour palette** (39 looks in rows, previewed live on your keyframe as you hover; the chosen look's colours are swatches you can change before you render) and one of 44 camera moves. Every option's tooltip shows the exact words it adds; your choices lead the prompt and the genre fills only what you leave on *From genre*. A **resolution** slider (draft 384 px to 1024, keyframes always full size) and a free **length** (snapped to H3's frame grid). *Frame it* makes two Krea 2 keyframes (or drop your own still); drop a character sheet to cast it in. *Shoot it* turns the keyframe into a MiniMax H3 shot. **Trained moves** (✦): with a camera LoRA installed, the move is learned, not described (360 orbit, bullet time, push-in, crane up, FPV on H3; crash zoom and arcs on Wan 2.2). **Dolly zoom** is a real trained push re-framed by *Valis Dolly Zoom*; **whip pan** is a steady pan speed-ramped by *Valis Whip Pan*. **Relight** and **light change**. Under every result: **Extend**, **Lead-in**, **Upscale** (SeedVR2). |
 | **Genjutsu** | Drop a video. **Motion transfer**: up to 8 reference images become the new cast and place; SDPose skeletons carry the motion, camera and timing (H3 Fun ControlNet Union); the source audio is kept. **Restyle**: 24 looks over Canny edges. **Object swap**: name one thing, describe its replacement; SAM 3 finds it, the ControlNet inpaints only that, and the result is composited back onto the untouched plate. **Check source** runs only the pose step and *Valis Pose Check* marks where the body can't be read before a 20-minute render. |
 | **Edit** | Drop a clip and name what to change ("his head", "her dress"). SAM 3 tracks it. **Transform** re-renders only the masked region in a new look (vampire, bride, ghostfire, smoke, chrome, stone, skeleton, fire). **Remove** paints it out. **Swap** replaces the whole person with a character sheet; *Match the plate* checks the take first and matches brightness, contrast, colour and grain back to the plate with no AI. **Turn** makes one take become another on a chosen word, and can turn the voice on the same word. |
 | **FX** | The library. Pick a clip (and another for the effects that open onto a second scene), optionally name a subject, stack effects. Each layer listens to one lane: from a soundless cue sheet, from any song (beats, kick/snare/hat, loudness, brightness), from YuE2 writing and performing a new song (every note becomes a cue), or from a Valis score. Every effect brings its own sound; add beds (rain, wind, sea, fire, room, neon). On a looping clip the effects loop with it: the cues repeat and every effect is played once round first, so trails, echoes and frost carry across the join (MP4 and GIF). |
-| **Score** | Load a score (DANSE MACABRE is built in). A lane timeline shows every event; map events to effects, give each shot a clip and a transformed layer from Edit, and *Render with Valis*. |
-| **Renders** | The queue, VRAM, *Free memory*, *Stop*, everything made so far, and **Setup**: every workflow the studio can send is checked against this ComfyUI before anything is queued, with the missing node packs and model files listed per feature. |
+| **Score** | Make a score in Valis: from **any song** (Valis hears its beats, bars, kick, snare and hats, how loud and bright it is, and lays out sections and shots on whole bars), from a song **YuE2 writes** (every note of its sheet music becomes a lane), or from a **cue sheet**; save it as `.json` and open it again (DANSE MACABRE is the example). Map lanes to library effects, lay clips from the bin on its shots, and the **live preview** plays your clips on the music with every effect sketched as it fires. *Render all*, then *Cut it* on the bars, or *Make a film on it*. |
+| **Extras** | **Stereogram**: hide whatever moves in a clip in a field of dots, as a magic-eye stereogram (parallel or cross-eyed) and a kinetogram (it exists only while it moves), drawn in squares, halftone or letters, with a check that the depth survives an upload. **Loop**: a shot that plays forever, H3 joining its end to its start ([MiniMax H3 Loop](https://github.com/pxl-pshr/ComfyUI-MiniMaxH3-Loop)), then effects that loop with it. **Stage** (experimental): one still split into depth layers and played by a live 2.5D camera. |
+| **Renders** | The queue, *Free memory*, *Stop*, everything made (the bin, kept between sessions) to send to any tab, and **Setup**: every workflow checked against this ComfyUI, with missing node packs and model files listed per feature. **Detect hardware** reads the GPU, driver, CUDA, cuDNN, attention kernels and ComfyUI's flags, and sets the safe shot size for this GPU. The **end-to-end test** renders every Create combination and every chain after it at low resolution and checks each result. |
 
 | Score | Edit · Turn |
 |---|---|
@@ -183,7 +184,10 @@ The rest of the library (effects, cues, sound, colour palettes, the swap checks 
 
 ## Use it
 
-**In the studio:** open `/valis`. Each tab says what it does. Renders land in `ComfyUI/output/valis/`.
+**In the studio:** open `/valis`. Hover anything for what it does; press **?** for how the tabs work together. Everything
+you make lands in the **bin** (bottom right): click an item to send it to another tab, or drag it onto a drop zone or a
+Film shot. Every button's time is learned from this machine's own past jobs (a `?` means it hasn't run that kind of job
+here yet). Renders land in `ComfyUI/output/valis/`.
 
 **As workflows:** [`workflows/`](workflows/) has every graph the studio sends, in API format. Drag one onto the
 ComfyUI canvas, point its Load nodes at your files, and queue it. `node tools/export_workflows.mjs` regenerates them.
@@ -221,7 +225,12 @@ these graphs. `--api` / `--key` point the CLI at Comfy Cloud or a Comfy API depl
 - **The studio:** plain ES modules under `app/`, with no build step. `api.js` is the SDK client. `film.js` is the film
   chain, run by the Film tab and by `valis film` through the same SDK. `graphs.js` has every workflow as an API-format
   builder. `presets.js` holds the director's panel and the looks. `score.js` is the timeline.
-  `fx.js` is the library tab. `check.js` is the setup check. `app/vendor/comfy-sdk.js` is `@comfyorg/sdk` bundled for
+  `fx.js` is the library tab. `check.js` is the setup check. `create.js` turns the director's panel into prompts and
+  graphs (the Create button, the end-to-end test and the CLI share it). `grade.js` is `palette.py`'s grade in the browser
+  (the live palette preview); `livefx.js` sketches the library's effects live for the Score preview. `estimate.js` and
+  `work.js` learn job times from this machine; `bin.js` is the bin; `machine.js` reads the hardware (with
+  `machine_routes.py`); `selftest.js` is the end-to-end test. Stage is `stageview.js`, `stage3d.js`, `nodes_stage.py`
+  and `stage_routes.py`. `app/vendor/comfy-sdk.js` is `@comfyorg/sdk` bundled for
   the browser by `tools/build-sdk/`.
 - **The engine:** `valis_fx/` (numpy and OpenCV, CPU). `engine.py` is the score-driven pass, `forge.py` the shared
   light, particle and grade tools, `post.py` the excitable reveal. `valis_fx/lib/` is the library: `cues.py`, `audio.py`
@@ -229,6 +238,20 @@ these graphs. `--api` / `--key` point the CLI at Comfy Cloud or a Comfy API depl
   `effects.py`, `sound.py`, `match.py`, `voice.py`, `dolly.py`, `whip.py`, `posecheck.py`, `palette.py`.
 - **Machine controls:** free memory, stop, VRAM, the node list and the render gallery use ComfyUI's own endpoints,
   because Comfy API v2 doesn't cover them.
+
+## Testing
+
+- `node tests/graphs.test.mjs`: every graph the studio can send, and Create across every camera move, aspect, size and
+  option, built with the same planner the buttons use and checked against a ComfyUI node list (34,000+ checks, no GPU).
+- `python tests/check_grade.py`: the browser's live colour grade against `palette.py`'s (within 0.2 levels on every look).
+- `node tests/ui/run.mjs`: the studio clicked through in a headless browser against a stand-in ComfyUI
+  (`tests/ui/mock_server.mjs`), with a screenshot of every screen.
+- **Renders → End-to-end test** (or `(await import("/valis/app/js/selftest.js")).run()` in the browser console): short,
+  low-resolution renders on the GPU through the studio's own code. 14 Create combinations (IMAX 65mm + fisheye + 1950s
+  + noir, Super 8, VHS, trained moves, Wan, custom palettes, an end frame, a loop, relight, a cast character), then the
+  chains after them: extend, lead-in, upscale, find, transform, remove, swap, turn, Genjutsu's three modes and source
+  check, FX on a cue sheet, a song, a YuE2 song and a loop, the stereogram, a score made from a song and cut on its bars,
+  a film from one line, and Stage. Every output is checked for size, length, motion, monochrome and sound.
 
 ## Timings on an RTX 4080 Laptop (12 GB VRAM, 32 GB RAM)
 

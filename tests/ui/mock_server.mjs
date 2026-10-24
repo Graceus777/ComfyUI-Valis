@@ -13,7 +13,8 @@ const args = process.argv.slice(2), opt = (k, d) => { const i = args.indexOf(k);
 const PORT = Number(args.find(a => /^\d+$/.test(a)) || 8288);
 const OI = JSON.parse(fs.readFileSync(opt("--object-info", path.join(repo, "tests", "fixtures", "object_info.json")), "utf8"));
 const MEDIA = opt("--media", path.join(here, "media"));
-const USER = fs.mkdtempSync(path.join(process.env.TMPDIR || "/tmp", "valis-user-"));
+// ComfyUI's per-user files (plans, the bin, timings): a fresh empty folder, or --user dir to start from saved ones
+const USER = opt("--user", null) || fs.mkdtempSync(path.join(process.env.TMPDIR || "/tmp", "valis-user-"));
 const STATS = {system: {os: "nt", ram_total: 31.9e9, ram_free: 9.9e9, comfyui_version: "0.42.0", python_version: "3.12.7", pytorch_version: "2.13.0+cu130",
   embedded_python: true, argv: ["ComfyUI\\main.py", "--windows-standalone-build"]},
   devices: [{name: "cuda:0 NVIDIA GeForce RTX 4080 Laptop GPU : cudaMallocAsync", type: "cuda", index: 0, vram_total: 12878086144, vram_free: 9589650372}]};
