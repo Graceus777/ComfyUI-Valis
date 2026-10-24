@@ -1,0 +1,270 @@
+{
+  "1": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "valis/still.png"
+    }
+  },
+  "2": {
+    "class_type": "LoadDA3Model",
+    "inputs": {
+      "model_name": "depth_anything_3_small.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "3": {
+    "class_type": "DA3Inference",
+    "inputs": {
+      "da3_model": [
+        "2",
+        0
+      ],
+      "image": [
+        "1",
+        0
+      ],
+      "resolution": 1008,
+      "resize_method": "upper_bound_resize",
+      "mode": "mono"
+    }
+  },
+  "4": {
+    "class_type": "DA3Render",
+    "inputs": {
+      "da3_geometry": [
+        "3",
+        0
+      ],
+      "output": "depth",
+      "output.normalization": "min_max",
+      "output.apply_sky_clip": false
+    }
+  },
+  "5": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "sam3.1_multiplex_fp16.safetensors"
+    }
+  },
+  "100": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "the sky:20",
+      "clip": [
+        "5",
+        1
+      ]
+    }
+  },
+  "101": {
+    "class_type": "SAM3_Detect",
+    "inputs": {
+      "model": [
+        "5",
+        0
+      ],
+      "image": [
+        "1",
+        0
+      ],
+      "conditioning": [
+        "100",
+        0
+      ],
+      "threshold": 0.35,
+      "refine_iterations": 2,
+      "individual_masks": true
+    }
+  },
+  "110": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "the moon:20",
+      "clip": [
+        "5",
+        1
+      ]
+    }
+  },
+  "111": {
+    "class_type": "SAM3_Detect",
+    "inputs": {
+      "model": [
+        "5",
+        0
+      ],
+      "image": [
+        "1",
+        0
+      ],
+      "conditioning": [
+        "110",
+        0
+      ],
+      "threshold": 0.35,
+      "refine_iterations": 2,
+      "individual_masks": true
+    }
+  },
+  "120": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "the temple:20",
+      "clip": [
+        "5",
+        1
+      ]
+    }
+  },
+  "121": {
+    "class_type": "SAM3_Detect",
+    "inputs": {
+      "model": [
+        "5",
+        0
+      ],
+      "image": [
+        "1",
+        0
+      ],
+      "conditioning": [
+        "120",
+        0
+      ],
+      "threshold": 0.35,
+      "refine_iterations": 2,
+      "individual_masks": true
+    }
+  },
+  "130": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "the rocks:20",
+      "clip": [
+        "5",
+        1
+      ]
+    }
+  },
+  "131": {
+    "class_type": "SAM3_Detect",
+    "inputs": {
+      "model": [
+        "5",
+        0
+      ],
+      "image": [
+        "1",
+        0
+      ],
+      "conditioning": [
+        "130",
+        0
+      ],
+      "threshold": 0.35,
+      "refine_iterations": 2,
+      "individual_masks": true
+    }
+  },
+  "140": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "the path:20",
+      "clip": [
+        "5",
+        1
+      ]
+    }
+  },
+  "141": {
+    "class_type": "SAM3_Detect",
+    "inputs": {
+      "model": [
+        "5",
+        0
+      ],
+      "image": [
+        "1",
+        0
+      ],
+      "conditioning": [
+        "140",
+        0
+      ],
+      "threshold": 0.35,
+      "refine_iterations": 2,
+      "individual_masks": true
+    }
+  },
+  "150": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "the lamps:20",
+      "clip": [
+        "5",
+        1
+      ]
+    }
+  },
+  "151": {
+    "class_type": "SAM3_Detect",
+    "inputs": {
+      "model": [
+        "5",
+        0
+      ],
+      "image": [
+        "1",
+        0
+      ],
+      "conditioning": [
+        "150",
+        0
+      ],
+      "threshold": 0.35,
+      "refine_iterations": 2,
+      "individual_masks": true
+    }
+  },
+  "900": {
+    "class_type": "ValisStage",
+    "inputs": {
+      "image": [
+        "1",
+        0
+      ],
+      "depth": [
+        "4",
+        0
+      ],
+      "names": "the sky\nthe moon\nthe temple\nthe rocks\nthe path\nthe lamps",
+      "stage_name": "stage",
+      "far": 6,
+      "band": 0.025,
+      "mask_1": [
+        "101",
+        0
+      ],
+      "mask_2": [
+        "111",
+        0
+      ],
+      "mask_3": [
+        "121",
+        0
+      ],
+      "mask_4": [
+        "131",
+        0
+      ],
+      "mask_5": [
+        "141",
+        0
+      ],
+      "mask_6": [
+        "151",
+        0
+      ]
+    }
+  }
+}
