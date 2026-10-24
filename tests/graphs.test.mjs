@@ -107,12 +107,21 @@ ok(JSON.stringify(CR.gradeOf(own)) === JSON.stringify({look: "teal_orange", hex:
 ok(CR.gradeOf({...own, look: {id: "custom", hex: ["#000000", "#ffffff"]}}).look === "custom", "grade · your colours alone");
 
 // ---- the film plan parser
-import {parsePlan, barSeconds, shotSeconds} from "../app/js/film.js";
+import {parsePlan, barSeconds, shotSeconds, shotLen, cutOf, songSeconds, songShort, SHOT_SECONDS} from "../app/js/film.js";
 const plan = parsePlan('noise {"title":"T","cast":[{"name":"the keeper","look":"an old man"}],"place":"a rock","song":{"style":"strings"},"shots":[{"who":["the keeper"],"keyframe":"k","motion":"m","subject":"the keeper","effect":"Rays","on":"beat"},{"keyframe":"k2","effect":"Nope","on":"x"}]} tail', 6);
 ok(plan.shots.length === 2 && plan.shots[1].effect === "none" && plan.shots[1].on === "beat", "film · the plan parser fills bad effects and lanes");
 ok(/BPM/.test(plan.song.style), "film · the song brief gets a tempo");
 const bar = barSeconds("X:1\nM:3/4\nQ:1/4=161\n"); ok(Math.abs(bar.seconds - 3 * 60 / 161) < 1e-6, "film · a 3/4 bar at 161 BPM", String(bar.seconds));
 ok(shotSeconds(bar.seconds).bars === 3, "film · whole bars in a clip", JSON.stringify(shotSeconds(bar.seconds)));
+{ // shot length: the plan's own, cut to whole bars; a song long enough for it, or a new one
+  const pl = {shots: [{}, {}, {}, {}], music: {audio: {filename: "s.flac"}, bar: {seconds: 2}, seconds: songSeconds({shots: [{}, {}, {}, {}]})}};
+  ok(shotLen(pl) === SHOT_SECONDS && cutOf(pl).bars === 2 && cutOf(pl).seconds === 4, "film · a shot is one clip, two 2 s bars of it play", JSON.stringify(cutOf(pl)));
+  pl.shotSeconds = 9;
+  ok(cutOf(pl).bars === 4 && cutOf(pl).seconds === 8, "film · a 9 s shot plays four bars", JSON.stringify(cutOf(pl)));
+  ok(songShort(pl) && songSeconds(pl) === 40, "film · longer shots need a longer song", String(songSeconds(pl)));
+  pl.music.own = true; ok(!songShort(pl), "film · your own song is never remade");
+  ok(shotSeconds(5, 3).bars === 1 && shotSeconds(5, 3).seconds === 3, "film · a shot shorter than a bar plays whole");
+}
 
 console.log(`${pass} passed, ${fail} failed${info ? "" : " (no node list: tests/fixtures/object_info.json missing, so graphs weren't checked against ComfyUI)"}`);
 if (fail) { console.log(failures.slice(0, 60).join("\n")); if (failures.length > 60) console.log(`… and ${failures.length - 60} more`); process.exit(1); }

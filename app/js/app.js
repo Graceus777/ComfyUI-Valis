@@ -9,7 +9,7 @@ import {palettePicker} from "./palettepick.js";
 import {ScoreView} from "./score.js";
 import {FxView} from "./fx.js";
 import {checkSetup} from "./check.js";
-import {planFilm, makeFilm, makeSong, frameShots, shootShots, effectShots, cutFilm} from "./film.js";
+import {planFilm, makeFilm, makeSong, frameShots, shootShots, effectShots, cutFilm, SHOT_SECONDS, shotLen, songSeconds, songShort} from "./film.js";
 import * as R from "./refengine.js";
 import {Bin} from "./bin.js";
 import * as MC from "./machine.js";
@@ -944,7 +944,7 @@ engineUI();
 
 api.connect();
 // ------------------------------------------------------------------ FILM: one line, one film, step by step (film.js runs each step)
-const M = {genre: null, shots: 6, plan: null, busy: false, short: CR.NATIVE_SHORT};
+const M = {genre: null, shots: 6, plan: null, busy: false, short: CR.NATIVE_SHORT, len: SHOT_SECONDS};
 const filmIO = {
   run: (graph, label) => new Promise((res, rej) => {
     api.submit(graph, label, "film").then((job) => {
@@ -967,8 +967,9 @@ function buildFilm() {
   const sec = (key, title, tip, ...kids) => (fsec[key] = section(title, {id: `m-sec-${key}`, tip}, ...kids));
   $("#m-sections").replaceChildren(
     sec("genre", "Genre", "The film's look: every keyframe starts with the genre's words.", h("div", {class: "cards", id: "m-genre"})),
-    sec("shape", "Shots and size", "How many shots, and the size H3 shoots them at.",
+    sec("shape", "Shots, length and size", "How many shots, how long each is, and the size H3 shoots them at.",
       lab("Shots", "Each shot is one MiniMax H3 clip, cut to whole bars of the song."), h("div", {class: "seg", id: "m-shots-n"}),
+      h("div", {id: "m-len", class: "ctl"}), h("p", {class: "hint", id: "m-len-hint"}),
       h("div", {id: "m-res", class: "ctl"})),
     sec("song", "Song", "Qwen3's song brief goes to YuE2, which writes the sheet music and plays it. Or use your own song: Valis hears its tempo and bars.",
       h("div", {class: "seg", id: "m-song-src"}),
@@ -976,6 +977,11 @@ function buildFilm() {
   );
   cards($("#m-genre"), P.GENRES, (g) => { M.genre = g; fsec.genre.setValue(g.name); }, "gothic");
   seg($("#m-shots-n"), [4, 6, 8, 10, 12].map(n => ({id: String(n), name: String(n)})), (x) => { M.shots = Number(x.id); fshape(); }, "6");
+  M.lenCtl = slider($("#m-len"), {label: "Shot length", min: 2, max: 15, step: 0.5, value: Math.round(M.len * 2) / 2,
+    tip: "How long H3 shoots each shot. The cut plays as many whole bars of the song as fit in it, so the film is a little shorter than shots × length.",
+    fmt: (v) => `${v.toFixed(1)} s${Math.abs(v - SHOT_SECONDS) < .3 ? " · one clip" : ""}`,
+    marks: [{name: "3 s", value: 3}, {name: "one clip", value: 4.5}, {name: "8 s", value: 8}, {name: "15 s", value: 15}]},
+    (v) => { M.len = Math.abs(v - 4.5) < .01 ? SHOT_SECONDS : v; fshape(); });
   M.res = slider($("#m-res"), {label: "Shot size", min: 320, max: 1024, step: 32, value: M.short,
     tip: "The size H3 shoots every shot at (keyframes too). Smaller is much faster: try a draft at 384, then the film at native.",
     fmt: (v) => { const s = CR.shotSize("9:16", v); return `${s.w}×${s.h}${v === CR.NATIVE_SHORT ? " · native" : v < 512 ? " · draft" : ""}`; },
@@ -991,7 +997,23 @@ function buildFilm() {
   });
   $("#m-song-drop")._onItem = (it) => { if (it.kind !== "audio") return; M.ownSong = {ref: Bin.ref(it), name: it.file.filename, url: Bin.url(it)}; fsec.song.setValue(it.file.filename); };
 }
-function fshape() { const s = CR.shotSize("9:16", M.short); fsec.shape?.setValue(`${M.shots} shots · ${s.w}×${s.h}`); if (M.plan && !M.busy) { M.plan.size = {w: s.w, h: s.h}; fsteps(); } }
+function fshape() {
+  const s = CR.shotSize("9:16", M.short), f = CR.frames(M.len);
+  fsec.shape?.setValue(`${M.shots} × ${M.len.toFixed(1)} s · ${s.w}×${s.h}`);
+  $("#m-len-hint").textContent = `About ${Math.round(M.shots * M.len)} s of film before the title card.` +
+    (f < CR.TRAINED_FRAMES[0] ? " Shorter than H3's training (5.2–15 s): fine, fast moves can feel rushed." : "");
+  if (M.plan && !M.busy) {
+    M.plan.size = {w: s.w, h: s.h};
+    const was = shotLen(M.plan);
+    M.plan.shotSeconds = M.len === SHOT_SECONDS ? undefined : M.len;
+    if (Math.abs(was - shotLen(M.plan)) > .01) {
+      if (M.plan.shots.some(x => x.clip)) toast(`Shots made at ${was.toFixed(1)} s are shot again at ${shotLen(M.plan).toFixed(1)} s when you run Shots`);
+      if (songShort(M.plan)) toast("The song is shorter than the film now: the Song step writes a longer one");
+      fsave(); fdraw();
+    }
+    fsteps();
+  }
+}
 // ---- the plan, kept in ComfyUI/user/default/valis/films/<tag>.json so a reload (or another day) picks it up
 let fsaveT = null;
 function fsave() {
@@ -1021,6 +1043,7 @@ async function fopen(path) {
   $$("#m-genre .card").forEach(c => c.classList.toggle("on", c.dataset.id === M.genre?.id)); fsec.genre.setValue(M.genre?.name || "");
   M.shots = pl.shots.length; $$("#m-shots-n button").forEach(b => b.classList.toggle("on", Number(b.dataset.id) === M.shots));
   if (pl.size) { const short = Math.min(pl.size.w, pl.size.h); M.short = short; M.res?.set(short); }
+  M.len = pl.shotSeconds || SHOT_SECONDS; M.lenCtl?.set(Math.round(M.len * 2) / 2);
   $("#m-idea").value = pl.idea || "";
   fdraw(); frecent();
   if (pl.film) { $("#m-viewer").replaceChildren(media(pl.film)); finishBar($("#m-finish"), pl.film, $("#m-viewer"), null); }
@@ -1036,18 +1059,20 @@ const STEPS = [
 async function fsteps() {
   const p = M.plan, el = $("#m-steps");
   if (!p) { el.replaceChildren(h("p", {class: "hint"}, "Plan the film first: nothing renders until you press a step.")); return; }
-  const n = p.shots.length, cnt = (f) => p.shots.filter(f).length;
-  const state = {song: p.music?.audio ? 1 : 0, keys: cnt(s => s.key) / n, shots: cnt(s => s.clip) / n, fx: cnt(s => s.fx) / n, cut: p.film ? 1 : 0};
-  const label = {song: p.music?.audio ? `${p.music.bar.bpm} BPM · ${p.music.cut.bars} bar${p.music.cut.bars > 1 ? "s" : ""} a shot` : p.song.file ? "your song" : "YuE2",
-    keys: `${cnt(s => s.key)} of ${n}`, shots: `${cnt(s => s.clip)} of ${n}`, fx: `${cnt(s => s.fx)} of ${n}`, cut: p.film ? "done" : ""};
+  const n = p.shots.length, cnt = (f) => p.shots.filter(f).length, len = shotLen(p);
+  const shot = (s) => s.clip && !(s.clipSeconds && Math.abs(s.clipSeconds - len) > .01), short = songShort(p);
+  const bars = p.music?.audio ? Math.max(1, Math.floor(len / p.music.bar.seconds + 1e-6)) : 0;
+  const state = {song: p.music?.audio && !short ? 1 : 0, keys: cnt(s => s.key) / n, shots: cnt(shot) / n, fx: cnt(s => s.fx && shot(s)) / n, cut: p.film ? 1 : 0};
+  const label = {song: short ? "shorter than the film now" : p.music?.audio ? `${p.music.bar.bpm} BPM · ${bars} bar${bars > 1 ? "s" : ""} a shot` : p.song.file ? "your song" : "YuE2",
+    keys: `${cnt(s => s.key)} of ${n}`, shots: `${cnt(shot)} of ${n}`, fx: `${cnt(s => s.fx && shot(s))} of ${n}`, cut: p.film ? "done" : ""};
   const {w, hh = sizeOfPlan(p).h} = sizeOfPlan(p);
   const est = {
-    song: await EST.estimate(p.song.file ? G.scoreMake({audio: "x"}) : G.song({style: "x", lyrics: "x", seconds: Math.min(60, Math.ceil(n * 4.46 + 2))}).graph),
+    song: await EST.estimate(p.song.file ? G.scoreMake({audio: "x"}) : G.song({style: "x", lyrics: "x", seconds: songSeconds(p)}).graph),
     keys: await EST.estimate(G.filmKeyframes({prompts: p.shots.filter(s => !s.key).map(() => "x"), width: w, height: hh})),
-    shots: await EST.estimate(G.shot({image: "x", motion: "x", width: w, height: hh, seconds: 107 / 24})),
-    fx: await EST.estimate(G.fx({clip: "x", layers: [{effect: "Punch", on: "kick"}]})), cut: {seconds: 20, measured: false},
+    shots: await EST.estimate(G.shot({image: "x", motion: "x", width: w, height: hh, seconds: len})),
+    fx: await EST.estimate(G.fx({clip: "x", layers: [{effect: "Punch", on: "kick"}], seconds: len})), cut: {seconds: 20, measured: false},
   };
-  const left = {song: 1 - state.song, keys: n - cnt(s => s.key), shots: n - cnt(s => s.clip), fx: n - cnt(s => s.fx), cut: 1 - state.cut};
+  const left = {song: 1 - state.song, keys: n - cnt(s => s.key), shots: n - cnt(shot), fx: n - cnt(s => s.fx && shot(s)), cut: 1 - state.cut};
   const t = (id) => { const e = est[id]; if (!left[id]) return ""; const k = id === "song" || id === "cut" || id === "keys" ? 1 : left[id]; return EST.fmt({...e, seconds: e.seconds * k}); };
   el.replaceChildren(...STEPS.map(st => h("div", {class: "step" + (state[st.id] >= 1 ? " done" : state[st.id] > 0 ? " part" : ""), tip: st.tip},
     h("i", {class: "sdot"}), h("div", {class: "sn"}, h("b", {}, st.name), h("span", {}, label[st.id])),
@@ -1096,7 +1121,7 @@ function fdraw() {
           h("button", {class: "ibtn", type: "button", disabled: M.busy, tip: "A new keyframe for this shot (a new seed)", onclick: () => { sh.keySeed = (sh.keySeed ?? 7101 + k) + 101; fstep("keys", [k]); }}, "⟳ still"),
           h("button", {class: "ibtn", type: "button", disabled: M.busy || !sh.key, tip: "Shoot (or re-shoot) this shot with H3", onclick: () => { if (sh.clip) sh.shotSeed = (sh.shotSeed ?? 51101 + k) + 1; fstep("shots", [k]); }}, "▶ shoot"),
           h("button", {class: "ibtn", type: "button", tip: "Work on this shot in Create (camera, light, palette, trained moves), then send the still or the shot back here", onclick: () => toCreate(k)}, "Create ↗"))),
-      h("div", {class: "fmedia"}, thumb(sh.key, "keyframe", "no still yet"), thumb(sh.clip, "shot", "not shot"), thumb(sh.fx, "with effects", "no effects")),
+      h("div", {class: "fmedia"}, thumb(sh.key, "keyframe", "no still yet"), thumb(sh.clip, sh.clipSeconds && Math.abs(sh.clipSeconds - shotLen(M.plan)) > .01 ? `shot at ${sh.clipSeconds.toFixed(1)} s: shoot again` : "shot", "not shot"), thumb(sh.fx, "with effects", "no effects")),
       h("textarea", {rows: 2, tip: "The still frame (Krea 2). The cast's looks and the place are added to it.", oninput: (e) => { sh.keyframe = e.target.value; fsave(); }}, sh.keyframe),
       h("input", {type: "text", value: sh.motion, placeholder: "what moves", tip: "What moves in the shot (H3)", oninput: (e) => { sh.motion = e.target.value; fsave(); }}),
       h("div", {class: "frow"},
@@ -1114,7 +1139,7 @@ function fdraw() {
 function toShot(k, it) {
   const sh = M.plan?.shots[k]; if (!sh) return;
   if (it.kind === "still") { sh.key = it.file; sh.clip = null; sh.fx = null; toast(`Shot ${k + 1}: new keyframe`); }
-  else if (it.kind === "clip") { sh.clip = it.file; sh.fx = null; toast(`Shot ${k + 1}: new shot`); }
+  else if (it.kind === "clip") { sh.clip = it.file; sh.clipSeconds = null; sh.fx = null; toast(`Shot ${k + 1}: new shot`); }
   else return;
   fsave(); fdraw();
 }
@@ -1153,6 +1178,7 @@ $("#m-plan").addEventListener("click", async () => {
     $("#m-status").textContent = "Qwen3 is writing the cast, the song brief and the shot list";
     M.plan = await planFilm({idea, shots: M.shots, genre: M.genre}, filmIO);
     const s = CR.shotSize("9:16", M.short); M.plan.size = {w: s.w, h: s.h};
+    if (M.len !== SHOT_SECONDS) M.plan.shotSeconds = M.len;
     if (M.songSrc === "own" && M.ownSong) { M.plan.song.file = M.ownSong.ref; M.plan.song.fileName = M.ownSong.name; }
     $("#m-progress").replaceChildren();
     $("#m-status").textContent = `Planned: ${M.plan.title}. Edit anything, then run the steps one by one, or Make the rest.`;

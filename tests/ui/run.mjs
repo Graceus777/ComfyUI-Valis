@@ -74,6 +74,11 @@ try {
   // ---- Film: steps are there before a plan, and say so
   await page.click('.tab[data-view="film"]'); await page.waitForTimeout(300);
   ok(/Plan the film first/.test(await page.$eval("#m-steps", e => e.textContent)), "Film: nothing renders before the plan");
+  await page.$eval("#m-len input[type=range]", (i) => { i.value = 9; i.dispatchEvent(new Event("input")); });
+  await page.waitForTimeout(200);
+  ok(/6 × 9\.0 s/.test(await page.$eval("#m-sec-shape .val", e => e.textContent)) && /About 54 s of film/.test(await page.$eval("#m-len-hint", e => e.textContent)),
+     "Film: the shot length sets the film's length", await page.$eval("#m-sec-shape .val", e => e.textContent));
+  await shot("film_length");
   // ---- Score: the example loads and plays the timeline; a source can be picked
   await page.click('.tab[data-view="score"]'); await page.click('#s-source button[data-id="demo"]');
   await page.waitForFunction(() => /danse/i.test(document.querySelector("#s-info")?.textContent || ""), null, {timeout: 8000}).catch(() => {});
