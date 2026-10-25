@@ -209,6 +209,14 @@ import * as F from "../app/js/film.js";
   const m3 = P.motionPrompt({genre: goth, move: push, action: "She opens her eyes; white-gold fire races up the blade. The camera holds still.", look: "Oil painting."});
   ok(!m3.includes("stay exactly"), "Film · a shot whose action changes the light isn't told the light stays", m3);
 }
+{ // a score's shot without effect sounds keeps the song as it is: trimmed to the shot, not run through the sound design
+  const base = {clip: "c.mp4", source: "score", score: "s.json", audio: "a.flac", layers: [{effect: "Rays", on: "beat"}], seconds: 4.42, fit: true};
+  const q = G.fx({...base, sound: false, start: 0});
+  ok(!Object.values(q).some(n => n.class_type === "ValisSoundDesign") && JSON.stringify(q["81"].inputs.audio) === '["46",0]' && q["46"].inputs.start_index === 0 && q["46"].inputs.duration === 4.42,
+     "Score · no effect sounds: the shot's stretch of the song, untouched (also the first shot)");
+  const r = G.fx({...base, sound: true, start: 4.42});
+  ok(r["85"]?.class_type === "ValisSoundDesign" && JSON.stringify(r["81"].inputs.audio) === '["85",0]' && "stack" in r["85"].inputs, "Score · with effect sounds the sound design mixes them under the song");
+}
 { // your own sheet music: YuE2 plays it as written (no sheet of its own, no voice move), and the score is made from it
   const abc = "X:1\nT:\nM:4/4\nL:1/32\nQ:1/4=108\n";
   const g = G.songScore({style: "solo piano", abc, seconds: 60});

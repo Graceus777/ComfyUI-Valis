@@ -825,10 +825,15 @@ export function fx({clip, other = null, subject = "", source = "sheet", audio = 
   const vid = {images: prev ? ["80", 0] : frames, fps: 24};
   if (sound || music) {
     let seg = music;
-    if (music && start) { g["46"] = N("TrimAudioDuration", {audio: music, start_index: start, duration: seconds}); seg = ["46", 0]; }
-    g["85"] = N("ValisSoundDesign", {cues: ["50", 0], duration: seconds, beds: beds.map(b => `${b}:.45`).join(", "), hits: "", music_gain: 0.9, duck: 0.3, seed: 1,
-      ...(sound && prev ? {stack: [prev, 0]} : {}), ...(seg ? {music: seg} : {})});
-    vid.audio = ["85", 0];
+    if (music && (start || !sound)) { g["46"] = N("TrimAudioDuration", {audio: music, start_index: start, duration: seconds}); seg = ["46", 0]; }
+    // no effect sounds: the song goes out as it is. The sound design evens out each shot's loudness, and a composed score's
+    // quiet dawn came out 13 dB louder than it was written, with a jump in level at every cut
+    if (!sound && seg) vid.audio = seg;
+    else {
+      g["85"] = N("ValisSoundDesign", {cues: ["50", 0], duration: seconds, beds: beds.map(b => `${b}:.45`).join(", "), hits: "", music_gain: 0.9, duck: 0.3, seed: 1,
+        ...(sound && prev ? {stack: [prev, 0]} : {}), ...(seg ? {music: seg} : {})});
+      vid.audio = ["85", 0];
+    }
   }
   g["81"] = N("CreateVideo", vid);
   g["82"] = N("SaveVideo", {video: ["81", 0], filename_prefix: prefix, format: "auto", codec: "auto"});

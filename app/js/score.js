@@ -46,6 +46,8 @@ export class ScoreView {
     seg($("#s-source"), SOURCES, (x) => this.setSource(x.id), "song");
     this.secRules = section("Effects on the music", {id: "s-sec-rules", open: true, tip: "Each rule: a lane of the score fires an effect. Library effects work on any score; the classic engine's are made for the example."},
       h("div", {class: "seg", id: "s-engine"}), h("div", {class: "map", id: "s-map"}), h("button", {class: "btn small", id: "s-add", type: "button", style: "margin-top:8px"}, "+ Add a rule"),
+      h("label", {class: "bkind", style: "display:block;margin-top:8px", tip: "Each effect plays a sound of its own on its hits, mixed under the music. Untick it to keep the song alone, as it is (a score you composed)"},
+        h("input", {type: "checkbox", id: "s-fxsound", checked: true}), " the effects make sounds"),
       h("h3", {class: "lab", tip: "SAM 3 follows this in every shot: Echo, Lens, Vertigo, Double exposure and the classic reveals use it"}, "Subject"),
       h("div", {class: "row"}, h("input", {type: "text", id: "s-a", value: "the woman", tip: "subject A (the classic engine takes two)"}), h("input", {type: "text", id: "s-b", value: "the man", tip: "subject B"})));
     this.secShots = section("Shots", {id: "s-sec-shots", open: true, tip: "The score's shots, cut on whole bars. Give each a clip (drag one from the bin, or pick it), then render."},
@@ -234,6 +236,8 @@ export class ScoreView {
     const n = (this.sc?.shots || []).filter(s => this.assign[s.id]?.clip).length;
     $("#s-render-sub").textContent = n ? `${n} shots with a clip · ${EST.fmt({...e, seconds: e.seconds * n})}` : "shots that have a clip";
   }
+  // a shot plays until the next one starts (the bars' own grid: 106 or 107 frames), so the cut never repeats a frame of the song
+  span(shot) { const all = this.sc.shots, next = all[all.indexOf(shot) + 1]; return (next ? next.start_frame - shot.start_frame : shot.frames) / 24; }
   async renderShot(shot) {
     const a = this.assign[shot.id] || {};
     if (!a.clip) return toast(`Give ${shot.id} a clip first`, true);
@@ -243,7 +247,7 @@ export class ScoreView {
           targetA: $("#s-a").value.trim(), targetB: $("#s-b").value.trim(), prefix: `valis/score_${shot.id}_${tag}`})
       : G.fx({clip: a.clip.ref, subject: G.LIBRARY.some(l => this.rules.some(r => r.effect === l.id) && ((l.needs || []).includes("subject") || l.params?.at === "subject")) ? $("#s-a").value.trim() : "",
           source: "score", score, audio: this.audioRef, layers: this.rules.map(r => { const l = G.LIBRARY.find(x => x.id === r.effect); return {effect: r.effect, on: r.lane, params: l?.params || {}}; }),
-          sound: true, seconds: shot.frames / 24, start: shot.start_frame / 24, fit: true, prefix: `valis/score_${shot.id}_${tag}`});
+          sound: $("#s-fxsound").checked, seconds: this.span(shot), start: shot.start_frame / 24, fit: true, prefix: `valis/score_${shot.id}_${tag}`});
     return new Promise((res) => this.run(g, `Score · ${shot.id}`, null, {onDone: (j) => {
       const v = j.outputs.find(f => /\.(mp4|webm|mov)$/i.test(f.filename));
       if (v) { this.results[shot.id] = v; Bin.add(v, {from: "Score", label: `${this.sc.title || "score"} ${shot.id}`}); }
@@ -261,13 +265,13 @@ export class ScoreView {
     if (!shots.length) return toast("Render some shots first", true);
     if (shots.length < sc.shots.length) toast(`Cutting the ${shots.length} rendered shots of ${sc.shots.length}`);
     // the song goes on past the last shot: an end card plays over the rest of it (up to 8 s), so the cut ends with the song
-    const last = shots[shots.length - 1], end = (last.start_frame + last.frames) / 24, rest = sc.duration_seconds - end, text = $("#s-title").value.trim();
+    const last = shots[shots.length - 1], end = last.start_frame / 24 + this.span(last), rest = sc.duration_seconds - end, text = $("#s-title").value.trim();
     let title = null;
     if (text && this.audioRef && rest > 1) {
       const v = await new Promise((res) => { const e = document.createElement("video"); e.preload = "metadata"; e.onloadedmetadata = () => res(e); e.onerror = () => res(null); e.src = api.viewUrl(this.results[last.id]); });
       if (v?.videoWidth) title = {text, song: this.audioRef, start: end, seconds: Math.min(8, rest), width: v.videoWidth, height: v.videoHeight};
     }
-    this.run(G.filmCut({shots: shots.map(s => ({file: api.fileRef(this.results[s.id]), seconds: s.frames / 24})), title, prefix: `valis/score_cut_${Date.now().toString(36)}`}),
+    this.run(G.filmCut({shots: shots.map(s => ({file: api.fileRef(this.results[s.id]), seconds: this.span(s)})), title, prefix: `valis/score_cut_${Date.now().toString(36)}`}),
       "Score · cut", $("#s-viewer"), {onDone: (j) => {
         const v = j.outputs.find(f => /\.(mp4|webm|mov)$/i.test(f.filename));
         if (!v) return;
