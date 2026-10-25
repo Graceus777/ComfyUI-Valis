@@ -26,7 +26,11 @@ export const Bin = {
     const id = this.keyOf(f);
     this.removed.delete(id);                           // made again or dropped again: it's wanted
     let it = this.items.find(i => i.id === id);
-    if (it) { for (const [k, v] of Object.entries(meta)) if (!soft || it[k] == null) it[k] = v; }
+    if (it) {
+      for (const [k, v] of Object.entries(meta)) if (!soft || it[k] == null) it[k] = v;
+      // made or dropped again: back to the front, so a film's shots don't fall off the lists after many renders
+      if (!soft) { this.items.splice(this.items.indexOf(it), 1); this.items.unshift(it); }
+    }
     else { it = {id, kind: kindOf(f.filename), file: {filename: f.filename, subfolder: f.subfolder || "", type: f.type || "output"}, at: Date.now(), ...meta}; this.items.unshift(it); }
     this.save(); this.draw(); this.listeners.forEach(fn => fn(it));
     return it;
