@@ -79,6 +79,37 @@ try {
   ok(/6 × 9\.0 s/.test(await page.$eval("#m-sec-shape .val", e => e.textContent)) && /About 54 s of film/.test(await page.$eval("#m-len-hint", e => e.textContent)),
      "Film: the shot length sets the film's length", await page.$eval("#m-sec-shape .val", e => e.textContent));
   await shot("film_length");
+  // ---- Film: a blank film, built from references (the cards, the steps, a close-up box)
+  await page.click("#m-blank"); await page.waitForTimeout(400);
+  const secs = await page.$$eval("#m-build .bsec h3", hs => hs.map(h => h.textContent));
+  ok(secs.join() === "References,Sets,Frames", "Film: a blank film has References, Sets and Frames", secs.join());
+  ok(/References/.test(await page.$eval("#m-steps", e => e.textContent)) && /Frames/.test(await page.$eval("#m-steps", e => e.textContent)), "Film: the steps start with the references, sets and frames");
+  await page.click('#m-build .bsec:nth-child(1) .bhead button:has-text("+ character")'); await page.waitForTimeout(200);
+  await page.click('#m-build .bsec:nth-child(1) .bhead button:has-text("+ character")'); await page.waitForTimeout(200);
+  ok((await page.$$("#m-build .bsec:nth-child(1) .bcard")).length === 2, "Film: + character adds a reference card");
+  await page.fill("#m-build .bsec:nth-child(1) .bcard:nth-child(1) .bname", "Eleanor"); await page.press("#m-build .bsec:nth-child(1) .bcard:nth-child(1) .bname", "Tab");
+  await page.waitForTimeout(300);
+  await page.selectOption("#m-build .bsec:nth-child(1) .bcard:nth-child(2) select", "Eleanor"); await page.waitForTimeout(300);
+  ok(/a change of Eleanor/.test(await page.$eval("#m-build .bsec:nth-child(1) .bcard:nth-child(2) select", s => s.selectedOptions[0].textContent)), "Film: a reference can be a change of another");
+  await page.click('#m-build .bsec:nth-child(3) .bhead button:has-text("+ frame")'); await page.waitForTimeout(300);
+  ok((await page.$$("#m-build .bsec:nth-child(3) .bcard")).length === 1 && (await page.$$("#m-build .bsec:nth-child(3) .bchips .chip.on")).length === 2, "Film: a first frame seats everyone in the cast");
+  await page.selectOption("#m-shots .fshot:nth-child(1) select", "frame 1"); await page.waitForTimeout(300);
+  ok(/isn't made yet/.test(await page.$eval("#m-shots .fshot:nth-child(1)", e => e.textContent)), "Film: a shot on a frame that isn't made says so");
+  await shot("film_build");
+  // the close-up box: drag places it, the slider sizes it, the whole frame is no box
+  const crop = await page.evaluate(async () => {
+    const {cropEditor} = await import("/valis/app/js/filmbuild.js");
+    const got = []; const el = cropEditor({filename: "none.png", subfolder: "", type: "output"}, null, (c) => got.push(c));
+    el.style.width = "200px"; document.body.append(el);
+    const box = el.querySelector(".cropbox"), size = el.querySelector("input[type=range]");
+    size.value = "40"; size.dispatchEvent(new Event("input")); size.dispatchEvent(new Event("change"));
+    const b = box.getBoundingClientRect(), at = (t, fx, fy) => box.dispatchEvent(new PointerEvent(t, {bubbles: true, pointerId: 3, clientX: b.left + fx * b.width, clientY: b.top + fy * b.height}));
+    at("pointerdown", .95, .95); at("pointerup", .95, .95);
+    el.querySelector("button").click(); el.remove();
+    return got;
+  });
+  ok(crop.length === 3 && crop[0].w === .4 && crop[0].h === .4 && Math.abs(crop[1].x - .6) < .01 && Math.abs(crop[1].y - .6) < .01 && crop[2] === null,
+    "Film: the close-up box sizes, drags into the corner, and clears", JSON.stringify(crop));
   // ---- Score: the example loads and plays the timeline; a source can be picked
   await page.click('.tab[data-view="score"]'); await page.click('#s-source button[data-id="demo"]');
   await page.waitForFunction(() => /danse/i.test(document.querySelector("#s-info")?.textContent || ""), null, {timeout: 8000}).catch(() => {});
