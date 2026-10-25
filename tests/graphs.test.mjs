@@ -208,6 +208,10 @@ import * as F from "../app/js/film.js";
   const m3 = P.motionPrompt({genre: goth, move: push, action: "She opens her eyes; white-gold fire races up the blade. The camera holds still.", look: "Oil painting."});
   ok(!m3.includes("stay exactly"), "Film · a shot whose action changes the light isn't told the light stays", m3);
 }
+{ // the Score tab's shots follow the Film tab's rule: a bar ending up to 3 frames past the clip still counts
+  const m = G.scoreMake({audio: "s.flac"})["m"].inputs, bar = 4 * 60 / 106;
+  ok(Math.floor(m.shot_seconds / bar + 1e-6) === 2 && shotSeconds(bar).bars === 2, "Score · at 106 BPM a shot is two bars, as in the Film tab", m.shot_seconds);
+}
 { // a YuE2 take that fails (its sheet music came out broken) makes the next run another take
   const plan = {tag: "t", song: {style: "x", lyrics: "[Instrumental]"}, shots: [{}, {}]};
   const io = {exists: async () => false, run: async () => { throw new Error("The score is not valid native two-voice ABC.\n- error: ..."); }};

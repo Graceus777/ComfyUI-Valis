@@ -751,7 +751,9 @@ export function scoreMake({audio = null, music = null, abc = "", cueSheet = "", 
   const g = {};
   if (audio) { g["a"] = N("LoadAudio", {audio}); music = ["a", 0]; }
   g["c"] = N("ValisCues", {cue_sheet: cueSheet, duration: 0, ...(music ? {music} : {}), ...(abc ? {abc} : {})});
-  g["m"] = N("ValisScoreMake", {cues: ["c", 0], title, shot_seconds: shotSeconds, section_bars: sectionBars, bpm, meter});
+  // a shot is as many whole bars as fit in one clip, counting a bar that ends up to 3 frames past it (the Film tab's rule,
+  // film.js shotSeconds: at 106 BPM two bars are 4.53 s and an H3 clip 4.46 s, and the score cut every clip in half)
+  g["m"] = N("ValisScoreMake", {cues: ["c", 0], title, shot_seconds: shotSeconds + 3 / 24, section_bars: sectionBars, bpm, meter});
   g["s"] = N("SaveText", {text: ["m", 1], filename_prefix: prefix, format: "json"});
   return g;
 }
