@@ -196,6 +196,13 @@ import * as F from "../app/js/film.js";
   ok(JSON.stringify(g.hc.inputs.image_target) === '["17",0]' && g.hc.inputs.method === "mkl_lab" && JSON.stringify(g["80"].inputs.images) === '["hc",0]', "Film · every frame is matched to the keyframe before the effects");
   ok(!G.fx({clip: "c.mp4", layers: []}).hc, "FX · nothing is held unless asked");
 }
+{ // a film shot's motion: its look said in full with the light held; a camera direction in the action wins over the move
+  const push = P.MOVES.find(m => m.id === "push"), goth = P.GENRES.find(g => g.id === "gothic");
+  const m1 = P.motionPrompt({genre: goth, move: push, action: "She closes her eyes. The camera holds still.", look: "Red lamp light from below."});
+  ok(m1.startsWith("Red lamp light from below. The scene begins") && m1.includes("stay exactly as in the first frame") && !m1.includes(push.words) && !m1.includes(".."), "Film · a shot's motion keeps its look and its light, and its own camera", m1);
+  const m2 = P.motionPrompt({genre: goth, move: push, action: "She closes her eyes"});
+  ok(m2.includes(push.words) && !m2.includes("stay exactly"), "Create · the move is said when the action says nothing of the camera", m2);
+}
 // the steps, with a pretend io: what each makes, from what, in what order
 {
   const runs = [];

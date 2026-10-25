@@ -87,9 +87,15 @@ export function soundPrompt({subject = "", action = "", sound = ""} = {}) {
   const scene = [subject.trim(), action.trim()].filter(Boolean).join("; ").replace(/[.;,\s]+$/, "");
   return scene ? `The sound of the scene as it happens, ${scene}. Everything in the picture is heard: its people and creatures, their steps and movements, the place around them.` : "";
 }
-export function motionPrompt({genre, move, action}) {
-  const sc = (genre?.style || "").split(",")[0];
-  return `${sc}. The scene begins exactly as shown in the first frame and comes alive: ${action || "subtle natural motion"}. ${move?.words || ""}`.trim();
+// look: a film's own look line (its light and stock), said in full, with the light held: H3 lit SÉANCE's red-lamp
+// parlour like a showroom within a second when nothing said what the light was. A camera direction in the action wins
+// over a film's default move (it said "pushes in" after the action said "holds still").
+export function motionPrompt({genre, move, action, look = null}) {
+  const sc = look || (genre?.style || "").split(",")[0];
+  const act = (action || "subtle natural motion").trim().replace(/[.\s]+$/, "");
+  const cam = look && /\bcamera\b/i.test(act) ? "" : (move?.words || "");      // (Create's chosen move always stands)
+  return [`${sc.replace(/[.\s]+$/, "")}.`, `The scene begins exactly as shown in the first frame and comes alive: ${act}.`,
+    look ? "The light, its colour and the shadows stay exactly as in the first frame from start to end." : "", cam].filter(Boolean).join(" ").trim();
 }
 
 // ---------------------------------------------------------------- Edit: looks (anchor prompt for Krea, description for H3)
