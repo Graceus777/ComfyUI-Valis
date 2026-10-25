@@ -1053,6 +1053,52 @@ export function filmKeyframes({prompts, seed = 7101, width = 768, height = 1344,
   return g;
 }
 
+// ---------------------------------------------------------------- Film: frames built from references (continuity)
+// A film's stills are not painted one by one from words (every still a new room, new faces, a new head count): they are
+// built from references. Each character has a sheet (a costume-test portrait), the set an empty plate per camera setup.
+// One graph serves every step after the sheets and plates: Qwen Image 2.1 with every reference in one sequence, the
+// first one deciding the frame's size and camera.
+//   seat   the setup's empty plate first, then the sheets of who is in it: they are seated into the plate as written
+//   edit   a frame of that setup first (a change of state: a trance, a wet chair, someone arriving with their sheet)
+//   turn   an empty plate first: the same empty place from another side (a new camera setup)
+//   crop   a frame first, cut to the box and scaled back to the film's size, then the sheets of who is in the box:
+//          re-rendered sharp, so a close-up has the same chair, the same neighbours and the same light as its frame
+// Tested on SÉANCE: asking Qwen to move the camera on a frame with people in it brought the medium back twice and lost
+// the empty chair, so a new angle is always turned on the empty plate, then seated.
+// refs: [{image, mp}] (mp: scale that reference to about mp megapixels first; the first keeps its own size)
+// crop: {x, y, w, h} as fractions of the first reference, which is `from` pixels (frames are made at the plate's size);
+// size: {w, h} the box is scaled back to
+export function filmFrame({refs, prompt, seeds = [8401], crop = null, from = {w: 768, h: 1344}, size = {w: 768, h: 1344}, steps = 25, prefix = "valis/film_frame"}) {
+  if (!refs?.length) throw new Error("filmFrame: no references");
+  const g = {
+    "250": N("UnetLoaderGGUF", {unet_name: MODELS.qwen}),
+    "251": N("CLIPLoader", {clip_name: MODELS.qwenTE, type: "qwen_image", device: "default"}),
+    "252": N("VAELoader", {vae_name: MODELS.qwenVAE}),
+  };
+  const enc = {clip: ["251", 0], prompt, negative_prompt: "", resolution: 0, vae: ["252", 0]};
+  refs.forEach((r, k) => {
+    g[`r${k}`] = N("LoadImage", {image: r.image});
+    let out = [`r${k}`, 0];
+    if (k === 0 && crop) {
+      const px = (v, n) => Math.max(0, Math.min(n, Math.round(v * n)));
+      g["cr"] = N("ImageCrop", {image: out, width: Math.max(16, px(crop.w, from.w)), height: Math.max(16, px(crop.h, from.h)), x: px(crop.x, from.w), y: px(crop.y, from.h)});
+      g["cs"] = N("ImageScale", {image: ["cr", 0], upscale_method: "lanczos", width: size.w, height: size.h, crop: "center"});
+      out = ["cs", 0];
+    } else if (r.mp) {
+      g[`s${k}`] = N("ImageScaleToTotalPixels", {image: out, upscale_method: "lanczos", megapixels: r.mp, resolution_steps: 32});
+      out = [`s${k}`, 0];
+    }
+    enc[`images.image_${k + 1}`] = out;
+  });
+  g["enc"] = N("TextEncodeQwenImage21", enc);
+  seeds.forEach((seed, j) => {
+    g[`k${j}`] = N("KSampler", {model: ["250", 0], positive: ["enc", 0], negative: ["enc", 1], latent_image: ["enc", 2], seed, steps, cfg: 1, sampler_name: "euler", scheduler: "simple", denoise: 1});
+    g[`d${j}`] = N("VAEDecode", {samples: [`k${j}`, 0], vae: ["252", 0]});
+    g[`w${j}`] = N("SaveImage", {images: [`d${j}`, 0], filename_prefix: `${prefix}_${seed}`});
+  });
+  return g;
+}
+
 // the cut: every shot trimmed to its bars and joined; each shot carries its own slice of the song and its sounds
 // title: {text, subtitle, song, start, seconds, width, height}: a card over black after the last shot, with the song's tail
 // under it (every chunk of the cut must carry audio of the same kind)

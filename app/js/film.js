@@ -2,9 +2,14 @@
 // the `io` that submits a graph and reads its results (app.js over the SDK in the browser, cli/valis.mjs over the SDK
 // in Node), so the same code makes the film in either place.
 //
-//   plan      Qwen3 (ComfyUI's text generation on Qwen Image's encoder) writes the shot list and the song brief as JSON
+//   plan      Qwen3 (ComfyUI's text generation on Qwen Image's encoder) writes the shot list and the song brief as JSON;
+//             or you write the script yourself
+//   refs      a sheet for every character, every state of one, every prop (Krea 2, or Qwen Image 2.1 from other sheets)
+//   sets      the set, empty, from every camera setup (Krea 2 for the first; Qwen turns the empty plate for the others)
+//   frames    people seated into a setup's plate from their sheets, then each change of state an edit of the frame before
 //   song      YuE2 writes the sheet music and performs it; its tempo decides how long every shot is (whole bars)
-//   keyframes Krea 2 frames every shot in one graph
+//   keyframes a shot's still: its frame, or a box cut from it and re-rendered sharp (a shot with no frame: Krea 2 paints
+//             it from its words, as before)
 //   shots     MiniMax H3 shoots each keyframe, one job each
 //   effects   SAM 3 tracks the shot's subject; the library fires the shot's effect on the song's lane; the sound design
 //             is synthesized in the song's key, from where this shot sits in the song
@@ -94,6 +99,75 @@ export function stillPrompt(plan, s, genre = null) {
   const inShot = (plan.cast || []).filter(c => !s.who || !c.name || s.who.some(w => w.toLowerCase().includes(c.name.toLowerCase()) || c.name.toLowerCase().includes(w.toLowerCase())));
   return [lookOf(plan, genre), s.keyframe, ...inShot.map(c => c.look), plan.place].filter(Boolean).join(" ");
 }
+// ---------------------------------------------------------------------------------------------------------- references
+// A film is built from references, so what stays the same from shot to shot is the same picture, not the same words
+// (words alone gave every still a new room, new faces and a new head count):
+//   plan.cast    a sheet for every character (a costume-test portrait you pick); every state of one ({from: "Eleanor",
+//                edit: "soaked, drowned"}: an edit of Eleanor's sheet); every prop made of them ({kind: "prop",
+//                with: ["the widower", "Eleanor"], look: "their wedding photograph"}: those sheets in one picture)
+//   plan.setups  the set, empty, from every camera setup. The first is painted from the film's look, its view and the
+//                place; each other one turns an empty plate ({from: "master", turn: "from the opposite side"}). Turn the
+//                empty plate, never a frame with people in it: they come back twice and the furniture goes
+//   plan.frames  what a setup shows at one moment: people seated into its plate from their sheets as the blocking says
+//                ({setup, with, seat}), then each change of state an edit of the frame before ({from, edit, with}), so
+//                nothing changes that the script doesn't change
+//   shot.frame   the shot's still is that frame, or a box cut from it (shot.crop, fractions of the frame) re-rendered sharp
+//                with the sheets of who is in it (shot.with): a close-up with the same chair, the same neighbours, the
+//                same light
+// A shot with no frame keeps its own still painted from its words (stillPrompt), as before.
+const SHEET = "Costume test photograph, shot on 35mm. Waist-up portrait, facing the camera, standing in front of a plain dark grey backdrop, soft even light from the front. Real skin texture, sharp focus, film grain.";
+const PROP = "Close-up photograph on a plain dark grey backdrop, soft even light from the front. Sharp focus, film grain.";
+const KEEP = " Keep everyone else, every face, pose and piece of clothing, the furniture, the light and the framing exactly the same.";
+export const byName = (list, name) => (list || []).find(x => x && x.name === name) || null;
+const legend = (names, first = 2) => (names || []).map((n, i) => `Picture ${i + first} is ${n}.`).join(" ");
+const join = (...a) => a.filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+export function sheetPrompt(c) {                                       // a character or a prop, painted from its words
+  return join(c.kind === "prop" ? PROP : SHEET, c.look);
+}
+export function refPrompt(c) {                                         // a state of another sheet, or sheets combined
+  if (c.from) return join(c.edit, "Keep the face, the hair, the design of the clothes, the pose, the framing, the light and the backdrop exactly the same.");
+  return join(legend(c.with, 1), c.look);
+}
+export function platePrompt(plan, su, genre = null) {                 // the first setup: the empty set
+  return join(lookOf(plan, genre), su.view, plan.place, "No people.");
+}
+export function turnPrompt(plan, su) {                                 // another setup: the empty plate turned
+  return join(`Picture 1 shows an empty place in a film: ${plan.place || "the set"}`, `Show the same empty place ${su.turn || "from another side"}.`,
+    su.view, "No people. The same furniture, the same light, the same film grain.");
+}
+export function seatPrompt(plan, f, genre = null) {                   // people seated into a setup's plate
+  return join("Picture 1 is the empty set.", legend(f.with), "Place them into Picture 1, keeping the place, the furniture and the camera exactly as in Picture 1.",
+    f.seat, "Nobody else is in the frame. Each person keeps their face, hair, clothes and accessories exactly as in their picture.", lookOf(plan, genre));
+}
+export function editPrompt(f) {                                         // a change of state on the frame before
+  return join("Picture 1 is a still from this film.", legend(f.with), f.edit) + KEEP;
+}
+export function cropPrompt(s) {                                         // a close-up cut from a frame
+  return join("Picture 1 is a soft, low-resolution crop of a film frame. Re-render it as a sharp, detailed film still with exactly the same framing, composition, poses, objects, light and colours.",
+    legend(s.with), s.with?.length ? "Everyone keeps the face, hair and clothes of their picture." : "", s.fix);
+}
+// what a reference, a setup or a frame is made from (the names of the others it needs first)
+export const needs = {
+  ref: (c) => c.from ? [c.from] : (c.with || []),
+  setup: (su) => su.from ? [su.from] : [],
+  frame: (f) => f.from ? [f.from] : [],
+};
+// the order to make things in: everything a thing needs comes before it (and a loop is an error)
+export function inOrder(list, deps, what = "it") {
+  const out = [], done = new Set(), path = new Set();
+  const visit = (x) => {
+    if (done.has(x)) return;
+    if (path.has(x)) throw new Error(`${x.name} is made from itself`);
+    path.add(x);
+    for (const n of deps(x)) { const d = byName(list, n); if (d) visit(d); }
+    path.delete(x); done.add(x); out.push(x);
+  };
+  list.forEach(visit);
+  return out;
+}
+const slug = (s) => String(s || "x").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 24) || "x";
+const png = (r) => r.outputs.find(o => /\.png$/i.test(o.filename)) || null;
+
 export const sizeOf = (plan) => plan.size || {w: 768, h: 1344};            // the shots' size
 const KEY = {w: 768, h: 1344};                                                // stills are always painted at Krea's own size
 const keySeed = (s, k) => s.keySeed ?? 7101 + k;
@@ -124,9 +198,97 @@ export async function makeSong(plan, io, {onStage = () => {}} = {}) {
   return (plan.music = {audio, abc, bar, seconds: songSeconds(plan), cut: shotSeconds(bar.seconds, shotLen(plan))});
 }
 
+// ---- the references, the sets and the frames: each step makes what's missing (only: indexes to make again)
+const sheetOf = (plan, name) => { const c = byName(plan.cast, name); if (!c) throw new Error(`"${name}" isn't in the cast`); if (!c.sheet) throw new Error(`${name} has no sheet yet`); return c.sheet; };
+const REF_MP = 0.5;                                     // sheets go in at about half a megapixel: faces hold, the sequence stays short
+export async function makeRefs(plan, io, {only = null, onStage = () => {}} = {}) {
+  const cast = plan.cast || [], want = new Set(cast.filter((c, i) => only ? only.includes(i) : !c.sheet));
+  if (!want.size) return plan;
+  await free(io);
+  for (const c of inOrder(cast, needs.ref)) {
+    if (!want.has(c)) continue;
+    const k = cast.indexOf(c), seed = c.seed ?? 8301 + 10 * k, prefix = `${pre(plan)}_ref_${slug(c.name)}_s${seed}`;
+    onStage("refs", `the sheet for ${c.name}`);
+    const r = c.from || c.with?.length
+      ? await io.run(G.filmFrame({refs: needs.ref(c).map((n, i) => ({image: io.ref(sheetOf(plan, n)), mp: c.from ? 0 : REF_MP})), prompt: refPrompt(c), seeds: [seed], prefix}), `Film · ${c.name}`)
+      : await io.run(G.keyframes({prompt: sheetPrompt(c), width: 832, height: 1216, seeds: [seed], prefix}), `Film · ${c.name}`);
+    c.sheet = png(r);
+    if (!c.sheet) throw new Error(`no sheet for ${c.name}`);
+  }
+  return plan;
+}
+export async function makeSetups(plan, io, {genre = null, only = null, onStage = () => {}} = {}) {
+  const sus = plan.setups || [], want = new Set(sus.filter((su, i) => only ? only.includes(i) : !su.plate));
+  if (!want.size) return plan;
+  await free(io);
+  for (const su of inOrder(sus, needs.setup)) {
+    if (!want.has(su)) continue;
+    const k = sus.indexOf(su), seed = su.seed ?? 8601 + 10 * k, prefix = `${pre(plan)}_set_${slug(su.name)}_s${seed}`;
+    onStage("sets", `the set from the ${su.name}`);
+    let r;
+    if (su.from) {
+      const src = byName(sus, su.from);
+      if (!src?.plate) throw new Error(`the ${su.name} turns the ${su.from}, which has no plate yet`);
+      r = await io.run(G.filmFrame({refs: [{image: io.ref(src.plate)}], prompt: turnPrompt(plan, su), seeds: [seed], prefix}), `Film · set ${su.name}`);
+    } else r = await io.run(G.keyframes({prompt: platePrompt(plan, su, genre), width: KEY.w, height: KEY.h, seeds: [seed], prefix}), `Film · set ${su.name}`);
+    su.plate = png(r);
+    if (!su.plate) throw new Error(`no plate for the ${su.name}`);
+  }
+  return plan;
+}
+export async function makeFrames(plan, io, {genre = null, only = null, onStage = () => {}} = {}) {
+  const frames = plan.frames || [], want = new Set(frames.filter((f, i) => only ? only.includes(i) : !f.still));
+  if (!want.size) return plan;
+  await free(io);
+  for (const f of inOrder(frames, needs.frame)) {
+    if (!want.has(f)) continue;
+    const k = frames.indexOf(f), seed = f.seed ?? 8401 + 10 * k, prefix = `${pre(plan)}_frame_${slug(f.name)}_s${seed}`;
+    const sheets = (f.with || []).map(n => ({image: io.ref(sheetOf(plan, n)), mp: REF_MP}));
+    onStage("frames", `frame ${f.name}`);
+    let first, prompt;
+    if (f.from) {
+      const src = byName(frames, f.from);
+      if (!src?.still) throw new Error(`frame ${f.name} changes ${f.from}, which isn't made yet`);
+      first = src.still; prompt = editPrompt(f);
+    } else {
+      const su = byName(plan.setups, f.setup);
+      if (!su) throw new Error(`frame ${f.name} has no setup`);
+      if (!su.plate) throw new Error(`the ${su.name} has no plate yet`);
+      first = su.plate; prompt = seatPrompt(plan, f, genre);
+    }
+    const r = await io.run(G.filmFrame({refs: [{image: io.ref(first)}, ...sheets], prompt, seeds: [seed], prefix}), `Film · frame ${f.name}`);
+    f.still = png(r);
+    if (!f.still) throw new Error(`no still for frame ${f.name}`);
+  }
+  return plan;
+}
+// what a frame-built shot needs before its still can be made
+export function shotFrame(plan, s) {
+  if (!s.frame) return null;
+  const f = byName(plan.frames, s.frame);
+  if (!f) throw new Error(`there is no frame ${s.frame}`);
+  return f;
+}
+
 // keyframes for the shots that have none (only: shot indexes to make again, with a new seed if asked)
 export async function frameShots(plan, io, {genre = null, only = null, onStage = () => {}} = {}) {
-  const want = plan.shots.map((s, k) => k).filter(k => only ? only.includes(k) : !plan.shots[k].key);
+  let want = plan.shots.map((s, k) => k).filter(k => only ? only.includes(k) : !plan.shots[k].key);
+  if (!want.length) return plan;
+  // shots built from a frame: the frame itself, or a box cut from it and made sharp with the sheets of who is in it
+  const built = want.filter(k => plan.shots[k].frame);
+  if (built.length) await free(io);
+  for (const k of built) {
+    const s = plan.shots[k], f = shotFrame(plan, s);
+    if (!f.still) throw new Error(`shot ${k + 1}'s frame ${f.name} isn't made yet`);
+    if (!s.crop) { if (s.key?.filename !== f.still.filename) { s.clip = null; s.fx = null; } s.key = f.still; continue; }
+    const seed = keySeed(s, k);
+    onStage("keyframes", `shot ${k + 1}: a close-up cut from frame ${f.name}`);
+    const r = await io.run(G.filmFrame({refs: [{image: io.ref(f.still)}, ...(s.with || []).map(n => ({image: io.ref(sheetOf(plan, n)), mp: REF_MP}))],
+      prompt: cropPrompt(s), crop: s.crop, from: KEY, size: KEY, seeds: [seed], prefix: `${pre(plan)}_key_${k + 1}_${slug(f.name)}_s${seed}`}), `Film · keyframe ${k + 1}`);
+    s.key = png(r); s.clip = null; s.fx = null;
+    if (!s.key) throw new Error(`no keyframe for shot ${k + 1}`);
+  }
+  want = want.filter(k => !plan.shots[k].frame);
   if (!want.length) return plan;
   const {w, h} = KEY, b = base(plan);
   await free(io);
@@ -208,6 +370,11 @@ export async function cutFilm(plan, io, {onStage = () => {}} = {}) {
 // the whole film: every step in order, each making only what is still missing
 export async function makeFilm(plan, io, {genre = null, onStage = () => {}, onStep = () => {}} = {}) {
   plan.tag = plan.tag || Date.now().toString(36);
+  if (plan.cast?.some(c => c.sheet || c.from || c.with) || plan.setups?.length || plan.frames?.length) {   // a film built from references
+    await makeRefs(plan, io, {onStage}); onStep(plan);
+    await makeSetups(plan, io, {genre, onStage}); onStep(plan);
+    await makeFrames(plan, io, {genre, onStage}); onStep(plan);
+  }
   await makeSong(plan, io, {onStage}); onStep(plan);
   await frameShots(plan, io, {genre, onStage}); onStep(plan);
   await shootShots(plan, io, {genre, onStage}); onStep(plan);

@@ -9,7 +9,9 @@ import {palettePicker} from "./palettepick.js";
 import {ScoreView} from "./score.js";
 import {FxView} from "./fx.js";
 import {checkSetup} from "./check.js";
-import {planFilm, makeFilm, makeSong, frameShots, shootShots, effectShots, cutFilm, SHOT_SECONDS, shotLen, songSeconds, songShort, cutOf, lookOf} from "./film.js";
+import {planFilm, makeFilm, makeSong, frameShots, shootShots, effectShots, cutFilm, SHOT_SECONDS, shotLen, songSeconds, songShort, cutOf, lookOf,
+        makeRefs, makeSetups, makeFrames, byName} from "./film.js";
+import {drawBuild, cropEditor, whoChips} from "./filmbuild.js";
 import * as R from "./refengine.js";
 import {Bin} from "./bin.js";
 import * as MC from "./machine.js";
@@ -1105,8 +1107,11 @@ async function fopen(path) {
 }
 // ---- the steps panel: what each step makes, how much is done, a button to run it alone
 const STEPS = [
+  {id: "refs", name: "References", tip: "A sheet for every character, every state of one and every prop: Krea 2 paints them, Qwen Image 2.1 makes a state or a prop from other sheets."},
+  {id: "sets", name: "Sets", tip: "The set, empty, from every camera setup: Krea 2 paints the first, Qwen Image 2.1 turns the empty plate for the others."},
+  {id: "frames", name: "Frames", tip: "Who is where in a setup at one moment: their sheets seated into its plate, then each change an edit of the frame before (Qwen Image 2.1)."},
   {id: "song", name: "Song", tip: "YuE2 writes and plays the song (or Valis reads yours). Its bar sets every shot's length."},
-  {id: "keys", name: "Keyframes", tip: "Krea 2 frames every shot. Look at them before anything is shot: re-roll one, edit its words, or open it in Create."},
+  {id: "keys", name: "Keyframes", tip: "Every shot's still: its frame, or a close-up cut from it and made sharp with the sheets of who is in it. A shot with no frame: Krea 2 paints it from its words. Look at them before anything is shot."},
   {id: "shots", name: "Shots", tip: "MiniMax H3 shoots each keyframe."},
   {id: "fx", name: "Effects", tip: "SAM 3 finds each shot's subject; its effect fires on the song's lane, with its sound, in the song's key."},
   {id: "cut", name: "Cut", tip: "Every shot trimmed to its bars and joined on the song, with a title card at the end."},
@@ -1114,25 +1119,30 @@ const STEPS = [
 async function fsteps() {
   const p = M.plan, el = $("#m-steps");
   if (!p) { el.replaceChildren(h("p", {class: "hint"}, "Plan the film first: nothing renders until you press a step.")); return; }
-  const n = p.shots.length, cnt = (f) => p.shots.filter(f).length, len = shotLen(p);
+  const n = Math.max(1, p.shots.length), cnt = (f) => p.shots.filter(f).length, len = shotLen(p);
+  const part = (list, key) => (list || []).length ? (list || []).filter(x => x[key]).length / list.length : 1;
+  const of = (list, key) => (list || []).length ? `${(list || []).filter(x => x[key]).length} of ${list.length}` : "none";
   const shot = (s) => s.clip && !(s.clipSeconds && Math.abs(s.clipSeconds - len) > .01), short = songShort(p);
   const bars = p.music?.audio ? cutOf(p).bars : 0;
-  const state = {song: p.music?.audio && !short ? 1 : 0, keys: cnt(s => s.key) / n, shots: cnt(shot) / n, fx: cnt(s => s.fx && shot(s)) / n, cut: p.film ? 1 : 0};
-  const label = {song: short ? "shorter than the film now" : p.music?.audio ? `${p.music.bar.bpm} BPM · ${bars} bar${bars > 1 ? "s" : ""} a shot` : p.song.file ? "your song" : "YuE2",
+  const state = {refs: part(p.cast, "sheet"), sets: part(p.setups, "plate"), frames: part(p.frames, "still"), song: p.music?.audio && !short ? 1 : 0, keys: cnt(s => s.key) / n, shots: cnt(shot) / n, fx: cnt(s => s.fx && shot(s)) / n, cut: p.film ? 1 : 0};
+  const label = {refs: of(p.cast, "sheet"), sets: of(p.setups, "plate"), frames: of(p.frames, "still"), song: short ? "shorter than the film now" : p.music?.audio ? `${p.music.bar.bpm} BPM · ${bars} bar${bars > 1 ? "s" : ""} a shot` : p.song.file ? "your song" : "YuE2",
     keys: `${cnt(s => s.key)} of ${n}`, shots: `${cnt(shot)} of ${n}`, fx: `${cnt(s => s.fx && shot(s))} of ${n}`, cut: p.film ? "done" : ""};
   const {w, hh = sizeOfPlan(p).h} = sizeOfPlan(p);
+  const qwen = await EST.estimate(G.filmFrame({refs: [{image: "x"}], prompt: "x"})), krea = await EST.estimate(G.keyframes({prompt: "x", seeds: [1]}));
   const est = {
+    refs: krea, sets: krea, frames: qwen,
     song: await EST.estimate(p.song.file ? G.scoreMake({audio: "x"}) : G.song({style: "x", lyrics: "x", seconds: songSeconds(p)}).graph),
     keys: await EST.estimate(G.filmKeyframes({prompts: p.shots.filter(s => !s.key).map(() => "x"), width: w, height: hh})),
     shots: await EST.estimate(G.shot({image: "x", motion: "x", width: w, height: hh, seconds: len})),
     fx: await EST.estimate(G.fx({clip: "x", layers: [{effect: "Punch", on: "kick"}], seconds: len})), cut: {seconds: 20, measured: false},
   };
-  const left = {song: 1 - state.song, keys: n - cnt(s => s.key), shots: n - cnt(shot), fx: n - cnt(s => s.fx && shot(s)), cut: 1 - state.cut};
+  const left = {refs: (p.cast || []).filter(x => !x.sheet).length, sets: (p.setups || []).filter(x => !x.plate).length, frames: (p.frames || []).filter(x => !x.still).length, song: 1 - state.song, keys: n - cnt(s => s.key), shots: n - cnt(shot), fx: n - cnt(s => s.fx && shot(s)), cut: 1 - state.cut};
   const t = (id) => { const e = est[id]; if (!left[id]) return ""; const k = id === "song" || id === "cut" || id === "keys" ? 1 : left[id]; return EST.fmt({...e, seconds: e.seconds * k}); };
-  el.replaceChildren(...STEPS.map(st => h("div", {class: "step" + (state[st.id] >= 1 ? " done" : state[st.id] > 0 ? " part" : ""), tip: st.tip},
+  const steps = STEPS.filter(st => !["refs", "sets", "frames"].includes(st.id) || p.cast?.length || p.setups?.length || p.frames?.length);
+  el.replaceChildren(...steps.map(st => h("div", {class: "step" + (state[st.id] >= 1 ? " done" : state[st.id] > 0 ? " part" : ""), tip: st.tip},
     h("i", {class: "sdot"}), h("div", {class: "sn"}, h("b", {}, st.name), h("span", {}, label[st.id])),
-    h("button", {class: "btn small", type: "button", disabled: M.busy, onclick: () => fstep(st.id)}, state[st.id] >= 1 ? "again" : "run", h("span", {class: "sub"}, t(st.id) || "")))));
-  const total = Object.keys(left).reduce((a, k) => a + (left[k] ? est[k].seconds * (k === "shots" || k === "fx" ? left[k] : 1) : 0), 0);
+    h("button", {class: "btn small", type: "button", disabled: M.busy || label[st.id] === "none", onclick: () => fstep(st.id)}, label[st.id] === "none" ? "—" : state[st.id] >= 1 ? "again" : "run", h("span", {class: "sub"}, t(st.id) || "")))));
+  const total = Object.keys(left).reduce((a, k) => a + (left[k] ? est[k].seconds * (["shots", "fx", "refs", "sets", "frames"].includes(k) ? left[k] : 1) : 0), 0);
   $("#m-make-sub").textContent = total ? `every step still missing · ${EST.fmt({seconds: total, measured: Object.values(est).every(e => e.measured)})}` : "all done";
   $("#m-make").disabled = M.busy;
 }
@@ -1143,6 +1153,9 @@ async function fstep(id, only = null) {
   const p = M.plan, onStage = (stage, msg) => { $("#m-status").textContent = msg; };
   p.size = p.size || sizeOfPlan(p);
   try {
+    if (id === "refs") await makeRefs(p, filmIO, {only, onStage});
+    if (id === "sets") await makeSetups(p, filmIO, {genre: M.genre, only, onStage});
+    if (id === "frames") await makeFrames(p, filmIO, {genre: M.genre, only, onStage});
     if (id === "song") { if (!only) p.music = null; await makeSong(p, filmIO, {onStage}); }
     if (id === "keys") await frameShots(p, filmIO, {genre: M.genre, only, onStage});
     if (id === "shots") await shootShots(p, filmIO, {genre: M.genre, only, onStage});
@@ -1156,29 +1169,35 @@ async function fstep(id, only = null) {
 function fdraw() {
   const p = M.plan, box = $("#m-planbox");
   filmActions();
-  if (!p) { box.replaceChildren(); $("#m-shots").replaceChildren(); fsteps(); return; }
+  if (!p) { box.replaceChildren(); $("#m-build").replaceChildren(); $("#m-shots").replaceChildren(); fsteps(); return; }
   const field = (label, get, set, tip) => h("div", {class: "maprow", tip}, h("label", {}, label), h("input", {type: "text", value: get() || "", oninput: (e) => { set(e.target.value); fsave(); }}));
   box.replaceChildren(...[
     h("div", {class: "ptitle"}, h("input", {class: "title", type: "text", value: p.title, oninput: (e) => { p.title = e.target.value; fsave(); }}),
       h("span", {class: "hint"}, `${p.shots.length} shots · ${sizeOfPlan(p).w}×${sizeOfPlan(p).h}`)),
     h("input", {class: "logline", type: "text", value: p.logline || "", oninput: (e) => { p.logline = e.target.value; fsave(); }}),
+    h("textarea", {class: "script", rows: p.script ? 8 : 2, placeholder: "The script: scenes and beats, in order. What the audience must see, and why each shot is there.",
+      tip: "Your script. The references, the sets, the frames and the shots below are built from it, by you", oninput: (e) => { p.script = e.target.value; fsave(); }}, p.script || ""),
     field("look", () => lookOf(p, M.genre), (v) => { p.look = v.trim() ? v : null; }, "The film's look: every keyframe starts with these words. The genre's words until you change them; clear it to go back to them"),
-    ...p.cast.map((c, i) => field(c.name || `cast ${i + 1}`, () => c.look, (v) => { c.look = v; }, "How this character looks: goes into every keyframe they're in, so they stay the same from shot to shot")),
+    ...(built(p) ? [] : p.cast.map((c, i) => field(c.name || `cast ${i + 1}`, () => c.look, (v) => { c.look = v; }, "How this character looks: goes into every keyframe they're in, so they stay the same from shot to shot"))),
     field("place", () => p.place, (v) => { p.place = v; }, "The setting: goes into every keyframe"),
     p.song.file ? h("div", {class: "maprow"}, h("label", {}, "song"), h("span", {class: "hint"}, p.song.fileName || "your song"))
       : field("song", () => p.song.style, (v) => { p.song.style = v; p.music = null; }, "YuE2's brief: genre, instruments, mood, tempo"),
     p.music?.audio ? h("audio", {src: api.viewUrl(p.music.audio), controls: true, class: "songbar"}) : null].filter(Boolean));
+  if (built(p)) drawBuild($("#m-build"), p, {busy: M.busy, save: fsave, redraw: fdraw, run: (id, only) => fstep(id, only), view: (f) => $("#m-viewer").replaceChildren(media(f))});
+  else $("#m-build").replaceChildren(h("div", {class: "bstart"}, h("button", {class: "btn small", type: "button", disabled: M.busy, tip: "Give this film references: a sheet per character, the set from each camera setup, and frames every shot is cut from, so the same people stay in the same places",
+    onclick: () => { toBuilt(p); fsave(); fdraw(); }}, "Build it from references"), h("span", {class: "hint"}, "a sheet per character, the set from every camera setup, frames each shot is cut from")));
   const thumb = (f, label, empty) => f ? h("div", {class: "fm", tip: label, onclick: () => $("#m-viewer").replaceChildren(media(f))}, media(f, {controls: false, autoplay: false}), h("span", {}, label))
     : h("div", {class: "fm empty"}, h("span", {}, empty));
   $("#m-shots").replaceChildren(...p.shots.map((sh, k) => {
     const card = h("div", {class: "fshot"},
-      h("div", {class: "fh"}, h("b", {}, String(k + 1)), h("span", {class: "who"}, (sh.who || []).join(", ") || "no one"),
+      h("div", {class: "fh"}, h("b", {}, String(k + 1)), h("span", {class: "who"}, ((sh.frame ? sh.with : sh.who) || []).join(", ") || (sh.frame ? `frame ${sh.frame}` : "no one")),
         h("span", {class: "fbtns"},
           h("button", {class: "ibtn", type: "button", disabled: M.busy, tip: "A new keyframe for this shot (a new seed)", onclick: () => { sh.keySeed = (sh.keySeed ?? 7101 + k) + 101; fstep("keys", [k]); }}, "⟳ still"),
           h("button", {class: "ibtn", type: "button", disabled: M.busy || !sh.key, tip: "Shoot (or re-shoot) this shot with H3", onclick: () => { if (sh.clip) sh.shotSeed = (sh.shotSeed ?? 51101 + k) + 1; fstep("shots", [k]); }}, "▶ shoot"),
-          h("button", {class: "ibtn", type: "button", tip: "Work on this shot in Create (camera, light, palette, trained moves), then send the still or the shot back here", onclick: () => toCreate(k)}, "Create ↗"))),
+          h("button", {class: "ibtn", type: "button", tip: "Work on this shot in Create (camera, light, palette, trained moves), then send the still or the shot back here", onclick: () => toCreate(k)}, "Create ↗"),
+          h("button", {class: "ibtn", type: "button", disabled: M.busy || p.shots.length < 2, tip: "Remove this shot", onclick: () => { p.shots.splice(k, 1); fsave(); fdraw(); }}, "×"))),
       h("div", {class: "fmedia"}, thumb(sh.key, "keyframe", "no still yet"), thumb(sh.clip, sh.clipSeconds && Math.abs(sh.clipSeconds - shotLen(M.plan)) > .01 ? `shot at ${sh.clipSeconds.toFixed(1)} s: shoot again` : "shot", "not shot"), thumb(sh.fx, "with effects", "no effects")),
-      h("textarea", {rows: 2, tip: "The still frame (Krea 2). The look, the cast's looks and the place are added to it.", oninput: (e) => { sh.keyframe = e.target.value; fsave(); }}, sh.keyframe),
+      ...shotStill(p, sh),
       h("input", {type: "text", value: sh.motion, placeholder: "what moves", tip: "What moves in the shot (H3)", oninput: (e) => { sh.motion = e.target.value; fsave(); }}),
       h("div", {class: "frow"},
         h("input", {type: "text", value: sh.subject, placeholder: "subject", tip: "What SAM 3 tracks for the effect", oninput: (e) => { sh.subject = e.target.value; fsave(); }}),
@@ -1189,8 +1208,35 @@ function fdraw() {
     card.addEventListener("dragleave", () => card.classList.remove("over"));
     card.addEventListener("drop", (e) => { e.preventDefault(); card.classList.remove("over"); const raw = e.dataTransfer.getData("application/x-valis-item"); if (raw) toShot(k, JSON.parse(raw)); });
     return card;
-  }));
+  }), h("button", {class: "fshot addshot", type: "button", disabled: M.busy, tip: "Add a shot at the end", onclick: () => {
+    const last = p.shots[p.shots.length - 1];
+    p.shots.push({who: [], keyframe: "", motion: "", subject: "", effect: "none", on: "beat", ...(last?.frame ? {frame: last.frame} : {})});
+    fsave(); fdraw(); }}, "+ shot"));
   fsteps();
+}
+// a film built from references: sheets, setups or frames (a planned film is painted shot by shot from its words until then)
+const built = (p) => !!(p?.setups?.length || p?.frames?.length || p?.cast?.some(c => c.sheet || c.from || c.with));
+function toBuilt(p) {
+  p.setups = p.setups?.length ? p.setups : [{name: "master", view: "Wide shot of the whole place, everything in it."}];
+  p.frames = p.frames || [];
+}
+// a shot's still: painted from its words, or built from a frame (the whole frame, or a close-up box cut from it)
+function shotStill(p, sh) {
+  const frames = p.frames || [];
+  const sel = frames.length ? h("select", {tip: "Where this shot's still comes from: a frame keeps the same people in the same places", onchange: (e) => {
+    const v = e.target.value; if (v) sh.frame = v; else { delete sh.frame; delete sh.crop; }
+    sh.key = null; sh.clip = null; sh.fx = null; fsave(); fdraw(); }},
+    h("option", {value: "", selected: !sh.frame}, "painted from its words"),
+    ...frames.map(f => h("option", {value: f.name, selected: sh.frame === f.name}, `frame ${f.name}`))) : null;
+  if (!sh.frame) return [sel, h("textarea", {rows: 2, tip: "The still frame (Krea 2). The look, the cast's looks and the place are added to it.", oninput: (e) => { sh.keyframe = e.target.value; fsave(); }}, sh.keyframe)].filter(Boolean);
+  const f = byName(frames, sh.frame);
+  return [sel,
+    f?.still ? cropEditor(f.still, sh.crop, (c) => {
+      if (c) sh.crop = c; else delete sh.crop;
+      sh.key = c ? null : f.still; sh.clip = null; sh.fx = null; fsave(); fsteps(); })
+      : h("p", {class: "hint"}, `frame ${sh.frame} isn't made yet`),
+    sh.crop ? whoChips((p.cast || []).map(c => c.name), sh.with || [], (w) => { sh.with = w; sh.key = null; fsave(); fdraw(); }, "Who is in the close-up: their sheets make it sharp") : null,
+  ].filter(Boolean);
 }
 function toShot(k, it) {
   const sh = M.plan?.shots[k]; if (!sh) return;
@@ -1225,6 +1271,15 @@ function filmReturnBar() {
     h("button", {class: "linkbtn", type: "button", onclick: () => { FILM_RETURN = null; filmReturnBar(); }}, "done"));
   if (!bar) $("#view-create .stage").prepend(el);
 }
+$("#m-blank").addEventListener("click", () => {
+  if (M.busy) return;
+  const s = CR.shotSize("9:16", M.short);
+  M.plan = {tag: Date.now().toString(36), title: "Untitled", logline: "", idea: $("#m-idea").value.trim(), look: null, script: "", cast: [], place: "",
+    setups: [{name: "master", view: ""}], frames: [], song: {style: "cinematic, instrumental, 108 BPM", lyrics: "[Instrumental]"},
+    shots: [{who: [], keyframe: "", motion: "", subject: "", effect: "none", on: "beat"}], size: {w: s.w, h: s.h}, genre: M.genre?.id || null};
+  $("#m-status").textContent = "A blank film: write the script, add the references and the sets, seat the frames, then the shots.";
+  fsave(); fdraw();
+});
 $("#m-plan").addEventListener("click", async () => {
   const idea = $("#m-idea").value.trim();
   if (!idea) return toast("Say what the film is about first", true);
