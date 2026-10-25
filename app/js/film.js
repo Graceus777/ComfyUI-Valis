@@ -287,7 +287,10 @@ export async function makeFrames(plan, io, {genre = null, only = null, onStage =
   for (const f of [...frames.filter(f => !f.from), ...frames.filter(f => f.from)]) {
     if (!want.has(f)) continue;
     const {root, who, setup} = frameChain(frames, f);
-    const seed = f.seed ?? root.seed ?? 8401 + 10 * frames.indexOf(root), prefix = `${pre(plan)}_frame_${slug(f.name)}`;
+    // a moment on its seated frame's own seed starts from the very noise that frame was made from: it came back speckled
+    // and over-sharpened and left out what changed (Eleanor never arrived), so every moment has a seed of its own
+    const rootSeed = root.seed ?? 8401 + 10 * frames.indexOf(root);
+    const seed = f.seed ?? (f.from ? rootSeed + 1000 + 37 * frames.indexOf(f) : rootSeed), prefix = `${pre(plan)}_frame_${slug(f.name)}`;
     onStage("frames", `frame ${f.name}`);
     let r;
     if (!f.from) {
