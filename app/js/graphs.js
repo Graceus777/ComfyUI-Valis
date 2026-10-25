@@ -1058,9 +1058,7 @@ export function filmKeyframes({prompts, seed = 7101, width = 768, height = 1344,
 // built from references. Each character has a sheet (a costume-test portrait), the set an empty plate per camera setup.
 // One graph serves every step after the sheets and plates: a Krea 2 identity edit (lbouaraba/comfyui-krea2edit, the
 // LoRA the studio's Transform and Stage already use) with two inputs, as it was trained: the scene, and the subject.
-//   frame  the setup's empty plate is the scene; the sheets of who is in it, side by side, are the subject. Every frame
-//          of a setup is painted fresh from the clean plate (the moment written into its words), never an edit of an
-//          edit: each pass repaints the whole picture, and chained passes went soft and dark
+// (Seating people into a set is filmSeat, below.)
 //   turn   an empty plate is the scene: the same empty place from another side (a new camera setup)
 //   crop   a box cut from a frame is the scene (scaled back to the film's size), the sheets of who is in it the subject:
 //          a sharp close-up with the same chair, the same neighbours and the same light as its frame
@@ -1104,26 +1102,29 @@ export function filmFrame({refs, prompt, seeds = [8401], crop = null, from = {w:
   return g;
 }
 
-// Seating several people: one Krea 2 identity edit a person, each on the picture the one before made (the LoRA is
-// trained on a scene and one subject; three sheets side by side as one subject mixed their faces and seated the medium
-// twice). people: [{image, prompt}] in order; the plate is the first scene. Only the last picture is saved.
-export function filmSeat({plate, people, seed = 8401, size = {w: 768, h: 1344}, grounding = 1024, steps = 8, prefix = "valis/film_seat"}) {
-  if (!people?.length) throw new Error("filmSeat: no one to seat");
-  const g = kreaLoaders();
-  g["plate"] = N("LoadImage", {image: plate});
-  g["lat"] = N("EmptySD3LatentImage", {width: size.w, height: size.h, batch_size: 1});
-  let scene = ["plate", 0];
-  people.forEach((p, k) => {
-    const i = (x) => `p${k}${x}`;
-    g[i("ld")] = N("LoadImage", {image: p.image});
-    g[i("mp")] = N("Krea2EditModelPatch", {model: ["203", 0], source_latent: ["lat", 0], vae: ["202", 0], source_image: scene, source_image_b: [i("ld"), 0], target_latent: ["lat", 0], ref_boost: 1.0, ref_boost_a: 1.0, fit_mode: "fit"});
-    const enc = (text) => N("Krea2EditGroundedEncode", {clip: ["201", 0], prompt: text, image: scene, image_b: [i("ld"), 0], grounding_px: grounding, system_prompt: ""});
-    g[i("pos")] = enc(p.prompt); g[i("neg")] = enc("");
-    g[i("ks")] = N("KSampler", {model: [i("mp"), 0], positive: [i("pos"), 0], negative: [i("neg"), 0], latent_image: ["lat", 0], seed: seed + k, steps, cfg: 1.0, sampler_name: "euler", scheduler: "simple", denoise: 1.0});
-    g[i("dec")] = N("VAEDecode", {samples: [i("ks"), 0], vae: ["202", 0]});
-    scene = [i("dec"), 0];
+// Seating people into a setup's empty plate: Qwen Image 2.1 with every reference in one sequence, the plate first (it
+// sets the frame's size and camera), then a sheet a person at about half a megapixel. One pass, about a minute.
+// Measured on SÉANCE against the Krea 2 identity edit, which is trained on one scene and one subject: three sheets as
+// one subject lost the faces and seated the medium twice; one person a pass put the aunt in the medium's chair (and took
+// four times as long). Qwen seated all three right, looking like their sheets. Every moment is seated fresh from the
+// clean plate, with the moment in its words: an edit of an edit repaints the whole picture again and goes soft and dark.
+export function filmSeat({plate, people, prompt, seed = 8401, steps = 25, prefix = "valis/film_seat"}) {
+  const g = {
+    "250": N("UnetLoaderGGUF", {unet_name: MODELS.qwen}),
+    "251": N("CLIPLoader", {clip_name: MODELS.qwenTE, type: "qwen_image", device: "default"}),
+    "252": N("VAELoader", {vae_name: MODELS.qwenVAE}),
+    "plate": N("LoadImage", {image: plate}),
+  };
+  const enc = {clip: ["251", 0], prompt, negative_prompt: "", resolution: 0, vae: ["252", 0], "images.image_1": ["plate", 0]};
+  (people || []).forEach((p, k) => {
+    g[`p${k}`] = N("LoadImage", {image: p.image});
+    g[`p${k}s`] = N("ImageScaleToTotalPixels", {image: [`p${k}`, 0], upscale_method: "lanczos", megapixels: 0.5, resolution_steps: 32});
+    enc[`images.image_${k + 2}`] = [`p${k}s`, 0];
   });
-  g["save"] = N("SaveImage", {images: scene, filename_prefix: `${prefix}_${seed}`});
+  g["enc"] = N("TextEncodeQwenImage21", enc);
+  g["ks"] = N("KSampler", {model: ["250", 0], positive: ["enc", 0], negative: ["enc", 1], latent_image: ["enc", 2], seed, steps, cfg: 1, sampler_name: "euler", scheduler: "simple", denoise: 1});
+  g["dec"] = N("VAEDecode", {samples: ["ks", 0], vae: ["252", 0]});
+  g["save"] = N("SaveImage", {images: ["dec", 0], filename_prefix: `${prefix}_${seed}`});
   return g;
 }
 

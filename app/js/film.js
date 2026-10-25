@@ -6,7 +6,7 @@
 //             or you write the script yourself
 //   refs      a sheet for every character, every state of one, every prop (Krea 2; a state or a prop: Krea 2 identity edit)
 //   sets      the set, empty, from every camera setup (Krea 2 for the first; the others turn the empty plate)
-//   frames    people seated into a setup's plate from their sheets (Krea 2 identity edit), every moment fresh from the plate
+//   frames    people seated into a setup's plate from their sheets (Qwen Image 2.1), every moment fresh from the plate
 //   song      YuE2 writes the sheet music and performs it; its tempo decides how long every shot is (whole bars)
 //   keyframes a shot's still: its frame, or a box cut from it and re-rendered sharp (a shot with no frame: Krea 2 paints
 //             it from its words, as before)
@@ -110,8 +110,8 @@ export function stillPrompt(plan, s, genre = null) {
 //                empty plate, never a frame with people in it: they come back twice and the furniture goes
 //   plan.frames  what a setup shows at one moment: people seated into its plate from their sheets as the blocking says
 //                ({setup, with, seat}); a later moment names the frame it follows and what changed ({from, edit, with, gone}).
-//                A seated frame seats its people one at a time into the clean plate; every later moment is one pass on
-//                that seated frame with every change so far in its words, never an edit of the moment before (each
+//                Every frame is seated fresh into the setup's clean plate (Qwen Image 2.1, one pass) with everyone in
+//                it at that moment and every change so far in its words, never as an edit of the frame before (each
 //                pass repaints the whole picture: chained, they went soft and dark)
 //   shot.frame   the shot's still is that frame, or a box cut from it (shot.crop, fractions of the frame) re-rendered sharp
 //                with the sheets of who is in it (shot.with): a close-up with the same chair, the same neighbours, the
@@ -156,28 +156,19 @@ export function frameChain(frames, f) {
   }
   return {root, chain, who, setup: root.setup, moment: chain.slice(1).map(x => x.edit).filter(Boolean)};
 }
+// a frame: its setup's empty plate with everyone in it at this moment, as the blocking says, every change so far in
+// its words (Qwen numbers the pictures: the plate is Picture 1, each sheet the next)
 export function framePrompt(plan, frames, f, genre = null) {
-  const {root, who, moment} = frameChain(frames, f);
-  return join(who.length ? `Put the people from the second image into this empty room. ${shows(who)}` : "This empty room.",
+  const {root, who, moment, chain} = frameChain(frames, f);
+  const gone = [];
+  for (const x of chain) for (const n of x.gone || []) if (!gone.includes(n)) gone.push(n);
+  return join("Picture 1 is the empty set.", who.map((n, i) => `Picture ${i + 2} is ${n}.`).join(" "),
+    who.length ? "Place them into Picture 1, keeping the place, the furniture and the camera exactly as in Picture 1." : "Keep the place, the furniture and the camera exactly as in Picture 1.",
     root.seat, moment.length ? `At this moment: ${moment.join(" ")}` : "",
-    who.length ? "Nobody else is in the room. Each person keeps their face, hair and clothes from the second image." : "",
-    "Keep the room, the furniture, the light and the camera exactly as in the first image.", lookOf(plan, genre));
+    gone.length ? `${and(gone)} ${gone.length > 1 ? "are" : "is"} not in the room.` : "",
+    "Nobody else is in the frame.", who.length ? "Each person keeps their face, hair, clothes and accessories exactly as in their picture." : "", lookOf(plan, genre));
 }
 export const seatPrompt = (plan, f, genre = null) => framePrompt(plan, [f], f, genre);
-// seating one person into the picture so far (the blocking names where everyone goes; this pass places only them)
-export function seatOnePrompt(f, name) {
-  return join(`Put ${name}, the person in the second image, into this picture, where the blocking puts them: ${f.seat || ""}`,
-    `Only add ${name}. Everyone and everything already in the picture stays exactly where and as it is; ${name} keeps the face, hair and clothes of the second image.`);
-}
-// a later moment, painted on its seated frame: every change since, in order; anyone arriving is the second image
-export function momentPrompt(plan, frames, f, genre = null) {
-  const {root, who, moment, chain} = frameChain(frames, f);
-  const came = who.filter(n => !(root.with || []).includes(n)), gone = (root.with || []).filter(n => !who.includes(n));
-  return join(came.length ? shows(came) : "", `At this moment: ${moment.join(" ")}`,
-    gone.length ? `${and(gone)} ${gone.length > 1 ? "are" : "is"} no longer in the picture.` : "",
-    came.length ? `${and(came)} keep${came.length > 1 ? "" : "s"} the face, hair and clothes of the second image.` : "",
-    "Keep everyone else, every face and pose, the room, the furniture, the light and the camera exactly as they are.");
-}
 export function cropPrompt(s) {                                         // a close-up cut from a frame
   const w = s.with || [];
   return join("Make this a sharp, detailed close-up film still. Keep the framing, every pose, every hand, where everyone looks, the light and the colours exactly as they are.",
@@ -277,29 +268,18 @@ export async function makeSetups(plan, io, {genre = null, only = null, onStage =
   return plan;
 }
 export async function makeFrames(plan, io, {genre = null, only = null, onStage = () => {}} = {}) {
-  const frames = plan.frames || [], want = new Set(frames.filter((f, i) => only ? only.includes(i) : !f.still));
-  if (!want.size) return plan;
+  const frames = plan.frames || [], want = frames.filter((f, i) => only ? only.includes(i) : !f.still);
+  if (!want.length) return plan;
   await free(io);
-  // seated frames first (a later moment is painted on its seated frame)
-  const order = [...frames.filter(f => !f.from), ...frames.filter(f => f.from)].filter(f => want.has(f));
-  for (const f of order) {
-    const {root, who} = frameChain(frames, f);
+  for (const f of want) {
+    // every frame is seated fresh into its setup's clean plate, everyone in it at this moment, the moment in its words
+    const {root, who, setup} = frameChain(frames, f);
     const seed = f.seed ?? root.seed ?? 8401 + 10 * frames.indexOf(root), prefix = `${pre(plan)}_frame_${slug(f.name)}`;
+    const su = byName(plan.setups, setup);
+    if (!su) throw new Error(`frame ${f.name} has no setup`);
+    if (!su.plate) throw new Error(`the ${su.name} has no plate yet`);
     onStage("frames", `frame ${f.name}`);
-    let r;
-    if (!f.from) {
-      const su = byName(plan.setups, f.setup);
-      if (!su) throw new Error(`frame ${f.name} has no setup`);
-      if (!su.plate) throw new Error(`the ${su.name} has no plate yet`);
-      r = who.length
-        ? await io.run(G.filmSeat({plate: io.ref(su.plate), people: who.map(n => ({image: io.ref(sheetOf(plan, n)), prompt: seatOnePrompt(f, n)})), seed, prefix}), `Film · frame ${f.name}`)
-        : await io.run(G.filmFrame({refs: [{image: io.ref(su.plate)}], prompt: framePrompt(plan, frames, f, genre), seeds: [seed], prefix}), `Film · frame ${f.name}`);
-    } else {
-      if (!root.still) throw new Error(`frame ${f.name} is painted on ${root.name}, which isn't made yet`);
-      const came = who.filter(n => !(root.with || []).includes(n));
-      r = await io.run(G.filmFrame({refs: [{image: io.ref(root.still)}, ...came.map(n => ({image: io.ref(sheetOf(plan, n))}))],
-        prompt: momentPrompt(plan, frames, f, genre), seeds: [seed], prefix}), `Film · frame ${f.name}`);
-    }
+    const r = await io.run(G.filmSeat({plate: io.ref(su.plate), people: who.map(n => ({image: io.ref(sheetOf(plan, n))})), prompt: framePrompt(plan, frames, f, genre), seed, prefix}), `Film · frame ${f.name}`);
     f.still = png(r);
     if (!f.still) throw new Error(`no still for frame ${f.name}`);
   }
