@@ -43,10 +43,13 @@ export function barSeconds(abc) {
   return {bpm, beats, seconds: beats * (1 / noteLen) / unit * 60 / bpm};
 }
 
-// how much of a clip plays: as many whole bars as fit in it (a clip shorter than a bar plays whole)
+// how much of a clip plays: as many whole bars as fit in it (a clip shorter than a bar plays whole). A bar that ends
+// up to HOLD past the clip still counts: the effects pass holds the clip's last frame that long (at 107 BPM two bars are
+// 4.486 s and one H3 clip 4.458 s, which would otherwise throw half of every shot away)
+export const HOLD = 3 / 24;
 export function shotSeconds(bar, len = SHOT_SECONDS) {
-  const bars = Math.max(1, Math.floor(len / bar + 1e-6));
-  return {bars, seconds: Math.min(len, bars * bar)};
+  const bars = Math.max(1, Math.floor((len + HOLD) / bar + 1e-6));
+  return {bars, seconds: bars * bar <= len + HOLD ? bars * bar : len};
 }
 // how long H3 shoots each shot (plan.shotSeconds; one clip of 4.46 s unless you say), and what of it plays on the bars
 export const shotLen = (plan) => plan?.shotSeconds || SHOT_SECONDS;
@@ -176,7 +179,8 @@ export async function effectShots(plan, io, {only = null, onStage = () => {}} = 
     const layers = lib ? [{effect: lib.id, on: s.on, params: lib.params || {}}] : [];
     const subject = lib && ((lib.needs || []).includes("subject") || lib.params?.at === "subject") ? s.subject : "";
     const r = (!only && !s._custom && !plan.shotSeconds && await saved(io, [`${b}_fx_${k + 1}_00001_.mp4`], plan)) || await io.run(
-      G.fx({clip: io.ref(s.clip), subject, source: "song", audio: io.ref(m.audio), abc: m.abc, layers, sound: true, seconds: len,
+      G.fx({clip: io.ref(s.clip), subject, source: "song", audio: io.ref(m.audio), abc: m.abc, layers, sound: true,
+            seconds: Math.max(len, cut.seconds), fit: cut.seconds > len,
             start: k * cut.seconds, prefix: `${pre(plan)}_fx_${k + 1}${only ? "_" + Date.now().toString(36) : ""}`}), `Film · effects ${k + 1}`);
     s.fx = r.outputs.find(isVideo) || null;
     if (!s.fx) throw new Error(`effects on shot ${k + 1} saved no video`);
