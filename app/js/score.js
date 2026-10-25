@@ -255,12 +255,19 @@ export class ScoreView {
     if (!todo.length) return toast((this.sc?.shots || []).some(s => this.assign[s.id]?.clip) ? "Every shot with a clip is rendered" : "Give at least one shot a clip (Shots, or Fill from the bin)", true);
     for (const s of todo) this.renderShot(s);
   }
-  cut() {
+  async cut() {
     const sc = this.sc; if (!sc) return;
     const shots = sc.shots.filter(s => this.results[s.id]);
     if (!shots.length) return toast("Render some shots first", true);
     if (shots.length < sc.shots.length) toast(`Cutting the ${shots.length} rendered shots of ${sc.shots.length}`);
-    this.run(G.filmCut({shots: shots.map(s => ({file: api.fileRef(this.results[s.id]), seconds: s.frames / 24})), prefix: `valis/score_cut_${Date.now().toString(36)}`}),
+    // the song goes on past the last shot: an end card plays over the rest of it (up to 4 s), so the cut doesn't stop mid-bar
+    const last = shots[shots.length - 1], end = (last.start_frame + last.frames) / 24, rest = sc.duration_seconds - end, text = $("#s-title").value.trim();
+    let title = null;
+    if (text && this.audioRef && rest > 1) {
+      const v = await new Promise((res) => { const e = document.createElement("video"); e.preload = "metadata"; e.onloadedmetadata = () => res(e); e.onerror = () => res(null); e.src = api.viewUrl(this.results[last.id]); });
+      if (v?.videoWidth) title = {text, song: this.audioRef, start: end, seconds: Math.min(4, rest), width: v.videoWidth, height: v.videoHeight};
+    }
+    this.run(G.filmCut({shots: shots.map(s => ({file: api.fileRef(this.results[s.id]), seconds: s.frames / 24})), title, prefix: `valis/score_cut_${Date.now().toString(36)}`}),
       "Score · cut", $("#s-viewer"), {onDone: (j) => {
         const v = j.outputs.find(f => /\.(mp4|webm|mov)$/i.test(f.filename));
         if (!v) return;

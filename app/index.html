@@ -209,6 +209,7 @@
       <p class="hint" id="s-info"></p>
       <div class="row" style="margin-top:6px"><button class="btn small" id="s-save" type="button" data-tip="Download this score as a .json: open it again here, or load it in any ComfyUI with Valis Score (load)">Save .json</button><button class="btn small" id="s-tofilm" type="button" data-tip="A film on this song: the Film tab gets a plan with one shot per score shot, and the song itself">Make a film on it</button></div>
       <div id="s-sections"></div>
+      <input type="text" id="s-title" style="margin-top:8px" placeholder="End card title (optional)" data-tip="The cut ends on a title card over the rest of the song (the Film tab's card), instead of stopping mid-bar">
       <div class="cta">
         <button class="btn" id="s-cut">Cut it<span class="sub" id="s-cut-sub">the rendered shots, on the bars</span></button>
         <button class="btn ember" id="s-render" style="flex:1" tip="Each shot is rendered at its length in bars: a longer clip is cut at the bar line, a shorter one holds its last frame until it, so the cut stays on the beat">Render all<span class="sub" id="s-render-sub">shots that have a clip</span></button>
