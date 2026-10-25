@@ -217,6 +217,11 @@ import * as F from "../app/js/film.js";
   ok(runs.map(r => r.label).join("|") === "Film · frame F1|Film · frame F2", "Film · seated frames before the moments made from them");
   runs.length = 0; await F.frameShots({...plan, shots: plan.shots.slice(0, 2)}, io);
   ok(plan.shots[0].key?.filename.includes("frame_f1") && runs.length === 1 && runs[0].g.cr && runs[0].g.up && runs[0].g.l.inputs.image.includes("frame_f2"), "Film · a whole-frame shot takes its frame as is; a close-up is cut from its frame and enlarged", JSON.stringify(plan.shots[0].key));
+  ok(plan.shots[0].keyFrom === plan.frames.find(f => f.name === "F1").still.filename && !F.keyStale(plan, plan.shots[0]), "Film · a shot remembers the frame still it was cut from");
+  plan.frames.find(f => f.name === "F1").still = {filename: "rerolled.png"};
+  ok(F.keyStale(plan, plan.shots[0]), "Film · a re-rolled frame makes the shots cut from it stale");
+  runs.length = 0; await F.frameShots({...plan, shots: plan.shots.slice(0, 2)}, io);
+  ok(plan.shots[0].key.filename === "rerolled.png" && runs.length === 0, "Film · Keyframes again takes the new frame (a whole-frame shot needs no GPU)");
   let err = ""; try { await F.makeFrames({...plan, frames: [{name: "X", from: "nope"}]}, io); } catch (e) { err = e.message; }
   ok(/isn't a frame/.test(err), "Film · a change of a frame that doesn't exist says so", err);
   ok(F.momentPrompt([{name: "A", setup: "s", with: ["x", "y"], seat: "."}, {name: "B", from: "A", gone: ["y"], edit: "Rain."}], {name: "B", from: "A", gone: ["y"], edit: "Rain."}).includes("Remove y from the picture completely"), "Film · someone gone is taken out, by name");

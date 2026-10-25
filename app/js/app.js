@@ -10,7 +10,7 @@ import {ScoreView} from "./score.js";
 import {FxView} from "./fx.js";
 import {checkSetup} from "./check.js";
 import {planFilm, makeFilm, makeSong, frameShots, shootShots, effectShots, cutFilm, SHOT_SECONDS, shotLen, songSeconds, songShort, cutOf, lookOf,
-        makeRefs, makeSetups, makeFrames, byName} from "./film.js";
+        makeRefs, makeSetups, makeFrames, byName, keyStale} from "./film.js";
 import {drawBuild, cropEditor} from "./filmbuild.js";
 import * as R from "./refengine.js";
 import {Bin} from "./bin.js";
@@ -1124,9 +1124,9 @@ async function fsteps() {
   const of = (list, key) => (list || []).length ? `${(list || []).filter(x => x[key]).length} of ${list.length}` : "none";
   const shot = (s) => s.clip && !(s.clipSeconds && Math.abs(s.clipSeconds - len) > .01), short = songShort(p);
   const bars = p.music?.audio ? cutOf(p).bars : 0;
-  const state = {refs: part(p.cast, "sheet"), sets: part(p.setups, "plate"), frames: part(p.frames, "still"), song: p.music?.audio && !short ? 1 : 0, keys: cnt(s => s.key) / n, shots: cnt(shot) / n, fx: cnt(s => s.fx && shot(s)) / n, cut: p.film ? 1 : 0};
+  const state = {refs: part(p.cast, "sheet"), sets: part(p.setups, "plate"), frames: part(p.frames, "still"), song: p.music?.audio && !short ? 1 : 0, keys: cnt(s => s.key && !keyStale(p, s)) / n, shots: cnt(shot) / n, fx: cnt(s => s.fx && shot(s)) / n, cut: p.film ? 1 : 0};
   const label = {refs: of(p.cast, "sheet"), sets: of(p.setups, "plate"), frames: of(p.frames, "still"), song: short ? "shorter than the film now" : p.music?.audio ? `${p.music.bar.bpm} BPM · ${bars} bar${bars > 1 ? "s" : ""} a shot` : p.song.file ? "your song" : "YuE2",
-    keys: `${cnt(s => s.key)} of ${n}`, shots: `${cnt(shot)} of ${n}`, fx: `${cnt(s => s.fx && shot(s))} of ${n}`, cut: p.film ? "done" : ""};
+    keys: `${cnt(s => s.key && !keyStale(p, s))} of ${n}`, shots: `${cnt(shot)} of ${n}`, fx: `${cnt(s => s.fx && shot(s))} of ${n}`, cut: p.film ? "done" : ""};
   const {w, hh = sizeOfPlan(p).h} = sizeOfPlan(p);
   const qwen = await EST.estimate(G.filmFrame({refs: [{image: "x"}], prompt: "x"})), krea = await EST.estimate(G.keyframes({prompt: "x", seeds: [1]}));
   const est = {
@@ -1136,7 +1136,7 @@ async function fsteps() {
     shots: await EST.estimate(G.shot({image: "x", motion: "x", width: w, height: hh, seconds: len})),
     fx: await EST.estimate(G.fx({clip: "x", layers: [{effect: "Punch", on: "kick"}], seconds: len})), cut: {seconds: 20, measured: false},
   };
-  const left = {refs: (p.cast || []).filter(x => !x.sheet).length, sets: (p.setups || []).filter(x => !x.plate).length, frames: (p.frames || []).filter(x => !x.still).length, song: 1 - state.song, keys: n - cnt(s => s.key), shots: n - cnt(shot), fx: n - cnt(s => s.fx && shot(s)), cut: 1 - state.cut};
+  const left = {refs: (p.cast || []).filter(x => !x.sheet).length, sets: (p.setups || []).filter(x => !x.plate).length, frames: (p.frames || []).filter(x => !x.still).length, song: 1 - state.song, keys: n - cnt(s => s.key && !keyStale(p, s)), shots: n - cnt(shot), fx: n - cnt(s => s.fx && shot(s)), cut: 1 - state.cut};
   const t = (id) => { const e = est[id]; if (!left[id]) return ""; const k = id === "song" || id === "cut" || id === "keys" ? 1 : left[id]; return EST.fmt({...e, seconds: e.seconds * k}); };
   const steps = STEPS.filter(st => !["refs", "sets", "frames"].includes(st.id) || p.cast?.length || p.setups?.length || p.frames?.length);
   el.replaceChildren(...steps.map(st => h("div", {class: "step" + (state[st.id] >= 1 ? " done" : state[st.id] > 0 ? " part" : ""), tip: st.tip},

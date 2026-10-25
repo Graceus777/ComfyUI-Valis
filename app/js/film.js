@@ -314,8 +314,14 @@ export function shotFrame(plan, s) {
 }
 
 // keyframes for the shots that have none (only: shot indexes to make again, with a new seed if asked)
+// a shot built from a frame whose still has changed since (a re-rolled moment) needs its still again
+export function keyStale(plan, s) {
+  if (!s.frame || !s.key) return false;
+  const f = byName(plan.frames, s.frame);
+  return !!(f?.still && s.keyFrom && s.keyFrom !== f.still.filename);
+}
 export async function frameShots(plan, io, {genre = null, only = null, onStage = () => {}} = {}) {
-  let want = plan.shots.map((s, k) => k).filter(k => only ? only.includes(k) : !plan.shots[k].key);
+  let want = plan.shots.map((s, k) => k).filter(k => only ? only.includes(k) : !plan.shots[k].key || keyStale(plan, plan.shots[k]));
   if (!want.length) return plan;
   // shots built from a frame: the frame itself, or a box cut from it and made sharp with the sheets of who is in it
   const built = want.filter(k => plan.shots[k].frame);
@@ -323,11 +329,11 @@ export async function frameShots(plan, io, {genre = null, only = null, onStage =
   for (const k of built) {
     const s = plan.shots[k], f = shotFrame(plan, s);
     if (!f.still) throw new Error(`shot ${k + 1}'s frame ${f.name} isn't made yet`);
-    if (!s.crop) { if (s.key?.filename !== f.still.filename) { s.clip = null; s.fx = null; } s.key = f.still; continue; }
+    if (!s.crop) { if (s.key?.filename !== f.still.filename) { s.clip = null; s.fx = null; } s.key = f.still; s.keyFrom = f.still.filename; continue; }
     const seed = keySeed(s, k);
     onStage("keyframes", `shot ${k + 1}: a close-up cut from frame ${f.name}`);
     const r = await io.run(G.filmCrop({frame: io.ref(f.still), crop: s.crop, from: KEY, size: KEY, seed, prefix: `${pre(plan)}_key_${k + 1}_${slug(f.name)}`}), `Film · keyframe ${k + 1}`);
-    s.key = png(r); s.clip = null; s.fx = null;
+    s.key = png(r); s.keyFrom = f.still.filename; s.clip = null; s.fx = null;
     if (!s.key) throw new Error(`no keyframe for shot ${k + 1}`);
   }
   want = want.filter(k => !plan.shots[k].frame);
