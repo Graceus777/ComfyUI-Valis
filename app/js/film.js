@@ -391,7 +391,9 @@ export async function effectShots(plan, io, {only = null, onStage = () => {}} = 
     const layers = lib ? [{effect: lib.id, on: s.on, params: lib.params || {}}] : [];
     const subject = lib && ((lib.needs || []).includes("subject") || lib.params?.at === "subject") ? s.subject : "";
     const r = (!only && !s._custom && !plan.shotSeconds && await saved(io, [`${b}_fx_${k + 1}_00001_.mp4`], plan)) || await io.run(
+      // the shot keeps its keyframe's colours (a shot whose light is meant to change says holdColour: false)
       G.fx({clip: io.ref(s.clip), subject, source: "song", audio: io.ref(m.audio), abc: m.abc, layers, sound: true,
+            hold: s.key && s.holdColour !== false ? io.ref(s.key) : null,
             seconds: Math.max(len, cut.seconds), fit: cut.seconds > len,
             start: k * cut.seconds, prefix: `${pre(plan)}_fx_${k + 1}${only ? "_" + Date.now().toString(36) : ""}`}), `Film · effects ${k + 1}`);
     s.fx = r.outputs.find(isVideo) || null;

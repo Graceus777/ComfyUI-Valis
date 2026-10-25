@@ -763,8 +763,10 @@ export function songScore({style, lyrics = "[Instrumental]", seconds = 30, seed 
 
 // The FX tab: a clip (+ another clip, a subject), cues from a song / a written song / a cue sheet / a score, a stack of
 // library layers, and every layer's own sound mixed with the music.
+// hold: a picture (a film shot's keyframe) every frame's colours are matched to first (core Transfer Color, MKL in Lab,
+// frame by frame): H3 drifts the light over a shot, and SÉANCE's red lamp went warm white by the last second
 export function fx({clip, other = null, subject = "", source = "sheet", audio = null, abc = "", songSpec = null, cueSheet = "", score = null,
-                    layers = [], beds = [], sound = true, seconds = 4.46, start = 0, prefix = "valis/fx", loop = false, fit = false}) {
+                    layers = [], beds = [], sound = true, seconds = 4.46, start = 0, prefix = "valis/fx", loop = false, fit = false, hold = null, holdStrength = 1.0}) {
   const g = {
     "16": N("LoadVideo", {file: clip}),
     "17": N("GetVideoComponents", {video: ["16", 0]}),
@@ -779,6 +781,11 @@ export function fx({clip, other = null, subject = "", source = "sheet", audio = 
     g["18c"] = N("ImageBatch", {image1: ["17", 0], image2: ["18b", 0]});
     g["18"] = N("ImageFromBatch", {image: ["18c", 0], batch_index: 0, length: want});
     frames = ["18", 0];
+  }
+  if (hold) {
+    g["hk"] = N("LoadImage", {image: hold});
+    g["hc"] = N("ColorTransfer", {image_target: frames, image_ref: ["hk", 0], method: "mkl_lab", source_stats: "per_frame", strength: holdStrength});
+    frames = ["hc", 0];
   }
   // start: where this clip begins in the song. The cues are shifted so the clip's own clock starts at 0, and the sound
   // design gets the song from there, so a film's shots can each take their place in one song.

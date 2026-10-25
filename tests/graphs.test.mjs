@@ -190,6 +190,12 @@ import * as F from "../app/js/film.js";
   threw = false; try { F.inOrder([{name: "x", from: "y"}, {name: "y", from: "x"}], F.needs.ref); } catch { threw = true; }
   ok(threw, "Film · a reference made from itself is an error");
 }
+{ // a film shot keeps its keyframe's colours through the effects pass
+  const g = G.fx({clip: "c.mp4", layers: [{effect: "Frost", on: "kick"}], hold: "key.png"});
+  valid("Film · effects with the keyframe's colours held", g);
+  ok(JSON.stringify(g.hc.inputs.image_target) === '["17",0]' && g.hc.inputs.method === "mkl_lab" && JSON.stringify(g["80"].inputs.images) === '["hc",0]', "Film · every frame is matched to the keyframe before the effects");
+  ok(!G.fx({clip: "c.mp4", layers: []}).hc, "FX · nothing is held unless asked");
+}
 // the steps, with a pretend io: what each makes, from what, in what order
 {
   const runs = [];
