@@ -4,6 +4,7 @@
 //   node tests/ui/mock_server.mjs [port] [--object-info path] [--media dir]
 // --media: a folder laid out like ComfyUI/output (files served by /view?filename&subfolder&type=output)
 import http from "node:http";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
@@ -27,7 +28,7 @@ function file(res, p, head = false) {
   if (head) return res.end();
   fs.createReadStream(p).pipe(res);
 }
-http.createServer((req, res) => {
+const server = http.createServer((req, res) => {
   const u = new URL(req.url, `http://localhost:${PORT}`), p = decodeURIComponent(u.pathname);
   if (p === "/valis") return file(res, path.join(repo, "app", "index.html"));
   if (p.startsWith("/valis/app/")) { const f = path.resolve(repo, "app", p.slice("/valis/app/".length)); return f.startsWith(path.join(repo, "app")) ? file(res, f) : send(res, 403, "no"); }
@@ -53,4 +54,12 @@ http.createServer((req, res) => {
   }
   if (p === "/free" || p === "/interrupt") return send(res, 200, {});
   send(res, 404, "not found", "text/plain");
-}).listen(PORT, () => console.log(`mock ComfyUI on http://localhost:${PORT}/valis (user files in ${USER})`));
+});
+// ComfyUI's /ws, enough for the studio's connection light: the handshake, then a quiet open socket
+server.on("upgrade", (req, sock) => {
+  if (!req.url.startsWith("/ws")) return sock.destroy();
+  const accept = crypto.createHash("sha1").update(req.headers["sec-websocket-key"] + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").digest("base64");
+  sock.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
+  sock.on("error", () => {});
+});
+server.listen(PORT, () => console.log(`mock ComfyUI on http://localhost:${PORT}/valis (user files in ${USER})`));
