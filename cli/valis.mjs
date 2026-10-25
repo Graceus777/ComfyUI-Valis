@@ -22,7 +22,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const HELP = `valis <command> [options]
 
 commands
-  film       --idea "..." [--genre gothic --shots 6 --plan-only | --plan plan.json]                        one line -> a scored, cut short film
+  film       --idea "..." [--genre gothic --shots 6 --plan-only | --plan plan.json]                        one line (or a plan built from references: sheets, sets, frames) -> a scored, cut short film
   frame      --prompt "..." [--genre gothic --framing close --lens 85 --light candle --grade teal]   two Krea 2 keyframes
   cast       --keyframe k.png --character c.png [--prompt "..."]                                      put a character into a keyframe
   shoot      --image k.png --motion "..." [--move push --seconds 4.5]                                   H3 image-to-video
