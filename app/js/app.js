@@ -1151,7 +1151,7 @@ async function fstep(id, only = null) {
   if (!M.plan || M.busy) return;
   M.busy = true; fsteps(); fdraw();
   // a step that makes many pictures shows each one as it lands
-  const p = M.plan, onStage = (stage, msg) => { $("#m-status").textContent = msg; if (["refs", "sets", "frames", "keyframes"].includes(stage)) { fsave(); fdraw(); } };
+  const p = M.plan, onStage = (stage, msg) => { $("#m-status").textContent = msg; if (["refs", "sets", "frames", "keyframes", "shots", "effects"].includes(stage)) { fsave(); fdraw(); } };   // (a reload mid-step keeps what's made)
   p.size = p.size || sizeOfPlan(p);
   try {
     if (id === "refs") await makeRefs(p, filmIO, {only, onStage});
