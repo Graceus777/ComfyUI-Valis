@@ -180,8 +180,10 @@ import * as F from "../app/js/film.js";
   ok(F.refPrompt({with: ["the widower", "Eleanor"], look: "Their wedding photograph."}) === "The first image is the widower. The second image shows Eleanor. Their wedding photograph.", "Film · a prop of two sheets: scene and subject");
   ok(F.turnPrompt(plan, {turn: "from the other side"}).startsWith("Show this same empty room from the other side.") && F.turnPrompt(plan, {turn: "x"}).includes("No people"), "Film · a new setup turns the empty plate");
   ok(F.platePrompt(plan, {view: "High wide shot."}) === "Still from a 1920s horror film. High wide shot. A dark parlour. No people.", "Film · the first plate: the look, the view, the place, no people");
-  const cp = F.cropPrompt({with: ["Eleanor"]});
-  ok(cp.includes("every pose") && cp.includes("The second image shows Eleanor."), "Film · a close-up keeps the frame's poses; the sheet only lends the face and clothes", cp);
+  const gk = G.filmCrop({frame: "frame.png", crop: {x: .1, y: .3, w: .5, h: .5}});
+  valid("Film · a close-up: the box enlarged by SeedVR2", gk);
+  ok(gk.cr.inputs.width === 384 && gk.cr.inputs.height === 672 && gk.up.inputs.resolution === 768 && gk.fit.inputs.width === 768 && gk.fit.inputs.height === 1344,
+    "Film · the box is cut in the frame's pixels and enlarged back to the film's size");
   const cast = [{name: "photo", with: ["a", "b"]}, {name: "b2", from: "b"}, {name: "a"}, {name: "b"}];
   const order = F.inOrder(cast, F.needs.ref).map(c => c.name);
   ok(order.indexOf("a") < order.indexOf("photo") && order.indexOf("b") < order.indexOf("photo") && order.indexOf("b") < order.indexOf("b2"), "Film · sheets are made before what's made from them", order.join(","));
@@ -214,7 +216,7 @@ import * as F from "../app/js/film.js";
   ok(f2.enc.inputs.prompt.startsWith("Picture 1 is a still from this film. Picture 2 is Eleanor, drowned. At this moment: She sits.") && f2.ks.inputs.seed !== f1.ks.inputs.seed, "Film · a moment's words: who arrives, what changed; a seed of its own (its seated frame's noise speckled it)", f2.enc.inputs.prompt);
   ok(runs.map(r => r.label).join("|") === "Film · frame F1|Film · frame F2", "Film · seated frames before the moments made from them");
   runs.length = 0; await F.frameShots({...plan, shots: plan.shots.slice(0, 2)}, io);
-  ok(plan.shots[0].key?.filename.includes("frame_f1") && runs.length === 1 && runs[0].g.cr, "Film · a whole-frame shot takes its frame as is; a close-up is cut and made sharp", JSON.stringify(plan.shots[0].key));
+  ok(plan.shots[0].key?.filename.includes("frame_f1") && runs.length === 1 && runs[0].g.cr && runs[0].g.up && runs[0].g.l.inputs.image.includes("frame_f2"), "Film · a whole-frame shot takes its frame as is; a close-up is cut from its frame and enlarged", JSON.stringify(plan.shots[0].key));
   let err = ""; try { await F.makeFrames({...plan, frames: [{name: "X", from: "nope"}]}, io); } catch (e) { err = e.message; }
   ok(/isn't a frame/.test(err), "Film · a change of a frame that doesn't exist says so", err);
   ok(F.momentPrompt([{name: "A", setup: "s", with: ["x", "y"], seat: "."}, {name: "B", from: "A", gone: ["y"], edit: "Rain."}], {name: "B", from: "A", gone: ["y"], edit: "Rain."}).includes("Remove y from the picture completely"), "Film · someone gone is taken out, by name");

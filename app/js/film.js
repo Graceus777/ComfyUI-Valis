@@ -114,9 +114,8 @@ export function stillPrompt(plan, s, genre = null) {
 //                moment is one edit of that seated frame with every change so far in its words, never an edit of the
 //                moment before (each pass repaints the whole picture: chained, they went soft and dark; seated fresh
 //                again, the moment's words moved people to other chairs)
-//   shot.frame   the shot's still is that frame, or a box cut from it (shot.crop, fractions of the frame) re-rendered sharp
-//                with the sheets of who is in it (shot.with): a close-up with the same chair, the same neighbours, the
-//                same light
+//   shot.frame   the shot's still is that frame, or a box cut from it (shot.crop, fractions of the frame) enlarged by
+//                SeedVR2: a close-up with the same chair, the same neighbours, the same light, the same pose
 // A shot with no frame keeps its own still painted from its words (stillPrompt), as before.
 const SHEET = "Costume test photograph, shot on 35mm. Waist-up portrait, facing the camera, standing in front of a plain dark grey backdrop, soft even light from the front. Real skin texture, sharp focus, film grain.";
 const PROP = "Close-up photograph on a plain dark grey backdrop, soft even light from the front. Sharp focus, film grain.";
@@ -185,12 +184,6 @@ export function momentPrompt(frames, f) {
     came.length ? `${and(came)} keep${came.length > 1 ? "" : "s"} the face, hair and clothes of ${came.length > 1 ? "their pictures" : "Picture 2"}.` : "",
     `Everyone else stays exactly where and as they are${stay.length ? `: ${and(stay)}` : ""}${root.seat && /back to us/i.test(root.seat) ? ", and whoever sits with their back to us" : ""}. Keep every face, pose and piece of clothing, the furniture, the light and the framing exactly the same.`);
 }
-export function cropPrompt(s) {                                         // a close-up cut from a frame
-  const w = s.with || [];
-  return join("Make this a sharp, detailed close-up film still. Keep the framing, every pose, every hand, where everyone looks, the light and the colours exactly as they are.",
-    w.length ? `${shows(w)} Keep ${w.length > 1 ? "their" : "the"} face${w.length > 1 ? "s" : ""}, hair and clothes from it; it only shows what ${w.length > 1 ? "they look" : "the person looks"} like.` : "", s.fix);
-}
-// (a close-up of the aunt came back once as her sheet, standing and facing us: the sheets only lend faces and clothes)
 // what a reference, a setup or a frame is made from (the names of the others it needs first)
 export const needs = {
   ref: (c) => c.from ? [c.from] : (c.with || []),
@@ -333,8 +326,7 @@ export async function frameShots(plan, io, {genre = null, only = null, onStage =
     if (!s.crop) { if (s.key?.filename !== f.still.filename) { s.clip = null; s.fx = null; } s.key = f.still; continue; }
     const seed = keySeed(s, k);
     onStage("keyframes", `shot ${k + 1}: a close-up cut from frame ${f.name}`);
-    const r = await io.run(G.filmFrame({refs: [{image: io.ref(f.still)}, ...(s.with || []).map(n => ({image: io.ref(sheetOf(plan, n))}))],
-      prompt: cropPrompt(s), crop: s.crop, from: KEY, size: KEY, seeds: [seed], prefix: `${pre(plan)}_key_${k + 1}_${slug(f.name)}`}), `Film · keyframe ${k + 1}`);
+    const r = await io.run(G.filmCrop({frame: io.ref(f.still), crop: s.crop, from: KEY, size: KEY, seed, prefix: `${pre(plan)}_key_${k + 1}_${slug(f.name)}`}), `Film · keyframe ${k + 1}`);
     s.key = png(r); s.clip = null; s.fx = null;
     if (!s.key) throw new Error(`no keyframe for shot ${k + 1}`);
   }

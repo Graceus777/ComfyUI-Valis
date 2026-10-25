@@ -11,7 +11,7 @@ import {FxView} from "./fx.js";
 import {checkSetup} from "./check.js";
 import {planFilm, makeFilm, makeSong, frameShots, shootShots, effectShots, cutFilm, SHOT_SECONDS, shotLen, songSeconds, songShort, cutOf, lookOf,
         makeRefs, makeSetups, makeFrames, byName} from "./film.js";
-import {drawBuild, cropEditor, whoChips} from "./filmbuild.js";
+import {drawBuild, cropEditor} from "./filmbuild.js";
 import * as R from "./refengine.js";
 import {Bin} from "./bin.js";
 import * as MC from "./machine.js";
@@ -1111,7 +1111,7 @@ const STEPS = [
   {id: "sets", name: "Sets", tip: "The set, empty, from every camera setup: Krea 2 paints the first, Qwen Image 2.1 turns the empty plate for the others."},
   {id: "frames", name: "Frames", tip: "Who is where in a setup at one moment: their sheets seated into its plate, then each change an edit of the frame before (Qwen Image 2.1)."},
   {id: "song", name: "Song", tip: "YuE2 writes and plays the song (or Valis reads yours). Its bar sets every shot's length."},
-  {id: "keys", name: "Keyframes", tip: "Every shot's still: its frame, or a close-up cut from it and made sharp with the sheets of who is in it. A shot with no frame: Krea 2 paints it from its words. Look at them before anything is shot."},
+  {id: "keys", name: "Keyframes", tip: "Every shot's still: its frame, or a close-up box cut from it and enlarged by SeedVR2. A shot with no frame: Krea 2 paints it from its words. Look at them before anything is shot."},
   {id: "shots", name: "Shots", tip: "MiniMax H3 shoots each keyframe."},
   {id: "fx", name: "Effects", tip: "SAM 3 finds each shot's subject; its effect fires on the song's lane, with its sound, in the song's key."},
   {id: "cut", name: "Cut", tip: "Every shot trimmed to its bars and joined on the song, with a title card at the end."},
@@ -1236,9 +1236,8 @@ function shotStill(p, sh) {
       const had = !!sh.crop;
       if (c) sh.crop = c; else delete sh.crop;
       sh.key = c ? null : f.still; sh.clip = null; sh.fx = null; fsave();
-      if (had !== !!c) fdraw(); else fsteps(); })                // a close-up shows who's in it; the whole frame doesn't
+      fsteps(); })
       : h("p", {class: "hint"}, `frame ${sh.frame} isn't made yet`),
-    sh.crop ? whoChips((p.cast || []).map(c => c.name), sh.with || [], (w) => { sh.with = w; sh.key = null; fsave(); fdraw(); }, "Who is in the close-up: their sheets make it sharp") : null,
   ].filter(Boolean);
 }
 function toShot(k, it) {

@@ -1060,8 +1060,6 @@ export function filmKeyframes({prompts, seed = 7101, width = 768, height = 1344,
 // LoRA the studio's Transform and Stage already use) with two inputs, as it was trained: the scene, and the subject.
 // (Seating people into a set is filmSeat, below.)
 //   turn   an empty plate is the scene: the same empty place from another side (a new camera setup)
-//   crop   a box cut from a frame is the scene (scaled back to the film's size), the sheets of who is in it the subject:
-//          a sharp close-up with the same chair, the same neighbours and the same light as its frame
 //   sheet  a sheet is the scene: a state of that character (soaked, drowned); or two sheets, scene and subject, make a
 //          prop of both (their wedding photograph)
 // Two people are placed in one pass, never one at a time (the LoRA's own advice); more than one subject goes in as one
@@ -1100,6 +1098,23 @@ export function filmFrame({refs, prompt, seeds = [8401], crop = null, from = {w:
     g[`w${j}`] = N("SaveImage", {images: [`d${j}`, 0], filename_prefix: `${prefix}_${seed}`});
   });
   return g;
+}
+
+// A close-up cut from a frame: the box, enlarged by SeedVR2 (the studio's upscaler) to the film's size. It restores, it
+// doesn't repaint: Krea 2 and Qwen, asked to re-render the box sharp, invented a face at its edge and took the medium out
+// of her trance; SeedVR2 kept both as the frame has them. crop: {x, y, w, h} as fractions of the frame (`from` pixels).
+export function filmCrop({frame, crop, from = {w: 768, h: 1344}, size = {w: 768, h: 1344}, seed = 42, prefix = "valis/film_crop"}) {
+  const px = (v, n) => Math.max(0, Math.min(n, Math.round(v * n)));
+  return {
+    "l": N("LoadImage", {image: frame}),
+    "cr": N("ImageCrop", {image: ["l", 0], width: Math.max(16, px(crop.w, from.w)), height: Math.max(16, px(crop.h, from.h)), x: px(crop.x, from.w), y: px(crop.y, from.h)}),
+    "dit": N("SeedVR2LoadDiTModel", {model: "seedvr2_ema_3b-Q8_0.gguf", device: "cuda:0", offload_device: "cpu", blocks_to_swap: 16}),
+    "vae": N("SeedVR2LoadVAEModel", {model: "ema_vae_fp16.safetensors", device: "cuda:0", offload_device: "cpu", encode_tiled: true, decode_tiled: true}),
+    "up": N("SeedVR2VideoUpscaler", {image: ["cr", 0], dit: ["dit", 0], vae: ["vae", 0], seed, resolution: Math.min(size.w, size.h), max_resolution: 0, batch_size: 1,
+      uniform_batch_size: false, color_correction: "lab", offload_device: "cpu"}),
+    "fit": N("ImageScale", {image: ["up", 0], upscale_method: "lanczos", width: size.w, height: size.h, crop: "center"}),
+    "save": N("SaveImage", {images: ["fit", 0], filename_prefix: `${prefix}_${seed}`}),
+  };
 }
 
 // Seating people into a setup's empty plate: Qwen Image 2.1 with every reference in one sequence, the plate first (it
