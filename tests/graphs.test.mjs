@@ -209,14 +209,15 @@ import * as F from "../app/js/film.js";
   valid("Film · a frame seated into its plate (Qwen Image 2.1, one pass)", f1);
   ok(f1.plate.inputs.image.includes("set_reverse") && f1.p0.inputs.image.includes("ref_the_widower") && JSON.stringify(f1.enc.inputs["images.image_2"]) === '["p0s",0]',
     "Film · a seated frame: the setup's plate is Picture 1, each sheet the next");
-  ok(f2.plate.inputs.image.includes("set_reverse") && f2.p0.inputs.image.includes("ref_the_widower") && f2.p1.inputs.image.includes("ref_eleanor_drowned"),
-    "Film · a later moment is seated fresh into the same clean plate with everyone so far, not painted on the frame before");
-  ok(f2.enc.inputs.prompt.includes("He sits right. At this moment: She sits.") && f2.ks.inputs.seed === f1.ks.inputs.seed, "Film · a moment's words: the blocking, then what changed; its first frame's seed");
+  ok(f2.plate.inputs.image.includes("frame_f1") && f2.p0.inputs.image.includes("ref_eleanor_drowned") && !f2.p1,
+    "Film · a later moment is one edit of its seated frame, with the sheet of whoever arrives");
+  ok(f2.enc.inputs.prompt.startsWith("Picture 1 is a still from this film. Picture 2 is Eleanor, drowned. At this moment: She sits.") && f2.ks.inputs.seed === f1.ks.inputs.seed, "Film · a moment's words: who arrives, what changed; its seated frame's seed", f2.enc.inputs.prompt);
+  ok(runs.map(r => r.label).join("|") === "Film · frame F1|Film · frame F2", "Film · seated frames before the moments made from them");
   runs.length = 0; await F.frameShots({...plan, shots: plan.shots.slice(0, 2)}, io);
   ok(plan.shots[0].key?.filename.includes("frame_f1") && runs.length === 1 && runs[0].g.cr, "Film · a whole-frame shot takes its frame as is; a close-up is cut and made sharp", JSON.stringify(plan.shots[0].key));
   let err = ""; try { await F.makeFrames({...plan, frames: [{name: "X", from: "nope"}]}, io); } catch (e) { err = e.message; }
   ok(/isn't a frame/.test(err), "Film · a change of a frame that doesn't exist says so", err);
-  ok(F.framePrompt({}, [{name: "A", setup: "s", with: ["x", "y"], seat: "."}, {name: "B", from: "A", gone: ["y"], edit: "Rain."}], {name: "B", from: "A", gone: ["y"], edit: "Rain."}).includes("y is not in the room."), "Film · someone gone is said to be gone");
+  ok(F.momentPrompt([{name: "A", setup: "s", with: ["x", "y"], seat: "."}, {name: "B", from: "A", gone: ["y"], edit: "Rain."}], {name: "B", from: "A", gone: ["y"], edit: "Rain."}).includes("y is no longer there."), "Film · someone gone is said to be gone");
 }
 
 const plan = parsePlan('noise {"title":"T","cast":[{"name":"the keeper","look":"an old man"}],"place":"a rock","song":{"style":"strings"},"shots":[{"who":["the keeper"],"keyframe":"k","motion":"m","subject":"the keeper","effect":"Rays","on":"beat"},{"keyframe":"k2","effect":"Nope","on":"x"}]} tail', 6);

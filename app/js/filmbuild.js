@@ -152,7 +152,7 @@ export function cropEditor(f, crop, onChange) {
     const p0 = at(e), inside = p0.x >= c.x && p0.x <= c.x + c.w && p0.y >= c.y && p0.y <= c.y + c.h;
     const off = inside ? {x: p0.x - c.x, y: p0.y - c.y} : {x: c.w / 2, y: c.h / 2};
     const move = (ev) => { const q = at(ev); c.x = q.x - off.x; c.y = q.y - off.y; clamp(); place(); };
-    move(e); box.setPointerCapture(e.pointerId);
+    move(e); try { box.setPointerCapture(e.pointerId); } catch { /* a pointer the browser no longer tracks */ }
     box.onpointermove = move;
     box.onpointerup = () => { box.onpointermove = null; box.onpointerup = null; done(); };
   });
