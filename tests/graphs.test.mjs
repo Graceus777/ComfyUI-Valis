@@ -43,9 +43,19 @@ function valid(name, g) {
 
 // ---- every feature the setup check knows, and the newer ones
 for (const [name, g] of Object.entries(features())) valid(name, g);
+// Remove: the clean frame (in the source's own framing) is the guide at frame 0; the green video is a reference
+{
+  const g = G.edit({mode: "remove", video: "x.mp4", target: "the man", anchorPrompt: "x"});
+  ok(JSON.stringify(g["7"].inputs.image) === '["cc",0]' && g["7"].inputs.frame_idx === 0, "Remove: the clean frame is the guide at frame 0");
+  ok(JSON.stringify(g["6"].inputs["ref_videos.ref_video_0"]) === '["gg",0]' && !("vae" in g["6"].inputs), "Remove: the green video reaches the text encoder only");
+  ok(g.gr.inputs.color === 65280, "Remove: the person is painted #00ff00");
+  ok(JSON.stringify(g["6"].inputs["ref_images.ref_image_0"]) === '["cc",0]' && g.cc.inputs.destination[0] === "f0", "Remove: the clean frame keeps the source's framing");
+  ok(g.lo.inputs.lora_name === G.REMOVER_LORA && g.lo.inputs.strength_model === 1, "Remove: the Person Remover LoRA at 1.0");
+}
 // a reference picture or video without the VAE only reaches H3's text encoder: every ref2va that has references gets the VAEs
+// (except Remove, wired as the Person Remover LoRA's own workflow: its green video goes in as a guide clip instead)
 for (const [name, g] of Object.entries(features())) for (const [id, n] of Object.entries(g)) {
-  if (n.class_type !== "MiniMaxH3ReferenceToVideo") continue;
+  if (n.class_type !== "MiniMaxH3ReferenceToVideo" || n.inputs.prompt === G.REMOVER_PROMPT) continue;
   const refs = Object.keys(n.inputs).filter(k => /^ref_(images|videos)\./.test(k));
   if (refs.length) ok(Array.isArray(n.inputs.vae), `${name} node ${id}: references go in with the VAE`);
 }
@@ -135,7 +145,7 @@ const plan = parsePlan('noise {"title":"T","cast":[{"name":"the keeper","look":"
 ok(plan.shots.length === 2 && plan.shots[1].effect === "none" && plan.shots[1].on === "beat", "film · the plan parser fills bad effects and lanes");
 ok(/BPM/.test(plan.song.style), "film · the song brief gets a tempo");
 const bar = barSeconds("X:1\nM:3/4\nQ:1/4=161\n"); ok(Math.abs(bar.seconds - 3 * 60 / 161) < 1e-6, "film · a 3/4 bar at 161 BPM", String(bar.seconds));
-ok(shotSeconds(bar.seconds).bars === 3, "film · whole bars in a clip", JSON.stringify(shotSeconds(bar.seconds)));
+ok(shotSeconds(bar.seconds).bars === 4, "film · whole bars in a clip (4 bars of 3/4 at 161: the clip's last frame held 0.01 s)", JSON.stringify(shotSeconds(bar.seconds)));
 { // shot length: the plan's own, cut to whole bars; a song long enough for it, or a new one
   const pl = {shots: [{}, {}, {}, {}], music: {audio: {filename: "s.flac"}, bar: {seconds: 2}, seconds: songSeconds({shots: [{}, {}, {}, {}]})}};
   ok(shotLen(pl) === SHOT_SECONDS && cutOf(pl).bars === 2 && cutOf(pl).seconds === 4, "film · a shot is one clip, two 2 s bars of it play", JSON.stringify(cutOf(pl)));
@@ -144,6 +154,8 @@ ok(shotSeconds(bar.seconds).bars === 3, "film · whole bars in a clip", JSON.str
   ok(songShort(pl) && songSeconds(pl) === 40, "film · longer shots need a longer song", String(songSeconds(pl)));
   pl.music.own = true; ok(!songShort(pl), "film · your own song is never remade");
   ok(shotSeconds(5, 3).bars === 1 && shotSeconds(5, 3).seconds === 3, "film · a shot shorter than a bar plays whole");
+  { const c = shotSeconds(60 / 107 * 4); ok(c.bars === 2 && Math.abs(c.seconds - 4.486) < .01, "film · two bars at 107 BPM fit one H3 clip (its last frame held)", JSON.stringify(c)); }
+  { const c = shotSeconds(60 / 100 * 4); ok(c.bars === 1 && Math.abs(c.seconds - 2.4) < .01, "film · two bars at 100 BPM don't: one bar", JSON.stringify(c)); }
 }
 
 console.log(`${pass} passed, ${fail} failed${info ? "" : " (no node list: tests/fixtures/object_info.json missing, so graphs weren't checked against ComfyUI)"}`);

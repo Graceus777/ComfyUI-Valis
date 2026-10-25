@@ -443,7 +443,7 @@ const E = {clip: null, clipUrl: null, mode: "transform", look: null, character: 
 const EXAMPLES = ["the man", "his head", "her dress", "the woman", "man in the mirror", "the sky", "the car"];
 $("#e-target-ex").replaceChildren(...EXAMPLES.map(t => h("button", {class: "chip", onclick: () => { $("#e-target").value = t; refreshPrompt(); }}, t)));
 seg($("#e-mode"), [{id: "transform", name: "Transform", tip: "The thing you named becomes something else (a look below): Krea 2 makes the first and last frames, H3 re-renders only the masked region"},
-  {id: "remove", name: "Remove", tip: "The person you named is taken out: SAM 3 finds them, the H3 Person Remover LoRA paints in what was behind them, and outside the mask every pixel stays the source's. Made for people; a shadow or reflection outside the mask stays"},
+  {id: "remove", name: "Remove", tip: "The person you named is taken out: SAM 3 finds them, the H3 Person Remover LoRA paints in what was behind them, and outside the mask every pixel stays the source's. Made for people; a shadow or reflection outside the mask stays, and a person close to the camera in a crowd, or carrying something, can be painted back (H3's own pass is saved next to it to compare)"},
   {id: "swap", name: "Swap", tip: "The whole person replaced by your character (H3 character swap), keeping the take's voice and motion"},
   {id: "turn", name: "Turn", tip: "One take turns into another on a spoken word: the man into the vampire on 'morning'"}], (m) => {
   E.mode = m.id;

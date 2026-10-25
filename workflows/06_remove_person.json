@@ -44,14 +44,6 @@
         "1",
         0
       ],
-      "vae": [
-        "3",
-        0
-      ],
-      "audio_vae": [
-        "4",
-        0
-      ],
       "prompt": "Remove the green-masked person and reconstruct the background. Preserve the rest of the video, including its camera motion and frame timing.",
       "width": [
         "s1",
@@ -71,7 +63,7 @@
         0
       ],
       "ref_images.ref_image_0": [
-        "cf",
+        "cc",
         0
       ]
     }
@@ -93,7 +85,7 @@
         0
       ],
       "image": [
-        "cf",
+        "cc",
         0
       ]
     }
@@ -630,11 +622,93 @@
       "crop": "center"
     }
   },
+  "k0": {
+    "class_type": "ImageFromBatch",
+    "inputs": {
+      "image": [
+        "m1",
+        0
+      ],
+      "batch_index": 0,
+      "length": 1
+    }
+  },
+  "k1": {
+    "class_type": "ImageToMask",
+    "inputs": {
+      "image": [
+        "k0",
+        0
+      ],
+      "channel": "red"
+    }
+  },
+  "k2": {
+    "class_type": "GrowMask",
+    "inputs": {
+      "mask": [
+        "k1",
+        0
+      ],
+      "expand": 16,
+      "tapered_corners": true
+    }
+  },
+  "k3": {
+    "class_type": "MaskToImage",
+    "inputs": {
+      "mask": [
+        "k2",
+        0
+      ]
+    }
+  },
+  "k4": {
+    "class_type": "ImageBlur",
+    "inputs": {
+      "image": [
+        "k3",
+        0
+      ],
+      "blur_radius": 6,
+      "sigma": 3
+    }
+  },
+  "k5": {
+    "class_type": "ImageToMask",
+    "inputs": {
+      "image": [
+        "k4",
+        0
+      ],
+      "channel": "red"
+    }
+  },
+  "cc": {
+    "class_type": "ImageCompositeMasked",
+    "inputs": {
+      "destination": [
+        "f0",
+        0
+      ],
+      "source": [
+        "cf",
+        0
+      ],
+      "x": 0,
+      "y": 0,
+      "resize_source": false,
+      "mask": [
+        "k5",
+        0
+      ]
+    }
+  },
   "cfs": {
     "class_type": "SaveImage",
     "inputs": {
       "images": [
-        "cf",
+        "cc",
         0
       ],
       "filename_prefix": "valis/edit_anchor_first"

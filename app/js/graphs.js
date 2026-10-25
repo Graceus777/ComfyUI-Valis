@@ -420,7 +420,16 @@ export function removePerson({video, audio, target, anchorPrompt, grow = 8, mega
     "f0": N("ImageFromBatch", {image: ["s0", 0], batch_index: 0, length: 1}),
     ...qwenEdit(300, ["f0", 0], anchorPrompt || REMOVE_PROMPT_FALLBACK(target), 3, null),
     "cf": N("ImageScale", {image: ["303", 0], upscale_method: "lanczos", width: ["s1", 0], height: ["s1", 1], crop: "center"}),
-    "cfs": N("SaveImage", {images: ["cf", 0], filename_prefix: `${prefix}_anchor_first`}),
+    // Qwen can drift the framing (a slight zoom); the LoRA wants the source's exact framing, so the clean frame is the
+    // source's own frame 0 with Qwen's fill only inside the person's grown, feathered mask
+    "k0": N("ImageFromBatch", {image: ["m1", 0], batch_index: 0, length: 1}),
+    "k1": N("ImageToMask", {image: ["k0", 0], channel: "red"}),
+    "k2": N("GrowMask", {mask: ["k1", 0], expand: 16, tapered_corners: true}),
+    "k3": N("MaskToImage", {mask: ["k2", 0]}),
+    "k4": N("ImageBlur", {image: ["k3", 0], blur_radius: 6, sigma: 3.0}),
+    "k5": N("ImageToMask", {image: ["k4", 0], channel: "red"}),
+    "cc": N("ImageCompositeMasked", {destination: ["f0", 0], source: ["cf", 0], x: 0, y: 0, resize_source: false, mask: ["k5", 0]}),
+    "cfs": N("SaveImage", {images: ["cc", 0], filename_prefix: `${prefix}_anchor_first`}),
     // H3 ref2va + the LoRA
     "1": N("CLIPLoader", {clip_name: MODELS.h3TE, type: "minimax", device: "default"}),
     "2": N("UNETLoader", {unet_name: MODELS.h3ref, weight_dtype: "default"}),
@@ -428,11 +437,12 @@ export function removePerson({video, audio, target, anchorPrompt, grow = 8, mega
     "4": N("VAELoader", {vae_name: MODELS.h3AVAE}),
     "5": N("MiniMaxH3SigmaShift", {model: ["2", 0], shift_video: 12.0, shift_audio: 3.0}),
     "lo": N("LoraLoaderModelOnly", {model: ["5", 0], lora_name: REMOVER_LORA, strength_model: 1.0}),
-    // the VAEs put the guide video and the clean frame in as picture tokens (without them they only reach the text encoder,
-    // and H3 paints the person back from what the encoder was told)
-    "6": N("MiniMaxH3ReferenceToVideo", {clip: ["1", 0], vae: ["3", 0], audio_vae: ["4", 0], prompt: REMOVER_PROMPT, width: ["s1", 0], height: ["s1", 1], length: ["18", 4], ref_image_size: "match",
-                                          "ref_videos.ref_video_0": ["gg", 0], "ref_images.ref_image_0": ["cf", 0]}),
-    "7": N("MiniMaxH3AddGuide", {positive: ["6", 0], latent: ["6", 1], frame_idx: 0, vae: ["3", 0], image: ["cf", 0]}),
+    // The references (the green video, the clean first frame) reach only the text encoder, as in the LoRA's own workflow
+    // (no VAE on this node); the clean frame is also the guide at frame 0. Tried Oct 24 and worse: the VAE on the
+    // references (the person painted back), and the green video as the guide clip (H3 painted the person magenta).
+    "6": N("MiniMaxH3ReferenceToVideo", {clip: ["1", 0], prompt: REMOVER_PROMPT, width: ["s1", 0], height: ["s1", 1], length: ["18", 4], ref_image_size: "match",
+                                          "ref_videos.ref_video_0": ["gg", 0], "ref_images.ref_image_0": ["cc", 0]}),
+    "7": N("MiniMaxH3AddGuide", {positive: ["6", 0], latent: ["6", 1], frame_idx: 0, vae: ["3", 0], image: ["cc", 0]}),
     "8": N("CFGGuider", {model: ["lo", 0], positive: ["7", 0], negative: ["7", 0], cfg: 1.0}),
     "9": N("RandomNoise", {noise_seed: seed}),
     "10": N("KSamplerSelect", {sampler_name: "er_sde"}),
