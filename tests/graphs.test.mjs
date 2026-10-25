@@ -209,6 +209,11 @@ import * as F from "../app/js/film.js";
   const m3 = P.motionPrompt({genre: goth, move: push, action: "She opens her eyes; white-gold fire races up the blade. The camera holds still.", look: "Oil painting."});
   ok(!m3.includes("stay exactly"), "Film · a shot whose action changes the light isn't told the light stays", m3);
 }
+{ // a cut can carry one unbroken stretch of the song instead of each shot's own sound
+  const g = G.filmCut({shots: [{file: "a.mp4", seconds: 4.42}, {file: "b.mp4", seconds: 4.46}], song: {audio: "s.flac", start: 0, seconds: 8.88}});
+  ok(JSON.stringify(g["cat"].inputs.complete_audio) === '["st",0]' && g["st"].inputs.duration === 8.88 && g["sa"].inputs.audio === "s.flac", "Cut · the song unbroken under the whole cut");
+  ok(!("complete_audio" in G.filmCut({shots: [{file: "a.mp4", seconds: 4}]})["cat"].inputs), "Cut · without a song each shot keeps its own sound");
+}
 { // a score's shot without effect sounds keeps the song as it is: trimmed to the shot, not run through the sound design
   const base = {clip: "c.mp4", source: "score", score: "s.json", audio: "a.flac", layers: [{effect: "Rays", on: "beat"}], seconds: 4.42, fit: true};
   const q = G.fx({...base, sound: false, start: 0});

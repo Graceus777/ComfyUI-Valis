@@ -1164,7 +1164,9 @@ export function filmSeat({plate, people, prompt, seed = 8401, steps = 25, prefix
 // the cut: every shot trimmed to its bars and joined; each shot carries its own slice of the song and its sounds
 // title: {text, subtitle, song, start, seconds, width, height}: a card over black after the last shot, with the song's tail
 // under it (every chunk of the cut must carry audio of the same kind)
-export function filmCut({shots, title = null, prefix = "valis/film"}) {
+// song: {audio, start, seconds}: one unbroken stretch of the music under the whole cut instead of each shot's own sound
+// (a score played as it is, joined back together at every cut, ticked at the joins)
+export function filmCut({shots, title = null, prefix = "valis/film", song = null}) {
   const g = {}, vids = {};
   shots.forEach((s, k) => {
     g[`v${k}`] = N("LoadVideo", {file: s.file});
@@ -1178,7 +1180,11 @@ export function filmCut({shots, title = null, prefix = "valis/film"}) {
     g["tv"] = N("CreateVideo", {images: ["tc", 0], fps: 24.0, audio: ["tt", 0]});
     vids[`videos.video${shots.length}`] = ["tv", 0];
   }
-  g["cat"] = N("ConcatenateVideo", {...vids, codec: "auto"});
+  if (song) {
+    g["sa"] = N("LoadAudio", {audio: song.audio});
+    g["st"] = N("TrimAudioDuration", {audio: ["sa", 0], start_index: song.start, duration: song.seconds});
+  }
+  g["cat"] = N("ConcatenateVideo", {...vids, codec: "auto", ...(song ? {complete_audio: ["st", 0]} : {})});
   g["save"] = N("SaveVideo", {video: ["cat", 0], filename_prefix: prefix, format: "auto", codec: "auto"});
   return g;
 }

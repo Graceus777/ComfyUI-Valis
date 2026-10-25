@@ -271,7 +271,11 @@ export class ScoreView {
       const v = await new Promise((res) => { const e = document.createElement("video"); e.preload = "metadata"; e.onloadedmetadata = () => res(e); e.onerror = () => res(null); e.src = api.viewUrl(this.results[last.id]); });
       if (v?.videoWidth) title = {text, song: this.audioRef, start: end, seconds: Math.min(8, rest), width: v.videoWidth, height: v.videoHeight};
     }
-    this.run(G.filmCut({shots: shots.map(s => ({file: api.fileRef(this.results[s.id]), seconds: this.span(s)})), title, prefix: `valis/score_cut_${Date.now().toString(36)}`}),
+    // no effect sounds and no gaps between the shots: the song runs unbroken under the whole cut
+    const all = sc.shots, gapless = shots.every((s, k) => !k || all.indexOf(s) === all.indexOf(shots[k - 1]) + 1);
+    const song = !$("#s-fxsound").checked && this.audioRef && gapless
+      ? {audio: this.audioRef, start: shots[0].start_frame / 24, seconds: shots.reduce((t, s) => t + this.span(s), 0) + (title ? title.seconds : 0)} : null;
+    this.run(G.filmCut({shots: shots.map(s => ({file: api.fileRef(this.results[s.id]), seconds: this.span(s)})), title, song, prefix: `valis/score_cut_${Date.now().toString(36)}`}),
       "Score · cut", $("#s-viewer"), {onDone: (j) => {
         const v = j.outputs.find(f => /\.(mp4|webm|mov)$/i.test(f.filename));
         if (!v) return;
