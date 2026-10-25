@@ -119,6 +119,24 @@ async function inspectVideo(url, samples = 8) {
   return {width: W, height: H, seconds: D, luma: luma / n, saturation: sat / n, hueSpread, motion: diff / Math.max(1, frames.length - 1), audioDb,
           strip: strip.toDataURL("image/jpeg", .7)};
 }
+// a matte video's frames as 0..1 values at 96 px wide, the same sample times as inspectVideo
+async function matteFrames(url, samples = 8) {
+  const v = document.createElement("video");
+  v.muted = true; v.preload = "auto"; v.playsInline = true; v.src = url;
+  await new Promise((res, rej) => { v.onloadeddata = res; v.onerror = () => rej(new Error("the matte won't load")); setTimeout(() => rej(new Error("the matte took too long to load")), 30000); });
+  const cw = 96, ch = Math.max(1, Math.round(96 * v.videoHeight / v.videoWidth)), D = v.duration;
+  const cv = document.createElement("canvas"); cv.width = cw; cv.height = ch;
+  const x = cv.getContext("2d", {willReadFrequently: true}), out = [];
+  for (let i = 0; i < samples; i++) {
+    v.currentTime = Math.min(D - 0.05, (i + 0.5) / samples * D);
+    await new Promise(r => { v.onseeked = r; setTimeout(r, 4000); });
+    x.drawImage(v, 0, 0, cw, ch);
+    const d = x.getImageData(0, 0, cw, ch).data, f = new Float32Array(cw * ch);
+    for (let p = 0; p < f.length; p++) f[p] = d[p * 4] > 127 ? 1 : 0;
+    out.push(f);
+  }
+  return out;
+}
 function verdicts(m, exp) {
   const out = [];
   const ok = (name, pass, detail) => out.push({name, pass, detail});
@@ -254,15 +272,23 @@ async function runChain(t, ctx, log) {
   const r = await render(t.fn({...src, pre, run: ctx.run}), `${t.id} ${t.label.split(":")[0]}`);
   const ok = await checkOut(r.outputs, t.expect, log);
   if (!t.expect.gone) return ok;
-  // is it gone? SAM 3 looks for it in the source and in the result: the share of the frame it covers should drop
+  // is it gone? SAM 3 finds them in the source, then looks for them again in the result: no one should stand where they
+  // stood (the share of their outline that someone covers in the result)
   const result = r.outputs.filter(isVid).find(f => !NOT_RESULT.test(f.filename));
-  const cover = async (video, tag) => {
-    const m = await render(G.maskPreview({video, target: t.expect.gone.target, prefix: `${pre}_${tag}`}), `${t.id} SAM 3 on the ${tag}`);
-    const matte = m.outputs.find(f => /_matte/.test(f.filename));
-    return matte ? (await inspectVideo(api.viewUrl(matte))).luma : 0;
+  const matte = async (video, target, tag, maxObjects = 4) => {
+    const m = await render(G.maskPreview({video, target, maxObjects, prefix: `${pre}_${tag}`}), `${t.id} SAM 3 on the ${tag}`);
+    const f = m.outputs.find(o => /_matte/.test(o.filename));
+    return f ? matteFrames(api.viewUrl(f)) : null;
   };
-  const before = await cover(src[t.expect.gone.source], "source"), after = await cover(api.fileRef(result), "result");
-  const gone = {name: "gone", pass: after < Math.max(.01, before * .25), detail: `${t.expect.gone.target} covers ${(before * 100).toFixed(1)}% of the source, ${(after * 100).toFixed(1)}% of the result`};
+  const who = t.expect.gone.target, noun = (who.match(/\b(man|woman|person|guy|lady)\b/i) || [, "person"])[1];
+  const A = await matte(src[t.expect.gone.source], who, "source", 1);
+  // in the result: the same description, and the plain noun (a person painted back can wear something else); SAM 3
+  // asked for "a person" alone tracked the bystanders and missed her
+  const B1 = await matte(api.fileRef(result), who, "result"), B2 = await matte(api.fileRef(result), `a ${noun}`, "result_any");
+  let inA = 0, both = 0;
+  if (A) A.forEach((a, k) => { const b1 = B1?.[k] || [], b2 = B2?.[k] || []; for (let p = 0; p < a.length; p++) { inA += a[p]; both += Math.min(a[p], Math.max(b1[p] || 0, b2[p] || 0)); } });
+  const before = inA / Math.max(1, (A || []).reduce((n, a) => n + a.length, 0)), after = inA ? both / inA : 1;
+  const gone = {name: "gone", pass: !!A && after < .25, detail: `${t.expect.gone.target} covers ${(before * 100).toFixed(1)}% of the source; someone stands in ${(after * 100).toFixed(0)}% of that place in the result`};
   log({gone: {before, after}, checks: [...(log.checks || []), gone]});
   return ok && gone.pass;
 }

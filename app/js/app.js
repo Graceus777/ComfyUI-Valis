@@ -9,7 +9,7 @@ import {palettePicker} from "./palettepick.js";
 import {ScoreView} from "./score.js";
 import {FxView} from "./fx.js";
 import {checkSetup} from "./check.js";
-import {planFilm, makeFilm, makeSong, frameShots, shootShots, effectShots, cutFilm, SHOT_SECONDS, shotLen, songSeconds, songShort} from "./film.js";
+import {planFilm, makeFilm, makeSong, frameShots, shootShots, effectShots, cutFilm, SHOT_SECONDS, shotLen, songSeconds, songShort, cutOf} from "./film.js";
 import * as R from "./refengine.js";
 import {Bin} from "./bin.js";
 import * as MC from "./machine.js";
@@ -1116,7 +1116,7 @@ async function fsteps() {
   if (!p) { el.replaceChildren(h("p", {class: "hint"}, "Plan the film first: nothing renders until you press a step.")); return; }
   const n = p.shots.length, cnt = (f) => p.shots.filter(f).length, len = shotLen(p);
   const shot = (s) => s.clip && !(s.clipSeconds && Math.abs(s.clipSeconds - len) > .01), short = songShort(p);
-  const bars = p.music?.audio ? Math.max(1, Math.floor(len / p.music.bar.seconds + 1e-6)) : 0;
+  const bars = p.music?.audio ? cutOf(p).bars : 0;
   const state = {song: p.music?.audio && !short ? 1 : 0, keys: cnt(s => s.key) / n, shots: cnt(shot) / n, fx: cnt(s => s.fx && shot(s)) / n, cut: p.film ? 1 : 0};
   const label = {song: short ? "shorter than the film now" : p.music?.audio ? `${p.music.bar.bpm} BPM · ${bars} bar${bars > 1 ? "s" : ""} a shot` : p.song.file ? "your song" : "YuE2",
     keys: `${cnt(s => s.key)} of ${n}`, shots: `${cnt(shot)} of ${n}`, fx: `${cnt(s => s.fx && shot(s))} of ${n}`, cut: p.film ? "done" : ""};
