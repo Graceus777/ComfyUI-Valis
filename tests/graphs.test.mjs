@@ -140,7 +140,15 @@ ok(JSON.stringify(CR.gradeOf(own)) === JSON.stringify({look: "teal_orange", hex:
 ok(CR.gradeOf({...own, look: {id: "custom", hex: ["#000000", "#ffffff"]}}).look === "custom", "grade · your colours alone");
 
 // ---- the film plan parser
-import {parsePlan, barSeconds, shotSeconds, shotLen, cutOf, songSeconds, songShort, SHOT_SECONDS} from "../app/js/film.js";
+import {parsePlan, barSeconds, shotSeconds, shotLen, cutOf, songSeconds, songShort, SHOT_SECONDS, stillPrompt} from "../app/js/film.js";
+{
+  const goth = P.GENRES.find(g => g.id === "gothic"), pl = {place: "A parlour.", cast: [{name: "the medium", look: "grey hair"}, {name: "Eleanor", look: "soaked dress"}]};
+  const sh = {who: ["Eleanor"], keyframe: "Close-up: Eleanor."};
+  ok(stillPrompt(pl, sh, goth).startsWith(goth.style) && stillPrompt(pl, sh, goth).includes("soaked dress") && !stillPrompt(pl, sh, goth).includes("grey hair"), "film · a still: the genre's look, the shot, only the cast in it, the place");
+  ok(stillPrompt({...pl, look: "Red lamp only."}, sh, goth).startsWith("Red lamp only.") && !stillPrompt({...pl, look: "Red lamp only."}, sh, goth).includes(goth.style), "film · the plan's own look replaces the genre's words");
+  ok(!stillPrompt(pl, {who: [], keyframe: "An empty chair."}, goth).includes("soaked dress"), "film · a shot with no one in it gets no cast looks");
+}
+
 const plan = parsePlan('noise {"title":"T","cast":[{"name":"the keeper","look":"an old man"}],"place":"a rock","song":{"style":"strings"},"shots":[{"who":["the keeper"],"keyframe":"k","motion":"m","subject":"the keeper","effect":"Rays","on":"beat"},{"keyframe":"k2","effect":"Nope","on":"x"}]} tail', 6);
 ok(plan.shots.length === 2 && plan.shots[1].effect === "none" && plan.shots[1].on === "beat", "film · the plan parser fills bad effects and lanes");
 ok(/BPM/.test(plan.song.style), "film · the song brief gets a tempo");

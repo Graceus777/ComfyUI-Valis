@@ -87,10 +87,12 @@ async function saved(io, names, plan) {
   for (const f of files) if (!(await io.exists(f))) return null;
   return {outputs: files};
 }
-// a shot's still: the genre's look, the shot, the looks of the cast who are in it (all of them when the plan doesn't say), the place
+// a shot's still: the film's look (the plan's own words, else the genre's), the shot, the looks of the cast who are in it
+// (all of them when the plan doesn't say), the place
+export const lookOf = (plan, genre = null) => plan.look ?? genre?.style ?? "";
 export function stillPrompt(plan, s, genre = null) {
   const inShot = (plan.cast || []).filter(c => !s.who || !c.name || s.who.some(w => w.toLowerCase().includes(c.name.toLowerCase()) || c.name.toLowerCase().includes(w.toLowerCase())));
-  return [genre?.style || "", s.keyframe, ...inShot.map(c => c.look), plan.place].filter(Boolean).join(" ");
+  return [lookOf(plan, genre), s.keyframe, ...inShot.map(c => c.look), plan.place].filter(Boolean).join(" ");
 }
 export const sizeOf = (plan) => plan.size || {w: 768, h: 1344};            // the shots' size
 const KEY = {w: 768, h: 1344};                                                // stills are always painted at Krea's own size

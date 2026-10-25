@@ -9,7 +9,7 @@ import {palettePicker} from "./palettepick.js";
 import {ScoreView} from "./score.js";
 import {FxView} from "./fx.js";
 import {checkSetup} from "./check.js";
-import {planFilm, makeFilm, makeSong, frameShots, shootShots, effectShots, cutFilm, SHOT_SECONDS, shotLen, songSeconds, songShort, cutOf} from "./film.js";
+import {planFilm, makeFilm, makeSong, frameShots, shootShots, effectShots, cutFilm, SHOT_SECONDS, shotLen, songSeconds, songShort, cutOf, lookOf} from "./film.js";
 import * as R from "./refengine.js";
 import {Bin} from "./bin.js";
 import * as MC from "./machine.js";
@@ -1030,7 +1030,7 @@ function buildFilm() {
       h("div", {class: "seg", id: "m-song-src"}),
       h("div", {class: "drop", id: "m-song-drop", style: "margin-top:8px; display:none"}, "Drop your song (wav, flac, mp3)", h("br"), h("span", {class: "hint"}, "the shots are cut on its bars, the effects fire on its beats"))),
   );
-  cards($("#m-genre"), P.GENRES, (g) => { M.genre = g; fsec.genre.setValue(g.name); }, "gothic");
+  cards($("#m-genre"), P.GENRES, (g) => { M.genre = g; fsec.genre.setValue(g.name); if (M.plan && M.plan.look == null) fdraw(); }, "gothic");
   seg($("#m-shots-n"), [4, 6, 8, 10, 12].map(n => ({id: String(n), name: String(n)})), (x) => { M.shots = Number(x.id); fshape(); }, "6");
   M.lenCtl = slider($("#m-len"), {label: "Shot length", min: 2, max: 15, step: 0.5, value: Math.round(M.len * 2) / 2,
     tip: "How long H3 shoots each shot. The cut plays as many whole bars of the song as fit in it, so the film is a little shorter than shots × length.",
@@ -1162,6 +1162,7 @@ function fdraw() {
     h("div", {class: "ptitle"}, h("input", {class: "title", type: "text", value: p.title, oninput: (e) => { p.title = e.target.value; fsave(); }}),
       h("span", {class: "hint"}, `${p.shots.length} shots · ${sizeOfPlan(p).w}×${sizeOfPlan(p).h}`)),
     h("input", {class: "logline", type: "text", value: p.logline || "", oninput: (e) => { p.logline = e.target.value; fsave(); }}),
+    field("look", () => lookOf(p, M.genre), (v) => { p.look = v.trim() ? v : null; }, "The film's look: every keyframe starts with these words. The genre's words until you change them; clear it to go back to them"),
     ...p.cast.map((c, i) => field(c.name || `cast ${i + 1}`, () => c.look, (v) => { c.look = v; }, "How this character looks: goes into every keyframe they're in, so they stay the same from shot to shot")),
     field("place", () => p.place, (v) => { p.place = v; }, "The setting: goes into every keyframe"),
     p.song.file ? h("div", {class: "maprow"}, h("label", {}, "song"), h("span", {class: "hint"}, p.song.fileName || "your song"))
@@ -1177,7 +1178,7 @@ function fdraw() {
           h("button", {class: "ibtn", type: "button", disabled: M.busy || !sh.key, tip: "Shoot (or re-shoot) this shot with H3", onclick: () => { if (sh.clip) sh.shotSeed = (sh.shotSeed ?? 51101 + k) + 1; fstep("shots", [k]); }}, "▶ shoot"),
           h("button", {class: "ibtn", type: "button", tip: "Work on this shot in Create (camera, light, palette, trained moves), then send the still or the shot back here", onclick: () => toCreate(k)}, "Create ↗"))),
       h("div", {class: "fmedia"}, thumb(sh.key, "keyframe", "no still yet"), thumb(sh.clip, sh.clipSeconds && Math.abs(sh.clipSeconds - shotLen(M.plan)) > .01 ? `shot at ${sh.clipSeconds.toFixed(1)} s: shoot again` : "shot", "not shot"), thumb(sh.fx, "with effects", "no effects")),
-      h("textarea", {rows: 2, tip: "The still frame (Krea 2). The cast's looks and the place are added to it.", oninput: (e) => { sh.keyframe = e.target.value; fsave(); }}, sh.keyframe),
+      h("textarea", {rows: 2, tip: "The still frame (Krea 2). The look, the cast's looks and the place are added to it.", oninput: (e) => { sh.keyframe = e.target.value; fsave(); }}, sh.keyframe),
       h("input", {type: "text", value: sh.motion, placeholder: "what moves", tip: "What moves in the shot (H3)", oninput: (e) => { sh.motion = e.target.value; fsave(); }}),
       h("div", {class: "frow"},
         h("input", {type: "text", value: sh.subject, placeholder: "subject", tip: "What SAM 3 tracks for the effect", oninput: (e) => { sh.subject = e.target.value; fsave(); }}),
