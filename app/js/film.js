@@ -97,7 +97,10 @@ async function saved(io, names, plan) {
 export const lookOf = (plan, genre = null) => plan.look ?? genre?.style ?? "";
 export function stillPrompt(plan, s, genre = null) {
   const inShot = (plan.cast || []).filter(c => !s.who || !c.name || s.who.some(w => w.toLowerCase().includes(c.name.toLowerCase()) || c.name.toLowerCase().includes(w.toLowerCase())));
-  return [lookOf(plan, genre), s.keyframe, ...inShot.map(c => c.look), plan.place].filter(Boolean).join(" ");
+  // each look is said as "The knight: a tall woman knight in black armour...": said bare, it read as one more person, and
+  // THE IRON SAINT's wide shots showed the knight twice and put her crimson cloak on the giant
+  const said = (c) => c.name && c.look ? `${c.name[0].toUpperCase()}${c.name.slice(1)}: ${c.look.replace(/[.\s]+$/, "")}.` : c.look;
+  return [lookOf(plan, genre), s.keyframe, ...inShot.map(said), plan.place].filter(Boolean).join(" ");
 }
 // ---------------------------------------------------------------------------------------------------------- references
 // A film is built from references, so what stays the same from shot to shot is the same picture, not the same words

@@ -147,6 +147,7 @@ import {parsePlan, barSeconds, shotSeconds, shotLen, cutOf, songSeconds, songSho
   ok(stillPrompt(pl, sh, goth).startsWith(goth.style) && stillPrompt(pl, sh, goth).includes("soaked dress") && !stillPrompt(pl, sh, goth).includes("grey hair"), "film · a still: the genre's look, the shot, only the cast in it, the place");
   ok(stillPrompt({...pl, look: "Red lamp only."}, sh, goth).startsWith("Red lamp only.") && !stillPrompt({...pl, look: "Red lamp only."}, sh, goth).includes(goth.style), "film · the plan's own look replaces the genre's words");
   ok(!stillPrompt(pl, {who: [], keyframe: "An empty chair."}, goth).includes("soaked dress"), "film · a shot with no one in it gets no cast looks");
+  ok(/ [A-Z][^:]*: [^:]*soaked dress[^.]*\./.test(stillPrompt(pl, sh, goth)), "film · a cast look is said with its name, so it isn't read as one more person", stillPrompt(pl, sh, goth));
 }
 
 // ---- a film built from references: sheets, setups, frames, close-ups (Krea 2 identity edit: a scene and a subject)
