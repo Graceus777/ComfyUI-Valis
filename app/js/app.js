@@ -1150,7 +1150,8 @@ const sizeOfPlan = (p) => p.size || (() => { const s = CR.shotSize("9:16", M.sho
 async function fstep(id, only = null) {
   if (!M.plan || M.busy) return;
   M.busy = true; fsteps(); fdraw();
-  const p = M.plan, onStage = (stage, msg) => { $("#m-status").textContent = msg; };
+  // a step that makes many pictures shows each one as it lands
+  const p = M.plan, onStage = (stage, msg) => { $("#m-status").textContent = msg; if (["refs", "sets", "frames", "keyframes"].includes(stage)) { fsave(); fdraw(); } };
   p.size = p.size || sizeOfPlan(p);
   try {
     if (id === "refs") await makeRefs(p, filmIO, {only, onStage});

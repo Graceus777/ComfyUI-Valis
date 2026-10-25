@@ -1104,6 +1104,29 @@ export function filmFrame({refs, prompt, seeds = [8401], crop = null, from = {w:
   return g;
 }
 
+// Seating several people: one Krea 2 identity edit a person, each on the picture the one before made (the LoRA is
+// trained on a scene and one subject; three sheets side by side as one subject mixed their faces and seated the medium
+// twice). people: [{image, prompt}] in order; the plate is the first scene. Only the last picture is saved.
+export function filmSeat({plate, people, seed = 8401, size = {w: 768, h: 1344}, grounding = 1024, steps = 8, prefix = "valis/film_seat"}) {
+  if (!people?.length) throw new Error("filmSeat: no one to seat");
+  const g = kreaLoaders();
+  g["plate"] = N("LoadImage", {image: plate});
+  g["lat"] = N("EmptySD3LatentImage", {width: size.w, height: size.h, batch_size: 1});
+  let scene = ["plate", 0];
+  people.forEach((p, k) => {
+    const i = (x) => `p${k}${x}`;
+    g[i("ld")] = N("LoadImage", {image: p.image});
+    g[i("mp")] = N("Krea2EditModelPatch", {model: ["203", 0], source_latent: ["lat", 0], vae: ["202", 0], source_image: scene, source_image_b: [i("ld"), 0], target_latent: ["lat", 0], ref_boost: 1.0, ref_boost_a: 1.0, fit_mode: "fit"});
+    const enc = (text) => N("Krea2EditGroundedEncode", {clip: ["201", 0], prompt: text, image: scene, image_b: [i("ld"), 0], grounding_px: grounding, system_prompt: ""});
+    g[i("pos")] = enc(p.prompt); g[i("neg")] = enc("");
+    g[i("ks")] = N("KSampler", {model: [i("mp"), 0], positive: [i("pos"), 0], negative: [i("neg"), 0], latent_image: ["lat", 0], seed: seed + k, steps, cfg: 1.0, sampler_name: "euler", scheduler: "simple", denoise: 1.0});
+    g[i("dec")] = N("VAEDecode", {samples: [i("ks"), 0], vae: ["202", 0]});
+    scene = [i("dec"), 0];
+  });
+  g["save"] = N("SaveImage", {images: scene, filename_prefix: `${prefix}_${seed}`});
+  return g;
+}
+
 // the cut: every shot trimmed to its bars and joined; each shot carries its own slice of the song and its sounds
 // title: {text, subtitle, song, start, seconds, width, height}: a card over black after the last shot, with the song's tail
 // under it (every chunk of the cut must carry audio of the same kind)
