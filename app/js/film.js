@@ -176,10 +176,14 @@ export function momentPrompt(frames, f) {
   const {root, who, moment, chain} = frameChain(frames, f);
   const came = who.filter(n => !(root.with || []).includes(n)), gone = [];
   for (const x of chain) for (const n of x.gone || []) if (!gone.includes(n)) gone.push(n);
+  // who must still be there, by name (an edit left the widower in when told he'd gone, and dropped the medium seen from
+  // behind when nobody named her)
+  const stay = who.filter(n => !came.includes(n));
   return join("Picture 1 is a still from this film.", came.map((n, i) => `Picture ${i + 2} is ${n}.`).join(" "),
-    `At this moment: ${moment.join(" ")}`, gone.length ? `${and(gone)} ${gone.length > 1 ? "are" : "is"} no longer there.` : "",
+    `At this moment: ${moment.join(" ")}`,
+    gone.length ? `Remove ${and(gone)} from the picture completely: nobody sits where ${gone.length > 1 ? "they" : gone[0]} sat.` : "",
     came.length ? `${and(came)} keep${came.length > 1 ? "" : "s"} the face, hair and clothes of ${came.length > 1 ? "their pictures" : "Picture 2"}.` : "",
-    "Keep everyone else where they are, every face, pose and piece of clothing, the furniture, the light and the framing exactly the same.");
+    `Everyone else stays exactly where and as they are${stay.length ? `: ${and(stay)}` : ""}${root.seat && /back to us/i.test(root.seat) ? ", and whoever sits with their back to us" : ""}. Keep every face, pose and piece of clothing, the furniture, the light and the framing exactly the same.`);
 }
 export function cropPrompt(s) {                                         // a close-up cut from a frame
   const w = s.with || [];

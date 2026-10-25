@@ -217,7 +217,8 @@ import * as F from "../app/js/film.js";
   ok(plan.shots[0].key?.filename.includes("frame_f1") && runs.length === 1 && runs[0].g.cr, "Film · a whole-frame shot takes its frame as is; a close-up is cut and made sharp", JSON.stringify(plan.shots[0].key));
   let err = ""; try { await F.makeFrames({...plan, frames: [{name: "X", from: "nope"}]}, io); } catch (e) { err = e.message; }
   ok(/isn't a frame/.test(err), "Film · a change of a frame that doesn't exist says so", err);
-  ok(F.momentPrompt([{name: "A", setup: "s", with: ["x", "y"], seat: "."}, {name: "B", from: "A", gone: ["y"], edit: "Rain."}], {name: "B", from: "A", gone: ["y"], edit: "Rain."}).includes("y is no longer there."), "Film · someone gone is said to be gone");
+  ok(F.momentPrompt([{name: "A", setup: "s", with: ["x", "y"], seat: "."}, {name: "B", from: "A", gone: ["y"], edit: "Rain."}], {name: "B", from: "A", gone: ["y"], edit: "Rain."}).includes("Remove y from the picture completely"), "Film · someone gone is taken out, by name");
+  ok(F.momentPrompt([{name: "A", setup: "s", with: ["x", "y"], seat: "Z sits with her back to us."}, {name: "B", from: "A", edit: "Rain."}], {name: "B", from: "A", edit: "Rain."}).includes("Everyone else stays exactly where and as they are: x and y, and whoever sits with their back to us."), "Film · everyone who stays is named");
 }
 
 const plan = parsePlan('noise {"title":"T","cast":[{"name":"the keeper","look":"an old man"}],"place":"a rock","song":{"style":"strings"},"shots":[{"who":["the keeper"],"keyframe":"k","motion":"m","subject":"the keeper","effect":"Rays","on":"beat"},{"keyframe":"k2","effect":"Nope","on":"x"}]} tail', 6);
