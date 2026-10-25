@@ -815,13 +815,14 @@ export function fx({clip, other = null, subject = "", source = "sheet", audio = 
     g["83"] = N("ValisLoopSave", {images: ["80", 0], filename_prefix: prefix, format: "gif", fps: 24, gif_width: 480});
     return g;
   }
-  g["80"] = N("ValisRender", r);
-  const vid = {images: ["80", 0], fps: 24};
+  // no effect (a quiet shot): the frames go out as they are (the render needs a stack, and an empty one isn't a link)
+  if (prev) g["80"] = N("ValisRender", r);
+  const vid = {images: prev ? ["80", 0] : frames, fps: 24};
   if (sound || music) {
     let seg = music;
     if (music && start) { g["46"] = N("TrimAudioDuration", {audio: music, start_index: start, duration: seconds}); seg = ["46", 0]; }
     g["85"] = N("ValisSoundDesign", {cues: ["50", 0], duration: seconds, beds: beds.map(b => `${b}:.45`).join(", "), hits: "", music_gain: 0.9, duck: 0.3, seed: 1,
-      ...(sound ? {stack: [prev, 0]} : {}), ...(seg ? {music: seg} : {})});
+      ...(sound && prev ? {stack: [prev, 0]} : {}), ...(seg ? {music: seg} : {})});
     vid.audio = ["85", 0];
   }
   g["81"] = N("CreateVideo", vid);
