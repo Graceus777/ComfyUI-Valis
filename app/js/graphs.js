@@ -26,6 +26,7 @@ export const MODELS = {
   krea: "krea2_turbo_fp8_scaled.safetensors", kreaTE: "qwen3vl_4b_fp8_scaled.safetensors", kreaVAE: "qwen_image_vae.safetensors",
   kreaLora: "Krea2\\krea2_identity_edit_v1_2_r64.safetensors",
   h3i2v: "minimax_h3_fl2va_pruned_w4a8_mixed.safetensors", h3ref: "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+  h3i2vFull: "minimax_h3_fl2va_pruned_int8_convrot.safetensors",   // full quality: int8 weights, the undistilled recipe
   h3refFast: FAST_REF,      // FastH3 OmniRef: ref2va distilled to 8 steps (refengine.js)
   h3TE: "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors", h3VAE: "minimax_h3_video_vae_fp16.safetensors",
   h3AVAE: "minimax_h3_audio_vae_fp32.safetensors", pdd: "MiniMax-H3-FL2VA-Acc-8Step.safetensors",
@@ -101,8 +102,10 @@ export function fixKeyframe(g, {image, prompt, seed = 808, prefix = "valis/key_f
 }
 // loras: [{name, strength}] on the H3 model (camera-move LoRAs); raw: the whole prompt as the LoRA was trained on it
 // (trigger word first, no H3 section headers).
+// full: the int8 weights and the undistilled recipe (30 steps, res_multistep, no PDD), the ALLinONE pack's own i2v: ~3x
+// the time of the 8-step w4a8 shot, for a shot whose motion came apart (full = 40 takes 40 steps)
 function shotGraph({image, motion, width = 768, height = 1344, seconds = 4.46, seed = 51101, prefix = "valis/shot", soundscape, look = null, end = null, last = null, trimHold = false,
-                    loras = [], raw = null, dolly = null, whip = null}) {
+                    loras = [], raw = null, dolly = null, whip = null, full = false}) {
   const head = "For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\n\nintegrated_multimodal_description:\n[Shot 1] ";
   const sound = `\n\noverall_soundscape:\n${soundscape || "Quiet room tone, soft natural ambience."}\n\nnon_diegetic_music:\nN/A`;
   // a trained move's prompt (raw) has no sound direction, and H3 then invents a score under the shot: give it the place's sound
@@ -110,7 +113,7 @@ function shotGraph({image, motion, width = 768, height = 1344, seconds = 4.46, s
   // post steps in order: trim the anchored hold -> dolly lock -> whip ramp -> colour palette
   const th = trimHold ? ["th", 0] : ["12", 0], dz = dolly ? ["dz", 0] : th, wp = whip ? ["wp", 0] : dz, pal = look ? ["pal", 0] : wp;
   return {
-    "1": N("UNETLoader", {unet_name: MODELS.h3i2v, weight_dtype: "default"}),
+    "1": N("UNETLoader", {unet_name: full ? MODELS.h3i2vFull : MODELS.h3i2v, weight_dtype: "default"}),
     "2": N("CLIPLoader", {clip_name: MODELS.h3TE, type: "minimax", device: "default"}),
     "3": N("VAELoader", {vae_name: MODELS.h3VAE}),
     "fa": N("LoadImage", {image}),
@@ -118,12 +121,12 @@ function shotGraph({image, motion, width = 768, height = 1344, seconds = 4.46, s
     "6": N("MiniMaxH3ImageToVideo", {clip: ["2", 0], vae: ["3", 0], prompt: raw ? raw + rawSound : (head + motion + " One continuous shot, no cuts, no text." + sound), width, height, length: frames24(seconds), first_frame: ["fs", 0]}),
     ...Object.fromEntries(loras.map((l, i) => [`lo${i}`, N("LoraLoaderModelOnly", {model: i ? [`lo${i - 1}`, 0] : ["1", 0], lora_name: l.name, strength_model: l.strength ?? 1.0})])),
     "16": N("MiniMaxH3SigmaShift", {model: loras.length ? [`lo${loras.length - 1}`, 0] : ["1", 0], shift_video: 12.0, shift_audio: 3.0}),
-    "10": N("BasicScheduler", {model: ["16", 0], scheduler: "simple", steps: 8, denoise: 1.0}),
-    "acc": N("MiniMaxH3PDDAccApply", {model: ["16", 0], pdd_file: MODELS.pdd, nfe: "8", lora_strength: 1.0, head_strength: 1.0, on_off_grid: "error", enabled: true, partition: "", partition_check: "error", bypass_sigmas: ["10", 0]}),
-    "7": N("BasicGuider", {model: ["acc", 0], conditioning: ["6", 0]}),
+    "10": N("BasicScheduler", {model: ["16", 0], scheduler: "simple", steps: full ? (full === true ? 30 : full) : 8, denoise: 1.0}),
+    ...(full ? {} : {"acc": N("MiniMaxH3PDDAccApply", {model: ["16", 0], pdd_file: MODELS.pdd, nfe: "8", lora_strength: 1.0, head_strength: 1.0, on_off_grid: "error", enabled: true, partition: "", partition_check: "error", bypass_sigmas: ["10", 0]})}),
+    "7": N("BasicGuider", {model: full ? ["16", 0] : ["acc", 0], conditioning: ["6", 0]}),
     "8": N("RandomNoise", {noise_seed: seed}),
-    "9": N("KSamplerSelect", {sampler_name: "euler"}),
-    "11": N("SamplerCustomAdvanced", {noise: ["8", 0], guider: ["7", 0], sampler: ["9", 0], sigmas: ["acc", 1], latent_image: ["6", 1]}),
+    "9": N("KSamplerSelect", {sampler_name: full ? "res_multistep" : "euler"}),
+    "11": N("SamplerCustomAdvanced", {noise: ["8", 0], guider: ["7", 0], sampler: ["9", 0], sigmas: full ? ["10", 0] : ["acc", 1], latent_image: ["6", 1]}),
     "12": N("VAEDecode", {samples: ["11", 0], vae: ["3", 0]}),
     // H3 makes the sound in the same latent as the picture (voices, room, fire): decode it and keep it with the shot
     "av": N("VAELoader", {vae_name: MODELS.h3AVAE}),

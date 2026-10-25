@@ -374,11 +374,11 @@ export async function shootShots(plan, io, {genre = null, only = null, onStage =
     const s = plan.shots[k];
     if (!s.key) throw new Error(`shot ${k + 1} has no keyframe yet`);
     onStage("shots", `MiniMax H3 shoots shot ${k + 1} of ${plan.shots.length}`, k);
-    const seed = s.shotSeed ?? 51101 + k, fresh = only || s.shotSeed != null || plan.size || plan.shotSeconds;
+    const seed = s.shotSeed ?? 51101 + k, fresh = only || s.shotSeed != null || plan.size || plan.shotSeconds || s.full;
     const r = (!fresh && await saved(io, [`${b}_shot_${k + 1}_00001_.mp4`], plan)) || await io.run(
-      G.shot({image: io.ref(s.key), motion: P.motionPrompt({genre, move: push, action: s.motion, look: plan.look || null}), seconds: len, width: w, height: h, seed,
+      G.shot({image: io.ref(s.key), motion: P.motionPrompt({genre, move: push, action: s.motion, look: plan.look || null}), seconds: len, width: w, height: h, seed, full: !!s.full,
               soundscape: P.soundPrompt({subject: s.keyframe || "", action: s.motion || ""}) || undefined,
-              prefix: `${pre(plan)}_shot_${k + 1}${fresh ? `_s${seed}` : ""}`}), `Film · shot ${k + 1}`);
+              prefix: `${pre(plan)}_shot_${k + 1}${fresh ? `_s${seed}` : ""}${s.full ? "_full" : ""}`}), `Film · shot ${k + 1}`);
     s.clip = r.outputs.find(isVideo) || null; s.fx = null; s.clipSeconds = len;
     if (!s.clip) throw new Error(`shot ${k + 1} saved no video`);
   }

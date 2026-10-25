@@ -209,6 +209,12 @@ import * as F from "../app/js/film.js";
   const m3 = P.motionPrompt({genre: goth, move: push, action: "She opens her eyes; white-gold fire races up the blade. The camera holds still.", look: "Oil painting."});
   ok(!m3.includes("stay exactly"), "Film · a shot whose action changes the light isn't told the light stays", m3);
 }
+{ // a full-quality shot: the int8 weights, 30 steps of res_multistep, no PDD
+  const f = G.shot({image: "k.png", motion: "x", full: true}), d = G.shot({image: "k.png", motion: "x"});
+  ok(f["1"].inputs.unet_name.includes("int8") && f["10"].inputs.steps === 30 && !f["acc"] && JSON.stringify(f["11"].inputs.sigmas) === '["10",0]' && f["9"].inputs.sampler_name === "res_multistep"
+     && JSON.stringify(f["7"].inputs.model) === '["16",0]', "Shot · full quality: int8, 30 steps, no PDD");
+  ok(d["1"].inputs.unet_name.includes("w4a8") && d["acc"] && d["10"].inputs.steps === 8, "Shot · the default stays the 8-step w4a8 shot");
+}
 { // a cut can carry one unbroken stretch of the song instead of each shot's own sound
   const g = G.filmCut({shots: [{file: "a.mp4", seconds: 4.42}, {file: "b.mp4", seconds: 4.46}], song: {audio: "s.flac", start: 0, seconds: 8.88}});
   ok(JSON.stringify(g["cat"].inputs.complete_audio) === '["st",0]' && g["st"].inputs.duration === 8.88 && g["sa"].inputs.audio === "s.flac", "Cut · the song unbroken under the whole cut");

@@ -1200,6 +1200,8 @@ function fdraw() {
       h("div", {class: "fmedia"}, thumb(sh.key, "keyframe", "no still yet"), thumb(sh.clip, sh.clipSeconds && Math.abs(sh.clipSeconds - shotLen(M.plan)) > .01 ? `shot at ${sh.clipSeconds.toFixed(1)} s: shoot again` : "shot", "not shot"), thumb(sh.fx, "with effects", "no effects")),
       ...shotStill(p, sh),
       h("input", {type: "text", value: sh.motion, placeholder: "what moves", tip: "What moves in the shot (H3)", oninput: (e) => { sh.motion = e.target.value; fsave(); }}),
+      h("label", {class: "bkind", tip: "Shoot this shot on the int8 weights with the full 30-step recipe instead of the 8-step one: about three times as long (~20 min), for a shot whose motion came apart"},
+        h("input", {type: "checkbox", checked: !!sh.full, onchange: (e) => { sh.full = e.target.checked || undefined; fsave(); }}), " full quality (int8, 30 steps)"),
       h("label", {class: "bkind", tip: "The effects pass matches every frame's colours to the keyframe (H3 drifts the light over a shot). Untick it for a shot whose light is meant to change, like a lamp going out"},
         h("input", {type: "checkbox", checked: sh.holdColour !== false, onchange: (e) => { sh.holdColour = e.target.checked ? undefined : false; sh.fx = null; fsave(); fsteps(); }}), " keep the keyframe's colours"),
       h("div", {class: "frow"},
