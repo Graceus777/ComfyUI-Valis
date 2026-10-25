@@ -228,8 +228,11 @@ export async function makeSong(plan, io, {onStage = () => {}} = {}) {
   }
   onStage("song", "YuE2 writes the sheet music and performs it");
   const sn = plan.shotSeconds ? `_song_${songSeconds(plan)}s` : "_song";      // a song per length, so a longer film finds its own
+  // a take whose sheet music comes out broken (a line without its barline) fails: the next run is another take
+  const seed = plan.song.seed ?? 1843;
   const song = await saved(io, [`${b}${sn}_00001.flac`, `${b}${sn}_abc_00001.txt`], plan) || await io.run(
-    G.song({style: plan.song.style, lyrics: plan.song.lyrics, seconds: songSeconds(plan), seed: plan.song.seed ?? 1843, prefix: `${pre(plan)}${sn}`}).graph, "Film · song");
+    G.song({style: plan.song.style, lyrics: plan.song.lyrics, seconds: songSeconds(plan), seed, prefix: `${pre(plan)}${sn}`}).graph, "Film · song")
+    .catch((e) => { plan.song.seed = seed + 1; throw new Error(`YuE2's take didn't make it (${String(e.message || e).split("\n")[0].slice(0, 120)}). Run Song again for another take`); });
   const audio = song.outputs.find(o => /\.(flac|wav|mp3)$/i.test(o.filename)), abcFile = song.outputs.find(isText);
   if (!audio) throw new Error("YuE2 saved no audio");
   const abc = abcFile ? await io.text(abcFile) : "";

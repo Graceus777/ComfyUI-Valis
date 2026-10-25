@@ -140,7 +140,7 @@ ok(JSON.stringify(CR.gradeOf(own)) === JSON.stringify({look: "teal_orange", hex:
 ok(CR.gradeOf({...own, look: {id: "custom", hex: ["#000000", "#ffffff"]}}).look === "custom", "grade · your colours alone");
 
 // ---- the film plan parser
-import {parsePlan, barSeconds, shotSeconds, shotLen, cutOf, songSeconds, songShort, SHOT_SECONDS, stillPrompt} from "../app/js/film.js";
+import {parsePlan, barSeconds, shotSeconds, shotLen, cutOf, songSeconds, songShort, SHOT_SECONDS, stillPrompt, makeSong} from "../app/js/film.js";
 {
   const goth = P.GENRES.find(g => g.id === "gothic"), pl = {place: "A parlour.", cast: [{name: "the medium", look: "grey hair"}, {name: "Eleanor", look: "soaked dress"}]};
   const sh = {who: ["Eleanor"], keyframe: "Close-up: Eleanor."};
@@ -207,6 +207,12 @@ import * as F from "../app/js/film.js";
   ok(m2.includes(push.words) && !m2.includes("stay exactly"), "Create · the move is said when the action says nothing of the camera", m2);
   const m3 = P.motionPrompt({genre: goth, move: push, action: "She opens her eyes; white-gold fire races up the blade. The camera holds still.", look: "Oil painting."});
   ok(!m3.includes("stay exactly"), "Film · a shot whose action changes the light isn't told the light stays", m3);
+}
+{ // a YuE2 take that fails (its sheet music came out broken) makes the next run another take
+  const plan = {tag: "t", song: {style: "x", lyrics: "[Instrumental]"}, shots: [{}, {}]};
+  const io = {exists: async () => false, run: async () => { throw new Error("The score is not valid native two-voice ABC.\n- error: ..."); }};
+  let err = null; try { await makeSong(plan, io); } catch (e) { err = e; }
+  ok(err && /Run Song again/.test(err.message) && plan.song.seed === 1844 && !plan.music, "Film · a failed song take moves the song to another seed", err?.message);
 }
 { // an effects pass is found again only for the same clip and settings
   const asked = [];
