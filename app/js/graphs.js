@@ -1056,44 +1056,49 @@ export function filmKeyframes({prompts, seed = 7101, width = 768, height = 1344,
 // ---------------------------------------------------------------- Film: frames built from references (continuity)
 // A film's stills are not painted one by one from words (every still a new room, new faces, a new head count): they are
 // built from references. Each character has a sheet (a costume-test portrait), the set an empty plate per camera setup.
-// One graph serves every step after the sheets and plates: Qwen Image 2.1 with every reference in one sequence, the
-// first one deciding the frame's size and camera.
-//   seat   the setup's empty plate first, then the sheets of who is in it: they are seated into the plate as written
-//   edit   a frame of that setup first (a change of state: a trance, a wet chair, someone arriving with their sheet)
-//   turn   an empty plate first: the same empty place from another side (a new camera setup)
-//   crop   a frame first, cut to the box and scaled back to the film's size, then the sheets of who is in the box:
-//          re-rendered sharp, so a close-up has the same chair, the same neighbours and the same light as its frame
-// Tested on SÉANCE: asking Qwen to move the camera on a frame with people in it brought the medium back twice and lost
-// the empty chair, so a new angle is always turned on the empty plate, then seated.
-// refs: [{image, mp}] (mp: scale that reference to about mp megapixels first; the first keeps its own size)
-// crop: {x, y, w, h} as fractions of the first reference, which is `from` pixels (frames are made at the plate's size);
-// size: {w, h} the box is scaled back to
-export function filmFrame({refs, prompt, seeds = [8401], crop = null, from = {w: 768, h: 1344}, size = {w: 768, h: 1344}, steps = 25, prefix = "valis/film_frame"}) {
+// One graph serves every step after the sheets and plates: a Krea 2 identity edit (lbouaraba/comfyui-krea2edit, the
+// LoRA the studio's Transform and Stage already use) with two inputs, as it was trained: the scene, and the subject.
+//   frame  the setup's empty plate is the scene; the sheets of who is in it, side by side, are the subject. Every frame
+//          of a setup is painted fresh from the clean plate (the moment written into its words), never an edit of an
+//          edit: each pass repaints the whole picture, and chained passes went soft and dark
+//   turn   an empty plate is the scene: the same empty place from another side (a new camera setup)
+//   crop   a box cut from a frame is the scene (scaled back to the film's size), the sheets of who is in it the subject:
+//          a sharp close-up with the same chair, the same neighbours and the same light as its frame
+//   sheet  a sheet is the scene: a state of that character (soaked, drowned); or two sheets, scene and subject, make a
+//          prop of both (their wedding photograph)
+// Two people are placed in one pass, never one at a time (the LoRA's own advice); more than one subject goes in as one
+// picture, side by side. Turbo, 8 steps, CFG 1, at most 2 MP.
+// refs: [scene, ...subjects] (each {image}); crop: {x, y, w, h} as fractions of the scene, which is `from` pixels;
+// size: {w, h} of the picture made
+export function filmFrame({refs, prompt, seeds = [8401], crop = null, from = {w: 768, h: 1344}, size = {w: 768, h: 1344}, refBoost = 1.0, grounding = 1024, steps = 8, prefix = "valis/film_frame"}) {
   if (!refs?.length) throw new Error("filmFrame: no references");
-  const g = {
-    "250": N("UnetLoaderGGUF", {unet_name: MODELS.qwen}),
-    "251": N("CLIPLoader", {clip_name: MODELS.qwenTE, type: "qwen_image", device: "default"}),
-    "252": N("VAELoader", {vae_name: MODELS.qwenVAE}),
-  };
-  const enc = {clip: ["251", 0], prompt, negative_prompt: "", resolution: 0, vae: ["252", 0]};
-  refs.forEach((r, k) => {
-    g[`r${k}`] = N("LoadImage", {image: r.image});
-    let out = [`r${k}`, 0];
-    if (k === 0 && crop) {
-      const px = (v, n) => Math.max(0, Math.min(n, Math.round(v * n)));
-      g["cr"] = N("ImageCrop", {image: out, width: Math.max(16, px(crop.w, from.w)), height: Math.max(16, px(crop.h, from.h)), x: px(crop.x, from.w), y: px(crop.y, from.h)});
-      g["cs"] = N("ImageScale", {image: ["cr", 0], upscale_method: "lanczos", width: size.w, height: size.h, crop: "center"});
-      out = ["cs", 0];
-    } else if (r.mp) {
-      g[`s${k}`] = N("ImageScaleToTotalPixels", {image: out, upscale_method: "lanczos", megapixels: r.mp, resolution_steps: 32});
-      out = [`s${k}`, 0];
-    }
-    enc[`images.image_${k + 1}`] = out;
+  const g = kreaLoaders();
+  refs.forEach((r, k) => { g[`r${k}`] = N("LoadImage", {image: r.image}); });
+  let scene = ["r0", 0];
+  if (crop) {
+    const px = (v, n) => Math.max(0, Math.min(n, Math.round(v * n)));
+    g["cr"] = N("ImageCrop", {image: scene, width: Math.max(16, px(crop.w, from.w)), height: Math.max(16, px(crop.h, from.h)), x: px(crop.x, from.w), y: px(crop.y, from.h)});
+    g["cs"] = N("ImageScale", {image: ["cr", 0], upscale_method: "lanczos", width: size.w, height: size.h, crop: "center"});
+    scene = ["cs", 0];
+  }
+  // the subjects, side by side in one picture (one subject: as it is)
+  let subject = null;
+  refs.slice(1).forEach((r, k) => {
+    if (!subject) { subject = [`r${k + 1}`, 0]; return; }
+    g[`st${k}`] = N("ImageStitch", {image1: subject, image2: [`r${k + 1}`, 0], direction: "right", match_image_size: true, spacing_width: 0, spacing_color: "white"});
+    subject = [`st${k}`, 0];
   });
-  g["enc"] = N("TextEncodeQwenImage21", enc);
+  if (subject && refs.length > 2) { g["sts"] = N("ImageScaleToTotalPixels", {image: subject, upscale_method: "lanczos", megapixels: 1.0, resolution_steps: 16}); subject = ["sts", 0]; }
+  g["lat"] = N("EmptySD3LatentImage", {width: size.w, height: size.h, batch_size: 1});
+  const patch = {model: ["203", 0], source_latent: ["lat", 0], vae: ["202", 0], source_image: scene, target_latent: ["lat", 0], ref_boost: refBoost, ref_boost_a: 1.0, fit_mode: "fit"};
+  const enc = (text) => ({clip: ["201", 0], prompt: text, image: scene, grounding_px: grounding, system_prompt: "", ...(subject ? {image_b: subject} : {})});
+  if (subject) patch.source_image_b = subject;
+  g["mp"] = N("Krea2EditModelPatch", patch);
+  g["pos"] = N("Krea2EditGroundedEncode", enc(prompt));
+  g["neg"] = N("Krea2EditGroundedEncode", enc(""));
   seeds.forEach((seed, j) => {
-    g[`k${j}`] = N("KSampler", {model: ["250", 0], positive: ["enc", 0], negative: ["enc", 1], latent_image: ["enc", 2], seed, steps, cfg: 1, sampler_name: "euler", scheduler: "simple", denoise: 1});
-    g[`d${j}`] = N("VAEDecode", {samples: [`k${j}`, 0], vae: ["252", 0]});
+    g[`k${j}`] = N("KSampler", {model: ["mp", 0], positive: ["pos", 0], negative: ["neg", 0], latent_image: ["lat", 0], seed, steps, cfg: 1.0, sampler_name: "euler", scheduler: "simple", denoise: 1.0});
+    g[`d${j}`] = N("VAEDecode", {samples: [`k${j}`, 0], vae: ["202", 0]});
     g[`w${j}`] = N("SaveImage", {images: [`d${j}`, 0], filename_prefix: `${prefix}_${seed}`});
   });
   return g;

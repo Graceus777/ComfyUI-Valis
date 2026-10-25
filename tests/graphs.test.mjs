@@ -149,34 +149,43 @@ import {parsePlan, barSeconds, shotSeconds, shotLen, cutOf, songSeconds, songSho
   ok(!stillPrompt(pl, {who: [], keyframe: "An empty chair."}, goth).includes("soaked dress"), "film · a shot with no one in it gets no cast looks");
 }
 
-// ---- a film built from references: sheets, setups, frames, close-ups
+// ---- a film built from references: sheets, setups, frames, close-ups (Krea 2 identity edit: a scene and a subject)
 import * as F from "../app/js/film.js";
 {
   const crop = {x: .1, y: .3, w: .5, h: .5};
-  valid("Film · a frame from references (seat, edit, turn)", G.filmFrame({refs: [{image: "plate.png"}, {image: "a.png", mp: .5}, {image: "b.png", mp: .5}], prompt: "x", seeds: [1, 2]}));
-  const gc = G.filmFrame({refs: [{image: "frame.png"}, {image: "a.png", mp: .5}], prompt: "x", crop, seeds: [3]});
+  const g3 = G.filmFrame({refs: [{image: "plate.png"}, {image: "a.png"}, {image: "b.png"}, {image: "c.png"}], prompt: "x", seeds: [1, 2]});
+  valid("Film · a frame: the empty plate, everyone in it side by side", g3);
+  ok(JSON.stringify(g3.mp.inputs.source_image) === '["r0",0]' && JSON.stringify(g3.mp.inputs.source_image_b) === '["sts",0]' && g3.st2 && JSON.stringify(g3.pos.inputs.image_b) === '["sts",0]',
+    "Film · the plate is the scene, the sheets one picture as the subject (patch and encoder both)");
+  ok(g3["203"].inputs.lora_name === G.MODELS.kreaLora && g3.k0.inputs.steps === 8 && g3.k0.inputs.cfg === 1 && g3.k1.inputs.seed === 2, "Film · Krea 2 identity edit, turbo 8 steps, a picture per seed");
+  const g1 = G.filmFrame({refs: [{image: "sheet.png"}], prompt: "x", size: {w: 832, h: 1216}});
+  valid("Film · a sheet's state (one picture)", g1);
+  ok(!("source_image_b" in g1.mp.inputs) && !("image_b" in g1.pos.inputs) && g1.lat.inputs.width === 832, "Film · one picture: no subject, the sheet's size");
+  const gc = G.filmFrame({refs: [{image: "frame.png"}, {image: "a.png"}], prompt: "x", crop, seeds: [3]});
   valid("Film · a close-up cut from a frame", gc);
-  ok(gc.cr.inputs.width === 384 && gc.cr.inputs.height === 672 && gc.cr.inputs.x === 77 && gc.cr.inputs.y === 403 && JSON.stringify(gc.enc.inputs["images.image_1"]) === '["cs",0]',
-    "Film · the close-up box is cut in the frame's pixels and scaled back to the film's size first", JSON.stringify(gc.cr.inputs));
-  ok(gc.cs.inputs.width === 768 && gc.cs.inputs.height === 1344, "Film · the close-up comes back at the frame's size");
-  ok(!("s0" in gc) && gc.s1.inputs.megapixels === .5, "Film · the first reference keeps its size (it sets the frame's), sheets go in smaller");
+  ok(gc.cr.inputs.width === 384 && gc.cr.inputs.height === 672 && gc.cr.inputs.x === 77 && gc.cr.inputs.y === 403 && JSON.stringify(gc.mp.inputs.source_image) === '["cs",0]' && JSON.stringify(gc.mp.inputs.source_image_b) === '["r1",0]',
+    "Film · the close-up box is cut in the frame's pixels, scaled to the film's size, and is the scene", JSON.stringify(gc.cr.inputs));
   // prompts
-  const plan = {look: "Still from a 1920s horror film.", place: "A dark parlour.", cast: [{name: "the medium"}, {name: "Eleanor"}]};
-  const seat = F.seatPrompt(plan, {with: ["the medium", "Eleanor"], seat: "The medium sits on the far chair."});
-  ok(/^Picture 1 is the empty set\. Picture 2 is the medium\. Picture 3 is Eleanor\./.test(seat) && seat.includes("The medium sits on the far chair.") && seat.endsWith("Still from a 1920s horror film."),
-    "Film · seating names every sheet by its picture, then the blocking, then the look", seat);
-  const edit = F.editPrompt({with: ["Eleanor"], edit: "She sits in the empty chair."});
-  ok(edit.includes("Picture 2 is Eleanor. She sits in the empty chair.") && /exactly the same\.$/.test(edit), "Film · a change names its sheets and keeps the rest", edit);
+  const plan = {look: "Still from a 1920s horror film.", place: "A dark parlour."};
+  const frames = [{name: "F1", setup: "master", with: ["the medium", "Eleanor"], seat: "The medium sits on the far chair."}, {name: "F2", from: "F1", with: ["the widower"], edit: "Her eyes roll up."}, {name: "F3", from: "F2", edit: "The chair is wet."}];
+  const fp = F.framePrompt(plan, frames, frames[2]);
+  ok(fp.startsWith("Put the people from the second image into this empty room. The second image shows, from left to right, the medium, Eleanor and the widower.") && fp.includes("The medium sits on the far chair. At this moment: Her eyes roll up. The chair is wet.") && fp.endsWith("Still from a 1920s horror film."),
+    "Film · a later moment: everyone so far, the blocking, every change in order, the look", fp);
+  const ch = F.frameChain(frames, frames[2]);
+  ok(ch.setup === "master" && ch.who.join() === "the medium,Eleanor,the widower" && ch.root === frames[0], "Film · a moment's chain leads back to its seated frame and setup");
+  ok(F.frameChain([...frames, {name: "F4", from: "F3", gone: ["the medium"]}], {name: "F4", from: "F3", gone: ["the medium"]}).who.join() === "Eleanor,the widower", "Film · someone who has gone is not in the moment");
+  let threw = false; try { F.frameChain([{name: "a", from: "b"}, {name: "b", from: "a"}], {name: "a", from: "b"}); } catch { threw = true; }
+  ok(threw, "Film · a frame made from itself is an error");
   ok(F.refPrompt({from: "Eleanor", edit: "Soaked."}).startsWith("Soaked. Keep the face"), "Film · a state is an edit of the sheet it comes from");
-  ok(F.refPrompt({with: ["the widower", "Eleanor"], look: "Their wedding photograph."}) === "Picture 1 is the widower. Picture 2 is Eleanor. Their wedding photograph.", "Film · a prop of several sheets numbers them from 1");
-  ok(F.turnPrompt(plan, {turn: "from the other side"}).includes("Show the same empty place from the other side.") && F.turnPrompt(plan, {turn: "x"}).includes("No people"), "Film · a new setup turns the empty plate");
+  ok(F.refPrompt({with: ["the widower", "Eleanor"], look: "Their wedding photograph."}) === "The first image is the widower. The second image shows Eleanor. Their wedding photograph.", "Film · a prop of two sheets: scene and subject");
+  ok(F.turnPrompt(plan, {turn: "from the other side"}).startsWith("Show this same empty room from the other side.") && F.turnPrompt(plan, {turn: "x"}).includes("No people"), "Film · a new setup turns the empty plate");
   ok(F.platePrompt(plan, {view: "High wide shot."}) === "Still from a 1920s horror film. High wide shot. A dark parlour. No people.", "Film · the first plate: the look, the view, the place, no people");
-  ok(/^Picture 1 is a soft, low-resolution crop/.test(F.cropPrompt({with: ["Eleanor"]})) && F.cropPrompt({with: ["Eleanor"]}).includes("Picture 2 is Eleanor."), "Film · a close-up is re-rendered with the sheets of who is in it");
-  // order: what a thing is made from comes first; a loop is an error
+  const cp = F.cropPrompt({with: ["Eleanor"]});
+  ok(cp.includes("every pose") && cp.includes("The second image shows Eleanor."), "Film · a close-up keeps the frame's poses; the sheet only lends the face and clothes", cp);
   const cast = [{name: "photo", with: ["a", "b"]}, {name: "b2", from: "b"}, {name: "a"}, {name: "b"}];
   const order = F.inOrder(cast, F.needs.ref).map(c => c.name);
   ok(order.indexOf("a") < order.indexOf("photo") && order.indexOf("b") < order.indexOf("photo") && order.indexOf("b") < order.indexOf("b2"), "Film · sheets are made before what's made from them", order.join(","));
-  let threw = false; try { F.inOrder([{name: "x", from: "y"}, {name: "y", from: "x"}], F.needs.ref); } catch { threw = true; }
+  threw = false; try { F.inOrder([{name: "x", from: "y"}, {name: "y", from: "x"}], F.needs.ref); } catch { threw = true; }
   ok(threw, "Film · a reference made from itself is an error");
 }
 // the steps, with a pretend io: what each makes, from what, in what order
@@ -190,18 +199,20 @@ import * as F from "../app/js/film.js";
     shots: [{frame: "F1"}, {frame: "F2", crop: {x: 0, y: 0, w: .5, h: .5}, with: ["Eleanor, drowned"]}, {keyframe: "words"}]};
   await F.makeRefs(plan, io);
   ok(runs.map(r => r.label).join("|") === "Film · Eleanor|Film · Eleanor, drowned|Film · the widower", "Film · references: Eleanor's sheet before the drowned one made from it", runs.map(r => r.label).join("|"));
-  ok(runs[1].g.r0.inputs.image.includes("ref_eleanor_s") && runs[1].g.enc.inputs.prompt.startsWith("Soaked."), "Film · the drowned sheet is an edit of Eleanor's");
+  ok(/ref_eleanor_\d/.test(runs[1].g.r0.inputs.image) && runs[1].g.pos.inputs.prompt.startsWith("Soaked.") && runs[1].g.lat.inputs.width === 832, "Film · the drowned sheet is an edit of Eleanor's, at a sheet's size", runs[1].g.r0.inputs.image);
   ok(runs[0].g["10"].inputs.text.includes("Costume test photograph") && runs[0].g["4"].inputs.width === 832, "Film · a character's sheet is a costume-test portrait");
   runs.length = 0; await F.makeSetups(plan, io);
   ok(runs.map(r => r.label).join("|") === "Film · set master|Film · set reverse" && runs[1].g.r0.inputs.image.includes("set_master"), "Film · the reverse turns the master's empty plate, made first");
   runs.length = 0; await F.makeFrames(plan, io);
-  ok(runs.map(r => r.label).join("|") === "Film · frame F1|Film · frame F2", "Film · a frame before the change made from it");
-  ok(runs[0].g.r0.inputs.image.includes("set_reverse") && runs[0].g.r1.inputs.image.includes("ref_the_widower"), "Film · a seated frame: the setup's plate, then the sheets");
-  ok(runs[1].g.r0.inputs.image.includes("frame_f1") && runs[1].g.r1.inputs.image.includes("ref_eleanor_drowned"), "Film · a change: the frame before, then the newcomer's sheet");
+  const fr = Object.fromEntries(runs.map(r => [r.label, r.g]));
+  ok(fr["Film · frame F2"].r0.inputs.image.includes("set_reverse") && fr["Film · frame F2"].r1.inputs.image.includes("ref_the_widower") && fr["Film · frame F2"].r2.inputs.image.includes("ref_eleanor_drowned"),
+    "Film · a later moment is made fresh from the setup's plate, with everyone in it so far");
+  ok(fr["Film · frame F2"].pos.inputs.prompt.includes("He sits right. At this moment: She sits."), "Film · a later moment's words: the blocking, then what changed");
+  ok(fr["Film · frame F2"].k0.inputs.seed === fr["Film · frame F1"].k0.inputs.seed, "Film · every moment of a setup on its first frame's seed");
   runs.length = 0; await F.frameShots({...plan, shots: plan.shots.slice(0, 2)}, io);
   ok(plan.shots[0].key?.filename.includes("frame_f1") && runs.length === 1 && runs[0].g.cr, "Film · a whole-frame shot takes its frame as is; a close-up is cut and made sharp", JSON.stringify(plan.shots[0].key));
   let err = ""; try { await F.makeFrames({...plan, frames: [{name: "X", from: "nope"}]}, io); } catch (e) { err = e.message; }
-  ok(/isn't made yet/.test(err), "Film · a change of a frame that doesn't exist says so", err);
+  ok(/isn't a frame/.test(err), "Film · a change of a frame that doesn't exist says so", err);
 }
 
 const plan = parsePlan('noise {"title":"T","cast":[{"name":"the keeper","look":"an old man"}],"place":"a rock","song":{"style":"strings"},"shots":[{"who":["the keeper"],"keyframe":"k","motion":"m","subject":"the keeper","effect":"Rays","on":"beat"},{"keyframe":"k2","effect":"Nope","on":"x"}]} tail', 6);

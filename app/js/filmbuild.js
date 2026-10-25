@@ -119,8 +119,9 @@ export function drawBuild(el, p, ctx) {
         const [k, v] = e.target.value.split(":"); delete f.from; delete f.setup; f[k] = v; f.still = null; save(); redraw(); }},
         ...p.setups.map(su => h("option", {value: `setup:${su.name}`, selected: !f.from && f.setup === su.name}, `seated in the ${su.name}`)),
         ...others.map(n => h("option", {value: `from:${n}`, selected: f.from === n}, `a change of ${n}`))),
-      whoChips(people(p), f.with || [], (w) => { f.with = w; save(); redraw(); }, f.from ? "Whose sheets this change needs (someone arriving, a prop in a hand)" : "Who is in this frame: their sheets are seated into the plate"),
-      f.from ? text(f, "edit", 3, "What changes, e.g. the seat of the empty chair is soaking wet, water dripping onto the floor", "Only this changes; every face, pose, piece of furniture and the light stay as they were")
+      whoChips(people(p), f.with || [], (w) => { f.with = w; f.still = null; save(); redraw(); }, f.from ? "Who arrives at this moment (their sheets join everyone already there)" : "Who is in this frame: their sheets are seated into the plate"),
+      f.from ? h("div", {class: "bgone"}, h("span", {class: "hint"}, "gone:"), whoChips(people(p), f.gone || [], (w) => { f.gone = w; f.still = null; save(); redraw(); }, "Who has left by this moment")) : null,
+      f.from ? text(f, "edit", 3, "What has changed by now, e.g. the seat of the empty chair is soaking wet, water dripping onto the floor", "Painted fresh from the setup's plate: the blocking, then every change so far, in order")
         : text(f, "seat", 4, "Who sits where, facing where, doing what, e.g. the medium sits on the far chair behind the lamp, facing us…", "The blocking: say where each person is in the picture; anything you don't seat isn't there"));
   });
   const addFrame = h("button", {class: "ibtn", type: "button", disabled: busy || !p.setups.length, tip: p.setups.length ? "" : "Add a setup first", onclick: () => {
