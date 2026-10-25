@@ -209,6 +209,15 @@ import * as F from "../app/js/film.js";
   const m3 = P.motionPrompt({genre: goth, move: push, action: "She opens her eyes; white-gold fire races up the blade. The camera holds still.", look: "Oil painting."});
   ok(!m3.includes("stay exactly"), "Film · a shot whose action changes the light isn't told the light stays", m3);
 }
+{ // your own sheet music: YuE2 plays it as written (no sheet of its own, no voice move), and the score is made from it
+  const abc = "X:1\nT:\nM:4/4\nL:1/32\nQ:1/4=108\n";
+  const g = G.songScore({style: "solo piano", abc, seconds: 60});
+  const gm = Object.values(g).find(n => n.class_type === "YuE2GenerateMusic");
+  ok(gm.inputs.abc === abc && !Object.values(g).some(n => n.class_type === "YuE2GenerateABC" || n.class_type === "PlenioScoreTools") && g["c"].inputs.abc === abc,
+     "Song · your own sheet music is played as written");
+  const own = G.song({style: "x", lyrics: "[Instrumental]"}).graph;
+  ok(Object.values(own).some(n => n.class_type === "YuE2GenerateABC"), "Song · without sheet music YuE2 still writes its own");
+}
 { // the Score tab's shots follow the Film tab's rule: a bar ending up to 3 frames past the clip still counts
   const m = G.scoreMake({audio: "s.flac"})["m"].inputs, bar = 4 * 60 / 106;
   ok(Math.floor(m.shot_seconds / bar + 1e-6) === 2 && shotSeconds(bar).bars === 2, "Score · at 106 BPM a shot is two bars, as in the Film tab", m.shot_seconds);

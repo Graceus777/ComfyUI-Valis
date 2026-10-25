@@ -721,26 +721,29 @@ ramp loud 0 0 4.4 1`;
 // CLIP slot, ar_lora_inst_v3abc, CC BY-NC 4.0), the lyrics as the adapter was trained ("[instrumental]"), and the score's
 // Vocal melody moved to the instrument voice before the music is rendered (Plenio Score Tools), so the tune is played.
 export const INSTRUMENTAL_LORA = "ar_lora_inst_v3abc_comfyui.safetensors";
-export function song({style, lyrics, seconds = 30, seed = 1843, base = 500, prefix = "valis/song", instrumental = /^\s*\[instrumental\]\s*$/i.test(lyrics || "")}) {
+// abc: your own sheet music (YuE2's native two-voice ABC: the melody in Ins, the chord symbols in Vocal), played as it
+// is written instead of YuE2 writing its own
+export function song({style, lyrics, seconds = 30, seed = 1843, base = 500, prefix = "valis/song", instrumental = /^\s*\[instrumental\]\s*$/i.test(lyrics || ""), abc = null}) {
   const i = (k) => String(base + k);
   const clip = instrumental ? [i(9), 1] : [i(0), 1];
   const words = instrumental ? "[instrumental]" : lyrics;
+  const sheet = abc || (instrumental ? [i(10), 0] : [i(1), 0]);
   const g = {
     [i(0)]: N("CheckpointLoaderSimple", {ckpt_name: "yue2_3b_bf16.safetensors"}),
-    [i(1)]: N("YuE2GenerateABC", {clip, style, lyrics: words, seed, mode: "full", max_abc_tokens: 8192, temperature: 0.7, top_p: 0.9, top_k: 30, repetition_penalty: 1.005, penalty_window: 100}),
-    [i(2)]: N("YuE2GenerateMusic", {clip, style, lyrics: words, abc: instrumental ? [i(10), 0] : [i(1), 0], seed, mode: "full", max_duration: seconds, temperature: 1, top_p: 0.95, top_k: 100, repetition_penalty: 1.2, cfg_scale: 1}),
+    ...(abc ? {} : {[i(1)]: N("YuE2GenerateABC", {clip, style, lyrics: words, seed, mode: "full", max_abc_tokens: 8192, temperature: 0.7, top_p: 0.9, top_k: 30, repetition_penalty: 1.005, penalty_window: 100})}),
+    [i(2)]: N("YuE2GenerateMusic", {clip, style, lyrics: words, abc: sheet, seed, mode: "full", max_duration: seconds, temperature: 1, top_p: 0.95, top_k: 100, repetition_penalty: 1.2, cfg_scale: 1}),
     [i(3)]: N("ConditioningZeroOut", {conditioning: [i(2), 0]}),
     [i(4)]: N("EmptyYuE2LatentAudio", {seconds: [i(2), 1], batch_size: 1}),
     [i(5)]: N("KSampler", {model: [i(0), 0], positive: [i(2), 0], negative: [i(3), 0], latent_image: [i(4), 0], seed, steps: 32, cfg: 1, sampler_name: "dpm_2", scheduler: "sgm_uniform", denoise: 1}),
     [i(6)]: N("VAEDecodeAudio", {samples: [i(5), 0], vae: [i(0), 2]}),
     [i(7)]: N("SaveAudio", {audio: [i(6), 0], filename_prefix: prefix}),
-    [i(8)]: N("SaveText", {text: instrumental ? [i(10), 0] : [i(1), 0], filename_prefix: prefix + "_abc", format: "txt"}),
+    [i(8)]: N("SaveText", {text: sheet, filename_prefix: prefix + "_abc", format: "txt"}),
     ...(instrumental ? {
       [i(9)]: N("LoraLoader", {model: [i(0), 0], clip: [i(0), 1], lora_name: INSTRUMENTAL_LORA, strength_model: 0.0, strength_clip: 1.0}),
-      [i(10)]: N("PlenioScoreTools", {operation: "voices", "operation.vocal": "move Vocal melody to Ins", "operation.conflict": "replace Ins", score: [i(1), 0]}),
+      ...(abc ? {} : {[i(10)]: N("PlenioScoreTools", {operation: "voices", "operation.vocal": "move Vocal melody to Ins", "operation.conflict": "replace Ins", score: [i(1), 0]})}),
     } : {}),
   };
-  return {graph: g, audio: [i(6), 0], abc: instrumental ? [i(10), 0] : [i(1), 0]};
+  return {graph: g, audio: [i(6), 0], abc: sheet};
 }
 
 // A Valis score made from any music (or YuE2's sheet music, or a cue sheet, or several): Valis Cues hears it, Valis
@@ -758,8 +761,8 @@ export function scoreMake({audio = null, music = null, abc = "", cueSheet = "", 
   return g;
 }
 // YuE2 writes a song and plays it, and the score is made from its own sheet music and its audio, in one job
-export function songScore({style, lyrics = "[Instrumental]", seconds = 30, seed = 1843, title = "untitled", prefix = "valis/scores/song"}) {
-  const s = song({style, lyrics, seconds, seed, prefix});
+export function songScore({style, lyrics = "[Instrumental]", seconds = 30, seed = 1843, title = "untitled", prefix = "valis/scores/song", abc = null}) {
+  const s = song({style, lyrics, seconds, seed, prefix, abc});
   return {...s.graph, ...scoreMake({music: s.audio, abc: s.abc, title, prefix})};
 }
 
