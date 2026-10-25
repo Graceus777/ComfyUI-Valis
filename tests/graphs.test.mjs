@@ -206,6 +206,15 @@ import * as F from "../app/js/film.js";
   const m2 = P.motionPrompt({genre: goth, move: push, action: "She closes her eyes"});
   ok(m2.includes(push.words) && !m2.includes("stay exactly"), "Create · the move is said when the action says nothing of the camera", m2);
 }
+{ // an effects pass is found again only for the same clip and settings
+  const asked = [];
+  const io = {exists: async (f) => { asked.push(f.filename); return true; }, ref: (f) => f.filename, run: async () => { throw new Error("should not run"); }};
+  const plan = {tag: "t", music: {audio: {filename: "s.flac"}, abc: "", bar: {seconds: 2.8}}, shots: [{clip: {filename: "a.mp4"}, key: {filename: "k.png"}, effect: "Frost", on: "kick"}]};
+  await F.effectShots(plan, io);
+  plan.shots[0].fx = null; plan.shots[0].clip = {filename: "b.mp4"};
+  await F.effectShots(plan, io);
+  ok(asked.length === 2 && asked[0] !== asked[1] && /^film_t_fx_1_\w+_00001_\.mp4$/.test(asked[0]), "Film · a re-shot shot's effects pass isn't the old one found by name", asked.join(" "));
+}
 // the steps, with a pretend io: what each makes, from what, in what order
 {
   const runs = [];

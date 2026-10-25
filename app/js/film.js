@@ -203,6 +203,7 @@ export function inOrder(list, deps, what = "it") {
   list.forEach(visit);
   return out;
 }
+const hash = (t) => [...String(t)].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0, 7).toString(36);
 const slug = (s) => String(s || "x").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 24) || "x";
 const png = (r) => r.outputs.find(o => /\.png$/i.test(o.filename)) || null;
 
@@ -390,12 +391,15 @@ export async function effectShots(plan, io, {only = null, onStage = () => {}} = 
     onStage("effects", `effects and sound on shot ${k + 1} of ${plan.shots.length}`, k);
     const layers = lib ? [{effect: lib.id, on: s.on, params: lib.params || {}}] : [];
     const subject = lib && ((lib.needs || []).includes("subject") || lib.params?.at === "subject") ? s.subject : "";
-    const r = (!only && !s._custom && !plan.shotSeconds && await saved(io, [`${b}_fx_${k + 1}_00001_.mp4`], plan)) || await io.run(
+    // a pass is found again only if it was made from this clip with these settings (a re-shot shot, or a new effect,
+    // once picked up the old pass by its name)
+    const tag = hash([s.clip.filename, s.effect, s.on, s.subject, s.holdColour !== false, s.key?.filename].join("|"));
+    const r = (!only && !s._custom && !plan.shotSeconds && await saved(io, [`${b}_fx_${k + 1}_${tag}_00001_.mp4`], plan)) || await io.run(
       // the shot keeps its keyframe's colours (a shot whose light is meant to change says holdColour: false)
       G.fx({clip: io.ref(s.clip), subject, source: "song", audio: io.ref(m.audio), abc: m.abc, layers, sound: true,
             hold: s.key && s.holdColour !== false ? io.ref(s.key) : null,
             seconds: Math.max(len, cut.seconds), fit: cut.seconds > len,
-            start: k * cut.seconds, prefix: `${pre(plan)}_fx_${k + 1}${only ? "_" + Date.now().toString(36) : ""}`}), `Film · effects ${k + 1}`);
+            start: k * cut.seconds, prefix: `${pre(plan)}_fx_${k + 1}_${tag}${only ? "_" + Date.now().toString(36) : ""}`}), `Film · effects ${k + 1}`);
     s.fx = r.outputs.find(isVideo) || null;
     if (!s.fx) throw new Error(`effects on shot ${k + 1} saved no video`);
   }
