@@ -22,13 +22,14 @@ each shot at its own place in the song; and the cut lands every shot on the bars
 and about an hour on a 12 GB card. Nothing is prompted by hand and nothing leaves the machine.
 
 A story with the same people across many cuts needs more than words: painted one by one, every still is a new room,
-new faces and a new head count. **Build it from references** instead. Each character gets a sheet (a costume-test
-portrait; a state of one, like a drowned bride, is an edit of her sheet; a prop, like their wedding photograph, is
-made from both sheets). The set gets an empty plate per camera setup (a reverse angle turns the empty plate; turning
-a frame with people in it brings them back twice). A frame seats the sheets into a setup's plate as the blocking says,
-and every change after it (a trance, a wet chair, someone arriving) is an edit of the frame before, so nothing changes
-that the script doesn't change. A shot is a frame, or a close-up box dragged on one and re-rendered sharp with the
-sheets of who is in it. Qwen Image 2.1 does all of it, with every reference in one sequence.
+new faces and a new head count. **Build it from references** instead. Each character gets a sheet: a costume-test
+portrait (Krea 2); a state of one, like a drowned bride, is a Krea 2 identity edit of her sheet; a prop, like their
+wedding photograph, is made from both sheets. The set gets an empty plate per camera setup (a reverse angle turns the
+empty plate; turning a frame with people in it brings them back twice). A frame seats the sheets into a setup's plate
+as the blocking says (Qwen Image 2.1, every reference in one pass), and every later moment (a trance, a wet chair,
+someone arriving, someone gone) is one edit of that seated frame, never of the moment before, so nothing changes that
+the script doesn't change. A shot is a frame, or a close-up box dragged on one and enlarged by SeedVR2, which keeps
+the pose and the faces the frame has.
 
 The same chain runs headless, for people and for agents:
 
