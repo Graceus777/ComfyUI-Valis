@@ -1233,8 +1233,10 @@ function shotStill(p, sh) {
   const f = byName(frames, sh.frame);
   return [sel,
     f?.still ? cropEditor(f.still, sh.crop, (c) => {
+      const had = !!sh.crop;
       if (c) sh.crop = c; else delete sh.crop;
-      sh.key = c ? null : f.still; sh.clip = null; sh.fx = null; fsave(); fsteps(); })
+      sh.key = c ? null : f.still; sh.clip = null; sh.fx = null; fsave();
+      if (had !== !!c) fdraw(); else fsteps(); })                // a close-up shows who's in it; the whole frame doesn't
       : h("p", {class: "hint"}, `frame ${sh.frame} isn't made yet`),
     sh.crop ? whoChips((p.cast || []).map(c => c.name), sh.with || [], (w) => { sh.with = w; sh.key = null; fsave(); fdraw(); }, "Who is in the close-up: their sheets make it sharp") : null,
   ].filter(Boolean);
