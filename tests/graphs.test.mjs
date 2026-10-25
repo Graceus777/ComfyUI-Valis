@@ -205,6 +205,8 @@ import * as F from "../app/js/film.js";
   ok(m1.startsWith("Red lamp light from below. The scene begins") && m1.includes("stay exactly as in the first frame") && !m1.includes(push.words) && !m1.includes(".."), "Film · a shot's motion keeps its look and its light, and its own camera", m1);
   const m2 = P.motionPrompt({genre: goth, move: push, action: "She closes her eyes"});
   ok(m2.includes(push.words) && !m2.includes("stay exactly"), "Create · the move is said when the action says nothing of the camera", m2);
+  const m3 = P.motionPrompt({genre: goth, move: push, action: "She opens her eyes; white-gold fire races up the blade. The camera holds still.", look: "Oil painting."});
+  ok(!m3.includes("stay exactly"), "Film · a shot whose action changes the light isn't told the light stays", m3);
 }
 { // an effects pass is found again only for the same clip and settings
   const asked = [];
