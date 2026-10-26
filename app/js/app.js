@@ -1265,6 +1265,9 @@ function toCreate(k) {
   $("#c-action").value = sh.motion || ""; $("#c-who").value = sh.subject || "";
   FILM_RETURN = {tag: p.tag, k};
   if (sh.key) pickKey(sh.key, null);
+  // the film's genre comes along: its words open the shot's motion prompt (a painted fantasy film isn't "live-action gothic")
+  const gid = M.genre?.id || p.genre;
+  if (gid) $(`#c-genre .card[data-id="${gid}"]`)?.click();
   cchanged(); show("create"); filmReturnBar();
 }
 function filmReturnBar() {
