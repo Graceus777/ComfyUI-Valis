@@ -84,13 +84,13 @@ api.on((ev) => {
 });
 // the tab a job came from names it in the bin ("Edit", "Genjutsu"...)
 const TABNAME = {film: "Film", create: "Create", edit: "Edit", genjutsu: "Genjutsu", score: "Score", fx: "FX", extras: "Extras", renders: "Renders"};
-function run(graph, label, viewer, {onDone, kind} = {}) {
+function run(graph, label, viewer, {onDone, onError, kind} = {}) {
   return api.submit(graph, label, kind || TABNAME[$(".tab.on")?.dataset.view] || "render").then((job) => {
     const upd = viewer ? progressFor(job, viewer) : () => {};
     waiters.set(job.id, (j) => {
       upd(j);
       if (j.status === "done") { waiters.delete(j.id); onDone?.(j); }
-      if (j.status === "error") { waiters.delete(j.id); toast(`${label} failed: ${j.error}`, true); }
+      if (j.status === "error") { waiters.delete(j.id); toast(`${label} failed: ${j.error}`, true); onError?.(j); }
     });
     toast(`${label} queued`);
     return job;
@@ -473,9 +473,9 @@ $("#e-look-groups").replaceChildren(...[{id: "all", name: "All"}, ...P.LOOK_GROU
   }}, g.name)));
 const REF_EMPTY = () => [h("b", {}, "Your own look"), h("br"), "Drop a picture of it: a creature, a costume, a material", h("br"), h("span", {class: "hint"}, "or drag a still from the bin")];
 function useOwn() {
+  if (E.look?.id !== "own") $("#e-rb").value = P.OWN_LOOK.rb;     // coming from a preset: your look's own faithfulness (the slider is yours after)
   E.look = P.ownLook({words: $("#e-ref-words").value, ref: !!E.lookRef});
   $$("#e-looks .card").forEach(c => c.classList.remove("on"));
-  if (Number($("#e-rb").value) < 1) $("#e-rb").value = 1.0;
   syncSliders(); refreshPrompt(); ownState();
 }
 function usePreset() {
@@ -512,7 +512,7 @@ $("#e-ref-paint").addEventListener("click", () => {
   const btn = $("#e-ref-paint"); btn.disabled = true; btn.firstChild.textContent = "Painting…";
   const done = () => { btn.disabled = false; btn.firstChild.textContent = "Paint it"; };
   run(G.keyframes({prompt: P.lookRefPrompt(words), width: 768, height: 1024, seeds: [7000 + Math.floor(Math.random() * 9000)], prefix: `valis/look_ref_${Date.now().toString(36)}`}),
-    "Paint the look", null, {onDone: (j) => {
+    "Paint the look", null, {onError: done, onDone: (j) => {
       done();
       const f = j.outputs.find(o => /\.(png|jpe?g|webp)$/i.test(o.filename));
       if (f) { setLookRef(api.fileRef(f), api.viewUrl(f), `painted: ${words}`); Bin.add?.(f, {from: "Edit", label: `look: ${words}`}); }
@@ -630,7 +630,7 @@ $("#e-char-paint").addEventListener("click", () => {
   const btn = $("#e-char-paint"); btn.disabled = true; btn.firstChild.textContent = "Painting…";
   const done = () => { btn.disabled = false; btn.firstChild.textContent = "Paint"; };
   run(G.keyframes({prompt: sheetPrompt({look: words}), width: 832, height: 1216, seeds: [7000 + Math.floor(Math.random() * 9000)], prefix: `valis/swap_sheet_${Date.now().toString(36)}`}),
-    "Paint the character", null, {onDone: (j) => {
+    "Paint the character", null, {onError: done, onDone: (j) => {
       done();
       const f = j.outputs.find(o => /\.(png|jpe?g|webp)$/i.test(o.filename));
       if (!f) return;

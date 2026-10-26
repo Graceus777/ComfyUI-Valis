@@ -9,8 +9,8 @@ import {writeFileSync} from "node:fs";
 import {LOOKS} from "../app/js/presets.js";
 import {lookStill} from "../app/js/graphs.js";
 
-const WOMAN = ["bride", "ghost", "drowned", "angel", "elf", "porcelain", "glass", "ice", "flowers", "water", "cosmos", "victorian", "hologram", "biolum", "crystal", "sand"];
-const MEDIUM = ["frozen", "overgrown", "royal", "gold", "clay", "soaked", "runes", "lightning"];
+const WOMAN = ["bride", "ghost", "drowned", "angel", "elf", "porcelain", "ice", "flowers", "cosmos", "victorian", "hologram", "biolum", "crystal"];
+const MEDIUM = ["overgrown", "royal", "gold", "soaked", "runes", "lightning"];
 const base = (id) => WOMAN.includes(id) ? "woman" : MEDIUM.includes(id) ? "medium" : "man";
 const who = {man: "the man", woman: "the woman", medium: "the woman"};
 const [out, ...only] = process.argv.slice(2);
