@@ -214,6 +214,7 @@ details.prompt pre { margin: 0; padding: 0 12px 12px; white-space: pre-wrap; col
 .plan .shot textarea { min-height: 54px; }
 .plan .shot select, .plan .shot input { padding: 6px; font-size: 12px; }
 #m-progress .empty { padding: 10px 0 0; }
+#m-progress .empty b { margin-right: 10px; }   /* the job's name and its state were run together ("Film · planrendering") */
 
 /* ======================================================================== Oct 24 polish */
 /* header: tabs scroll instead of pushing the status off screen */
