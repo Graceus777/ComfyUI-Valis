@@ -1441,7 +1441,7 @@ const TIPS = {
   "#e-grow": "How far past the thing's edge the re-render reaches: more covers hair and loose clothes, less keeps the background untouched",
   "#e-audio": "Keep the clip's own sound", "#e-find": "Shows what SAM 3 finds for that name, as an overlay, before the long render",
   // fx
-  "#f-clip": "The clip the effects go on", "#f-clip-sel": "Or one from the studio's renders", "#f-other-sel": "A second clip, for effects that show another scene (tear, shatter, time slip, double exposure, split, era cut)",
+  "#f-clip": "The clip the effects go on", "#f-clip-sel": "Or one from the studio's renders", "#f-other-sel": "A second clip, for effects that show another scene (tear, time slip, double exposure, split, era cut)",
   "#f-subject": "SAM 3 follows this for effects that are about someone (echo, lens, vertigo, double exposure)",
   "#f-song": "Valis hears its beats, kick, snare and hats, and how loud and bright it is: those are the lanes effects listen to",
   "#f-style": "YuE2's brief: genre, instruments, mood, tempo", "#f-lyrics": "Lyrics with [verse] and [chorus], or [Instrumental]", "#f-secs": "How long the song is",

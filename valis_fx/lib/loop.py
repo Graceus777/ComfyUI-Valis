@@ -265,7 +265,7 @@ def render_loop(frames, cues, stack, fps=24.0, start=0.0, other=None, masks=None
         ctx.add_depth(np.asarray(depth, np.float32))
     fx = [LIBRARY[name](**p) for name, p in stack]
     for f in fx:
-        if hasattr(f, "once"):                          # Shatter: "once" means once per loop here
+        if hasattr(f, "once"):                          # an effect that fires once: once per loop here
             f.once = False
     total = warm + n
     out = np.empty((n, H, W, 3), np.float32)

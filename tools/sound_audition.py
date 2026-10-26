@@ -19,7 +19,7 @@ from valis_fx.lib import sound as S  # noqa: E402
 W, H, FPS = 1280, 720, 24
 REEL = [  # (design, what it is for, seconds between strikes)
     ("bell", "story bell, tuned to the key (each strike: a different clapper spot)", 3.2),
-    ("swell", "reverse-reverb chord into a hit (Shockwave, Shatter)", 3.0),
+    ("swell", "reverse-reverb chord into a hit (Shockwave)", 3.0),
     ("whoosh", "air passing, peak on the cue (DoubleExposure)", 1.9),
     ("boom", "round low hit on the tonic, no grit (Shockwave, Punch)", 2.4),
     ("shimmer", "light: a high chord that blooms (Rays)", 3.0),
@@ -30,7 +30,7 @@ REEL = [  # (design, what it is for, seconds between strikes)
     ("heartbeat", "story sound", 1.2),
     ("thunder", "story sound", 5.0),
     ("crackle", "fire (beds and Burn)", 2.4),
-    ("shatter", "glass on high notes (Shatter)", 3.0),
+    ("shatter", "glass on high notes (cue sheets)", 3.0),
     ("tear", "tearing open (Tear)", 1.8),
     ("stutter", "codec catch (Datamosh)", 1.2),
     ("tick", "a tiny tick (Glitch)", .6),

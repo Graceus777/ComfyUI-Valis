@@ -9,7 +9,6 @@ sheet music, a syllable, or a line in a soundless cue sheet.
     Lens            a gravitational lens at a tracked point: space bends, an Einstein ring, a dark core
     Datamosh        the next frame never arrives: the last picture is dragged along the new motion
     Echo            the subject sheds afterimages on each hit: they drift, grow and fade
-    Shatter         the frame cracks from the impact point and falls away in shards (onto another scene)
     Frost           frost grows in from the frame's edges on the hits, dendritic, frosting the glass, and thaws
     Vertigo         a dolly zoom from a subject mask: the subject holds, the world is pushed away (real pixels only)
     Tear            reality rips open along a jagged seam; another scene burns behind it
@@ -388,109 +387,6 @@ class Echo:
 
 
 # ---------------------------------------------------------------------------------------------------------------
-class Shatter:
-    """The frame is glass. On the hit, cracks race out from the impact point; after `hold` the shards fall,
-    turning and catching the light, onto `behind` (another clip, or black)."""
-
-    def __init__(self, on="impact", at=None, behind=None, cells=80, hold=.28, fall=1.8, gravity=1500, spin=1.6, seed=11,
-                 once=True, rim=.9):
-        self.__dict__.update(locals()); del self.__dict__["self"]
-        self._g = None
-
-    def _build(self, ctx, th, frame):
-        H, W = ctx.H, ctx.W
-        r = np.random.default_rng((self.seed + int(ctx.cues.key(th) * 100)) % 2 ** 32)
-        c = self.at if isinstance(self.at, tuple) else (ctx.centroid(self.at) if self.at else None) or (W * .5, H * .45)
-        # glass breaks in spokes from the impact and rings around it: shards are the cells of a jittered polar grid
-        h2, w2 = H // 2, W // 2
-        xx, yy = grid(h2, w2)
-        dx, dy = xx - c[0] / 2, yy - c[1] / 2
-        rr = np.sqrt(dx * dx + dy * dy); th_ = np.arctan2(dy, dx)
-        nsp = 11 + int(r.integers(0, 6))
-        spokes = np.sort(r.uniform(0, 2 * math.pi, nsp))
-        wob = (value_noise(h2, w2, 60, self.seed + 5, 3) - .5) * .07
-        a_ = (th_ + wob + 2 * math.pi) % (2 * math.pi)
-        sector = np.searchsorted(spokes, a_) % nsp
-        rings = np.cumsum(r.uniform(.6, 1.4, 12) * np.geomspace(18, 140, 12))
-        ring = np.searchsorted(rings, rr * (1 + (value_noise(h2, w2, 50, self.seed + 6, 3) - .5) * .08))
-        lab = (ring * nsp + sector).astype(np.int32)
-        _, lab = np.unique(lab, return_inverse=True); lab = lab.reshape(h2, w2).astype(np.int32)
-        self.cells = int(lab.max()) + 1
-        lab = cv2.resize(lab.astype(np.float32), (W, H), interpolation=cv2.INTER_NEAREST).astype(np.int32)
-        edges = ((np.abs(np.diff(lab, axis=0, prepend=lab[:1])) + np.abs(np.diff(lab, axis=1, prepend=lab[:, :1]))) > 0).astype(np.float32)
-        XX, YY = grid(H, W)
-        dist = np.sqrt((XX - c[0]) ** 2 + (YY - c[1]) ** 2)
-        shards = []
-        for k in range(self.cells):
-            ys, xs = np.nonzero(lab == k)
-            if len(xs) < 20:
-                continue
-            x0, x1, y0, y1 = xs.min(), xs.max() + 1, ys.min(), ys.max() + 1
-            sc = np.array([xs.mean(), ys.mean()], np.float32)
-            v = (sc - np.array(c, np.float32)); vn = v / (np.linalg.norm(v) + 1e-3)
-            dist0 = float(np.linalg.norm(v)) / max(W, H)
-            shards.append(dict(k=k, box=(x0, x1, y0, y1), c=sc, v=vn * r.uniform(60, 380) * (1.2 - dist0) + np.array([0, -r.uniform(0, 160)]),
-                               w=r.normal(0, self.spin), delay=dist0 * .5 + r.uniform(0, .12), z=r.uniform(.002, .02)))
-        self._g = dict(th=th, frame=frame.copy(), lab=lab, edges=edges, dist=dist, shards=shards, c=c)
-
-    def __call__(self, ctx, img):
-        hits = ctx.cues.times(self.on)
-        hits = hits[hits <= ctx.t + 1e-6]
-        if not len(hits):
-            return img
-        th = hits[0] if self.once else hits[-1]
-        if self._g is None or abs(self._g["th"] - th) > 1e-6:
-            if ctx.t - th > 2 / ctx.fps and self._g is None and not self.once:
-                return img
-            self._build(ctx, th, img)
-        G = self._g
-        age = ctx.t - G["th"]
-        H, W = ctx.H, ctx.W
-        behind = ctx.clip(self.behind) if self.behind else np.zeros_like(img)
-        if age < self.hold:
-            # cracks race outward; the shards shift a pixel or two, catching light
-            front = age / self.hold * max(W, H) * 1.2
-            cr = G["edges"] * (G["dist"] < front)
-            cr = cv2.dilate(cr, np.ones((2, 2), np.uint8))
-            out = img.copy()
-            out = screen(out, (blur(cr, 1.2) * 1.0 + blur(cr, 5) * .5)[..., None] * np.array([.95, .97, 1.0], np.float32))
-            return out
-        t2 = age - self.hold
-        if t2 > self.fall + .6:
-            return behind
-        out = behind.copy()
-        src = G["frame"]; lab = G["lab"]
-        order = sorted(G["shards"], key=lambda s: -s["z"])
-        for s in order:
-            tt = max(0.0, t2 - s["delay"])
-            x0, x1, y0, y1 = s["box"]
-            pad = 2
-            x0, y0 = max(0, x0 - pad), max(0, y0 - pad); x1, y1 = min(W, x1 + pad), min(H, y1 + pad)
-            if tt <= 0:
-                M = np.float32([[1, 0, 0], [0, 1, 0]])
-                ang = 0.0; scale = 1.0; off = np.zeros(2)
-            else:
-                off = s["v"] * tt + np.array([0, .5 * self.gravity * tt * tt])
-                ang = s["w"] * tt * 57.3; scale = 1 + s["z"] * tt * 40
-            M = cv2.getRotationMatrix2D((float(s["c"][0]), float(s["c"][1])), ang, scale)
-            M[:, 2] += off
-            piece = src[y0:y1, x0:x1]
-            msk = (lab[y0:y1, x0:x1] == s["k"]).astype(np.float32)
-            Mfull = M.copy()
-            # warp the shard's crop into the full frame
-            T = np.float32([[1, 0, x0], [0, 1, y0]])
-            A = np.vstack([Mfull, [0, 0, 1]]) @ np.vstack([T, [0, 0, 1]])
-            wp = cv2.warpAffine(piece, A[:2], (W, H), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
-            wm = cv2.warpAffine(msk, A[:2], (W, H), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
-            if wm.max() <= 0:
-                continue
-            edge = np.clip(wm - cv2.erode(wm, np.ones((3, 3), np.uint8)), 0, 1)
-            shade = .85 + .3 * math.cos(math.radians(ang) * 2)
-            wp = wp * shade + edge[..., None] * self.rim * np.array([.9, .95, 1.0], np.float32)
-            out = out * (1 - wm[..., None]) + wp * wm[..., None]
-        return out
-
-
 # ---------------------------------------------------------------------------------------------------------------
 class Frost:
     """Frost on the glass in front of the lens: it grows in from the frame's edges where the hits land (or from mask
@@ -965,7 +861,7 @@ class Punch:
         return screen(out, np.full_like(out, self.flash * min(e, 1)))
 
 
-LIBRARY = {c.__name__: c for c in (DoubleExposure, TimeSlip, SlitScan, Lens, Datamosh, Echo, Shatter, Frost, Vertigo, Shockwave, Rays, Split, Eras,
+LIBRARY = {c.__name__: c for c in (DoubleExposure, TimeSlip, SlitScan, Lens, Datamosh, Echo, Frost, Vertigo, Shockwave, Rays, Split, Eras,
                                     Tear, Projector, Glitch, Punch)}
 from .light import LIGHT          # noqa: E402  (light.py needs only core)
 LIBRARY.update(LIGHT)

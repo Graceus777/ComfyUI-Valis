@@ -542,7 +542,6 @@ ACCENT = {"heartbeat": 0.0, "thunder": 0.0, "bell": 0.0, "crackle": .3}
 
 # which designs an effect brings with it: (design, lane attribute, options)
 EFFECT_SOUNDS = {
-    "Shatter": [("swell", "on", dict(gain=.8)), ("shatter", "on", {})],
     "Tear": [("tear", "on", {})],
     "TimeSlip": [("slip", "on", {})],
     "Lens": [("lens", "on", {})],

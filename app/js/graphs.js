@@ -707,7 +707,7 @@ export function valisShot({clip, score, startBar, mode = "auto", section = "", l
 // The library, in groups. Light comes first: those effects relight the shot itself (a flame's breath, a strike off-screen,
 // headlights passing) and read as the scene's own light. Break & blend are strong graphic moments: one or two a film.
 // presets: named settings of the same effect; the first is the default. A layer, a Score rule or a Film shot names one as
-// "Effect:preset" ("Effect" alone is the first). A preset may say what it needs on top of the effect (Shatter's Break away
+// "Effect:preset" ("Effect" alone is the first). A preset may say what it needs on top of the effect (one that
 // falls onto another clip).
 export const FX_GROUPS = [
   {id: "light", name: "Light", tip: "They relight the shot itself, so they read as the scene's own light rather than a layer on top"},
@@ -759,7 +759,6 @@ export const LIBRARY = [
   {id: "Datamosh", group: "time", name: "Datamosh", blurb: "The next frame never arrives: the picture is dragged along the motion.", needs: [], on: "kick", params: {}},
   {id: "Eras", group: "time", name: "Era cut", blurb: "Cuts to the other clip and back on every hit, each cut bleeding into the last.", needs: ["other"], on: "beat", params: {clips: ["a", "b"]}},
   // break & blend
-  {id: "Shatter", group: "break", name: "Shatter", blurb: "The frame cracks like glass and falls away onto another scene.", needs: [], on: "downbeat", params: {}},
   {id: "Frost", group: "break", name: "Frost", blurb: "Frost creeps in from the edges of the glass on each hit and thaws.", needs: [], on: "downbeat", params: {},
    presets: [{id: "breath", name: "Breath on glass", params: {}}, {id: "creep", name: "Creeping", params: {reach: .35, thaw: 0}, tip: "It stays and grows with every hit"},
              {id: "whiteout", name: "Whiteout", params: {reach: 1, thaw: 0, opacity: 1, crystals: 1, sparkle: .8, lift: .18}, tip: "Across the whole frame: loud"}]},

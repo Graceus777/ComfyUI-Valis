@@ -55,7 +55,7 @@ class ValisCues:
     @classmethod
     def INPUT_TYPES(cls):
         return {"required": {
-                    "cue_sheet": ("STRING", {"multiline": True, "default": "", "tooltip": "soundless cues: '1.5 shatter', '2:1 ignite 0.8', 'every 1 beat from 3:1 to 7:1 pulse', 'ramp slip 0 0 4 1', 'bpm 96 3/4'"}),
+                    "cue_sheet": ("STRING", {"multiline": True, "default": "", "tooltip": "soundless cues: '1.5 impact', '2:1 ignite 0.8', 'every 1 beat from 3:1 to 7:1 pulse', 'ramp slip 0 0 4 1', 'bpm 96 3/4'"}),
                     "duration": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 3600.0, "step": .01, "tooltip": "seconds (0 = from the sources)"}),
                 },
                 "optional": {

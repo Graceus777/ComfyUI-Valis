@@ -3,7 +3,7 @@
 // for Punch, a ring for Shockwave, slipping slices for Glitch...), cheap enough to run live; Render makes the real thing
 // with the Valis library.
 export const FX_COLOR = {Punch: "#ffd27f", Shockwave: "#9cc2ff", Glitch: "#ff6bd6", Frost: "#cfefff", Rays: "#fff1c9", Echo: "#b8d8ff", Datamosh: "#ff8a4c",
-  Projector: "#e8dcc0", Shatter: "#d6e2ff", Lens: "#c9b6ff", Vertigo: "#8fe0d0", SlitScan: "#7fd3ff", DoubleExposure: "#ffb35c", TimeSlip: "#e6c08a",
+  Projector: "#e8dcc0", Lens: "#c9b6ff", Vertigo: "#8fe0d0", SlitScan: "#7fd3ff", DoubleExposure: "#ffb35c", TimeSlip: "#e6c08a",
   Tear: "#ff6b6b", Split: "#9aa0ff", Eras: "#d8b4a0",
   Flicker: "#ffc27a", Firelight: "#ff9a4c", Lightning: "#dbe6ff", Sweep: "#ffe2a8", Glow: "#ffd9b8", Haze: "#e0c8a8", Glint: "#fffbe8", Rim: "#bfe0ff",
   // the DANSE engine's (Valis classic)
@@ -127,13 +127,6 @@ export class LivePreview {
       x.fillStyle = `rgba(0,0,0,${.18 * proj.e * rand(Math.floor(t * 24))})`; x.fillRect(ox, oy, dw, dh);
       x.strokeStyle = `rgba(240,235,220,${.35 * proj.e})`; x.lineWidth = 1;
       for (let i = 0; i < 3; i++) { const sx = ox + rand(Math.floor(t * 24) + i * 31) * dw; x.beginPath(); x.moveTo(sx, oy); x.lineTo(sx + 3, oy + dh); x.stroke(); }
-    }
-    // Shatter: cracks from a point
-    const shat = get("Shatter");
-    if (shat.e > .05) {
-      x.strokeStyle = `rgba(230,240,255,${.6 * Math.min(1, shat.e)})`; x.lineWidth = 1.5; const seed = Math.floor(shat.last * 10);
-      for (let i = 0; i < 12; i++) { let px = cx, py = cy; x.beginPath(); x.moveTo(px, py); const a0 = rand(seed + i) * Math.PI * 2;
-        for (let k = 0; k < 5; k++) { px += Math.cos(a0 + (rand(seed + i * 9 + k) - .5)) * dw * .12; py += Math.sin(a0 + (rand(seed + i * 7 + k) - .5)) * dw * .12; x.lineTo(px, py); } x.stroke(); }
     }
     // Lens: a dark core and a bright ring at the middle
     const ln = get("Lens");
