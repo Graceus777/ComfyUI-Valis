@@ -101,33 +101,127 @@ export function motionPrompt({genre, move, action, look = null}) {
 }
 
 // ---------------------------------------------------------------- Edit: looks (anchor prompt for Krea, description for H3)
-// {T} is replaced with the target as the user typed it ("the man", "her dress", ...)
-export const LOOKS = [
-  {id: "vampire", name: "Vampire", thumb: "vampire.jpg", rb: 0.5, who: "the man", keep: "the face, skin and head",
-   anchor: "Transform {T} into a grotesque monstrous vampire: a gaunt, skull-like corpse face with grey-green leathery skin stretched over the bones, sunken dark eye sockets with burning red eyes, a wide mouth full of long jagged fangs, pointed bat-like ears. Inhuman and terrifying. Keep the pose, the camera angle, the framing, the background and the lighting exactly the same.",
-   desc: "a grotesque monstrous vampire: a gaunt skull-like corpse face, sunken eye sockets with burning red eyes, long jagged fangs and pointed bat-like ears"},
-  {id: "bride", name: "Ghost bride", thumb: "bride.jpg", rb: 4.0, who: "the woman", keep: "the veil, the gown and her face",
-   anchor: "Transform {T} into a ghost bride: a long torn lace wedding veil flowing from the hair and around the shoulders, a gown of tattered ghostly lace that dissolves into mist, pale blue-white translucent skin. Keep the face, the pose, the camera angle, the framing, the background and the lighting exactly the same.",
-   desc: "a ghost bride: a long torn lace wedding veil, a gown of tattered ghostly lace that dissolves into mist, pale blue-white translucent skin"},
-  {id: "ghostfire", name: "Ghost-fire", thumb: "ghostfire.jpg", rb: 4.0, who: "the clothing", keep: "the material, colour and light",
-   anchor: "Turn {T} into pale blue ghost-fire: translucent spectral flames and drifting wisps of glowing ectoplasm giving off cold white-blue light. Keep everything else exactly the same.",
-   desc: "pale blue ghost-fire, translucent spectral flames and drifting wisps of glowing ectoplasm giving off cold white-blue light"},
-  {id: "smoke", name: "Smoke & embers", thumb: "smoke.jpg", rb: 4.0, who: "the clothing", keep: "the material, colour and light",
-   anchor: "Turn {T} into living black smoke with glowing ember-red seams and drifting cinders. Keep everything else exactly the same.",
-   desc: "living black smoke with glowing ember-red seams and drifting cinders"},
-  {id: "chrome", name: "Liquid chrome", thumb: "chrome.jpg", rb: 4.0, who: "the subject", keep: "the material and reflections",
-   anchor: "Turn {T} into flowing liquid chrome: a mirror-polished metal that ripples like mercury and reflects the room around it. Keep everything else exactly the same.",
-   desc: "flowing liquid chrome, a mirror-polished metal that ripples like mercury and reflects its surroundings"},
-  {id: "stone", name: "Marble statue", thumb: "stone.jpg", rb: 1.5, who: "the subject", keep: "the stone texture and veins",
-   anchor: "Turn {T} into a carved white marble statue with grey veins and fine chisel marks. Keep the pose, the framing and everything else exactly the same.",
-   desc: "carved white marble with grey veins and fine chisel marks"},
-  {id: "skeleton", name: "Skeleton", thumb: "skeleton.jpg", rb: 0.6, who: "the person", keep: "the bones and clothing",
-   anchor: "Turn {T} into a living skeleton: bare bone skull and bony hands, the same clothes hanging loose. Keep the pose, the framing and everything else exactly the same.",
-   desc: "a living skeleton with a bare bone skull and bony hands, wearing the same clothes"},
-  {id: "fire", name: "Living fire", thumb: "fire.jpg", rb: 4.0, who: "the subject", keep: "the flames and light",
-   anchor: "Turn {T} into living fire: flowing flames and glowing molten embers with a white-hot core, throwing warm orange light. Keep everything else exactly the same.",
-   desc: "living fire, flowing flames and glowing molten embers with a white-hot core"},
+// {T} is replaced with the target as the user typed it ("the man", "her dress", ...). rb: Krea's faithfulness to the
+// original (low: the look takes over, a whole new face; high: the shape stays and only the material changes). who: what
+// H3 is told it is when no target is named. keep: what follows the new first frame. Every thumbnail is the look made on
+// one of the SÉANCE cast's costume-test sheets by the Transform's own first step (tools/look_thumbs.mjs).
+// A reference picture (dropped, or painted from words) can go with any look, or be the look on its own (OWN_LOOK).
+export const LOOK_GROUPS = [
+  {id: "element", name: "Elements"}, {id: "material", name: "Materials"}, {id: "light", name: "Light & tech"}, {id: "costume", name: "Costume"},
+  {id: "age", name: "Age & weather"}, {id: "spirit", name: "Spirits"}, {id: "creature", name: "Creatures"},
 ];
+const KEEP_ALL = "Keep the pose, the camera angle, the framing, the background and the lighting exactly the same.";
+const KEEP_FACE = "Keep the face, the pose, the camera angle, the framing, the background and the lighting exactly the same.";
+const look = (group, id, name, rb, who, keep, anchor, desc) => ({group, id, name, thumb: `looks/${id}.jpg`, rb, who, keep, anchor, desc});
+// a creature or a spirit replaces the face (low rb); a material keeps the shape (high rb); a costume keeps the face
+const creature = (id, name, rb, what, desc) => look("creature", id, name, rb, "the person", "the face, skin and head", `Transform {T} into ${what}. Inhuman and convincing, photographed for real. ${KEEP_ALL}`, desc);
+const spirit = (id, name, rb, what, desc) => look("spirit", id, name, rb, "the person", "the face, the clothes and the light on them", `Transform {T} into ${what}. ${KEEP_ALL}`, desc);
+const aged = (id, name, rb, what, desc) => look("age", id, name, rb, "the person", "the face and the clothes", `Make {T} ${what}. ${KEEP_ALL}`, desc);
+const material = (id, name, rb, what, desc) => look("material", id, name, rb, "the subject", "the material, its texture and the light on it", `Turn {T} into ${what}. Keep the pose, the framing and everything else exactly the same.`, desc);
+const element = (id, name, rb, what, desc) => look("element", id, name, rb, "the subject", "the material, colour and light", `Turn {T} into ${what}. Keep everything else exactly the same.`, desc);
+const costume = (id, name, rb, what, desc) => look("costume", id, name, rb, "the person", "the face and the costume", `Dress {T} in ${what}. ${KEEP_FACE}`, desc);
+const light = (id, name, rb, what, desc) => look("light", id, name, rb, "the subject", "the light, its colour and the shape", `Turn {T} into ${what}. Keep the pose, the framing and everything else exactly the same.`, desc);
+export const LOOKS = [
+  // creatures
+  creature("werewolf", "Werewolf", .5, "a werewolf: a wolf's head with a long snout, bared fangs and yellow eyes, coarse grey-brown fur over the face, neck and hands, clawed fingers, still in the same clothes",
+    "a werewolf: a wolf's head with a long snout, bared fangs, yellow eyes, coarse grey-brown fur and clawed hands, in the same clothes"),
+  creature("zombie", "Zombie", .6, "a rotting zombie: grey-green mottled skin, cracked lips, clouded white eyes in dark sunken sockets, lank hair, the same clothes torn and dirty",
+    "a rotting zombie with grey-green mottled skin, cracked lips and clouded white eyes, in torn dirty clothes"),
+  creature("demon", "Demon", .5, "a demon: dark red skin, curved black horns rising from the forehead, glowing ember-orange eyes, sharp cheekbones and pointed teeth",
+    "a demon with dark red skin, curved black horns, glowing ember-orange eyes and pointed teeth"),
+  creature("orc", "Orc", .5, "an orc: green-grey skin, a heavy brow, small tusks jutting up from the lower jaw, a broad flat nose and old battle scars",
+    "an orc with green-grey skin, a heavy brow, small tusks and a broad flat nose"),
+  creature("elf", "Elf", 1.0, "an elf: long pointed ears, fine sharp features, luminous pale skin, long silver hair",
+    "an elf with long pointed ears, fine features, luminous pale skin and long silver hair"),
+  creature("alien", "Grey alien", .4, "a grey alien: smooth grey skin, a large bald head, huge black almond eyes, a tiny mouth and no nose",
+    "a grey alien with smooth grey skin, a large bald head and huge black almond eyes"),
+  creature("android", "Android", .6, "an android: the face and hands made of white plastic panels with fine seams, glowing circuitry showing at the jaw and neck, glassy blue eyes",
+    "an android made of white plastic panels with fine seams, glowing circuitry at the jaw and neck and glassy blue eyes"),
+  creature("reptile", "Reptilian", .5, "a reptilian creature: green scaled skin, slit golden eyes, a flat nose and a thin lipless mouth",
+    "a reptilian creature with green scaled skin and slit golden eyes"),
+  creature("mummy", "Mummy", .5, "an ancient mummy: wrapped in yellowed, frayed linen bandages, dark sunken eyes showing between the wraps",
+    "an ancient mummy wrapped in yellowed, frayed linen bandages"),
+  look("creature", "skeleton", "Skeleton", .6, "the person", "the bones and clothing",
+    "Turn {T} into a living skeleton: bare bone skull and bony hands, the same clothes hanging loose. Keep the pose, the framing and everything else exactly the same.",
+    "a living skeleton with a bare bone skull and bony hands, wearing the same clothes"),
+  look("creature", "vampire", "Vampire", .5, "the person", "the face, skin and head",
+    "Transform {T} into a grotesque monstrous vampire: a gaunt, skull-like corpse face with grey-green leathery skin stretched over the bones, sunken dark eye sockets with burning red eyes, a wide mouth full of long jagged fangs, pointed bat-like ears. Inhuman and terrifying. Keep the pose, the camera angle, the framing, the background and the lighting exactly the same.",
+    "a grotesque monstrous vampire: a gaunt skull-like corpse face, sunken eye sockets with burning red eyes, long jagged fangs and pointed bat-like ears"),
+  // spirits
+  spirit("ghost", "Ghost", 2.0, "a ghost: translucent and pale blue-white, the edges of the body fading into mist, the eyes hollow and faintly glowing",
+    "a translucent pale blue-white ghost whose edges fade into mist"),
+  spirit("wraith", "Wraith", .6, "a wraith: a tattered black hooded shroud, the face a shadowed void with two cold pinpoints of light, wisps of black smoke trailing off",
+    "a wraith in a tattered black hooded shroud, its face a shadowed void with two cold pinpoints of light"),
+  spirit("drowned", "Drowned", 1.5, "someone drowned: soaking wet, lank wet hair plastered to the face, waterlogged blue-grey skin, clouded milky eyes, strands of pondweed, water dripping",
+    "drowned and soaking wet, with lank wet hair, waterlogged blue-grey skin, clouded milky eyes and strands of pondweed"),
+  spirit("shadow", "Living shadow", .8, "a living shadow: a figure of pure black shadow with soft smoky edges, the same silhouette, two faint glowing eyes",
+    "a figure of living black shadow with soft smoky edges and two faint glowing eyes"),
+  spirit("angel", "Angel", 1.5, "an angel: luminous skin, a soft ring of golden light behind the head, white feathered wings folded behind the shoulders",
+    "an angel with luminous skin, a soft golden halo and white feathered wings"),
+  look("spirit", "bride", "Ghost bride", 4.0, "the person", "the veil, the gown and her face",
+    "Transform {T} into a ghost bride: a long torn lace wedding veil flowing from the hair and around the shoulders, a gown of tattered ghostly lace that dissolves into mist, pale blue-white translucent skin. Keep the face, the pose, the camera angle, the framing, the background and the lighting exactly the same.",
+    "a ghost bride: a long torn lace wedding veil, a gown of tattered ghostly lace that dissolves into mist, pale blue-white translucent skin"),
+  // age & weather
+  aged("old", "Aged", 1.5, "fifty years older: deep wrinkles, thin white hair, age spots and sagging skin, the same face grown old", "fifty years older, with deep wrinkles, thin white hair and age spots"),
+  look("age", "frozen", "Frozen", .7, "the person", "the face and the clothes",
+    "Cover {T} in thick white frost and ice: ice crystals crusted over the hair, eyebrows, face and clothes, icicles hanging from the chin and the arms, the skin pale blue with cold. Keep the pose, the camera angle, the framing, the background and the lighting exactly the same.",
+    "frozen solid, crusted in thick white frost and ice crystals, with icicles hanging and pale blue skin"),
+  aged("worn", "Battle-worn", 1.5, "battle-worn: a face streaked with dirt, soot and sweat, a healed scar across the brow, the clothes torn and scorched", "battle-worn, streaked with dirt and soot, with a scar across the brow and torn scorched clothes"),
+  aged("overgrown", "Overgrown", 1.2, "overgrown: moss, lichen and small ferns growing over the skin and clothes, ivy wrapping the arms and neck, tiny white flowers", "overgrown with moss, lichen, ferns and ivy, with tiny white flowers"),
+  aged("soaked", "Caught in rain", 2.0, "soaked by heavy rain: wet hair, water running down the face, the clothes dark with rain, droplets on the skin", "soaked by heavy rain, with wet hair and water running down the face"),
+  // materials
+  material("bronze", "Bronze statue", 1.5, "a weathered bronze statue: dark bronze with green verdigris in the creases and polished highlights on the raised parts", "a weathered bronze statue with green verdigris in the creases"),
+  material("stone", "Marble statue", 1.5, "a carved white marble statue with grey veins and fine chisel marks", "carved white marble with grey veins and fine chisel marks"),
+  material("gold", "Gold", 1.5, "solid polished gold: a gleaming gold statue with mirror-bright highlights and warm reflections", "solid polished gold with mirror-bright highlights"),
+  material("chrome", "Liquid chrome", 4.0, "flowing liquid chrome: a mirror-polished metal that ripples like mercury and reflects the room around it", "flowing liquid chrome, a mirror-polished metal that ripples like mercury and reflects its surroundings"),
+  material("porcelain", "Porcelain", 1.5, "a porcelain doll: glossy white porcelain skin with fine hairline cracks, painted rosy cheeks and lips, glass eyes", "a porcelain doll with glossy white skin, fine hairline cracks and glass eyes"),
+  material("glass", "Glass", 1.5, "clear glass: a transparent glass figure that bends the background through it, with bright edges and caustic highlights", "clear transparent glass that bends the background through it, with bright edges"),
+  material("ice", "Ice sculpture", 1.5, "carved ice: a translucent ice sculpture with frosted surfaces, clear edges and trapped bubbles, cold light shining through it", "a translucent carved ice sculpture with frosted surfaces and trapped bubbles"),
+  material("wood", "Carved wood", 1.5, "a carved wooden figure: polished wood with visible grain, chisel marks and dark knots", "polished carved wood with visible grain and chisel marks"),
+  material("clay", "Clay", 1.5, "a stop-motion clay puppet: soft terracotta clay with thumbprints and tool marks", "a stop-motion clay puppet of soft terracotta clay with thumbprints"),
+  material("paper", "Folded paper", 1.5, "folded paper: crisp white paper folded in origami facets with sharp creases and soft shadows", "crisp white paper folded in origami facets"),
+  material("crystal", "Crystal", 1.5, "amethyst crystal: faceted violet crystal with light glinting off the facets and clusters of crystal points", "faceted violet amethyst crystal with light glinting off the facets"),
+  material("obsidian", "Obsidian", 1.5, "black obsidian: glossy volcanic glass with sharp curved fractures catching the light", "glossy black obsidian with sharp curved fractures catching the light"),
+  // elements
+  element("fire", "Living fire", 4.0, "living fire: flowing flames and glowing molten embers with a white-hot core, throwing warm orange light", "living fire, flowing flames and glowing molten embers with a white-hot core"),
+  element("ghostfire", "Ghost-fire", 4.0, "pale blue ghost-fire: translucent spectral flames and drifting wisps of glowing ectoplasm giving off cold white-blue light", "pale blue ghost-fire, translucent spectral flames and drifting wisps of glowing ectoplasm giving off cold white-blue light"),
+  element("smoke", "Smoke & embers", 4.0, "living black smoke with glowing ember-red seams and drifting cinders", "living black smoke with glowing ember-red seams and drifting cinders"),
+  element("water", "Water", 2.5, "living water: a figure of clear moving water with ripples and droplets, light refracting through it", "clear moving water with ripples and droplets, light refracting through it"),
+  element("lightning", "Lightning", 2.5, "crackling electricity: arcs of blue-white lightning crawling over the surface, glowing where they run", "crackling with arcs of blue-white lightning crawling over the surface"),
+  element("sand", "Sand", 2.0, "packed golden sand: a figure of fine sand, grains streaming away in the wind from its edges", "packed golden sand, grains streaming away in the wind from the edges"),
+  element("ash", "Ash", 1.5, "burnt ash: charred black ash with glowing orange cracks, grey flakes drifting off", "charred black ash with glowing orange cracks, flakes drifting off"),
+  element("lava", "Molten rock", 2.0, "molten rock: a black cooling crust split by bright orange molten cracks, glowing with heat", "molten rock, a black cooling crust split by glowing orange cracks"),
+  element("flowers", "Flowers", 2.0, "a figure made of flowers: densely packed roses, peonies and green leaves, a few petals drifting away", "made of densely packed roses, peonies and leaves, petals drifting away"),
+  element("cosmos", "Night sky", 2.0, "a window onto the night sky: the silhouette filled with stars and a glowing violet nebula", "a silhouette filled with stars and a glowing violet nebula"),
+  element("ink", "Ink", 2.0, "black ink: glossy liquid ink that drips and bleeds away into the air", "glossy black liquid ink that drips and bleeds away into the air"),
+  // costume
+  costume("armour", "Plate armour", 2.5, "a full suit of polished medieval steel plate armour with a dark surcoat", "wearing a full suit of polished medieval steel plate armour"),
+  costume("astronaut", "Space suit", 2.5, "a white space suit with mission patches, the helmet off", "wearing a white space suit with mission patches"),
+  costume("samurai", "Samurai", 2.5, "samurai armour: lacquered black plates laced with red silk cords", "wearing samurai armour of lacquered black plates laced with red silk cords"),
+  costume("victorian", "Victorian", 2.5, "Victorian dress: dark velvet with a high collar, lace cuffs and a cameo brooch", "in Victorian dress of dark velvet with a high collar and lace cuffs"),
+  costume("royal", "Royal", 2.5, "royal regalia: a jewelled gold crown and a crimson robe trimmed with ermine", "wearing a jewelled gold crown and a crimson robe trimmed with ermine"),
+  costume("diver", "Old diving suit", 1.0, "an old brass diving suit: heavy canvas and a brass helmet with round glass portholes", "in an old canvas diving suit with a brass helmet and round portholes"),
+  costume("cyber", "Cyberpunk", 2.5, "cyberpunk techwear: a black jacket with glowing cyan light strips and a chrome implant at the temple", "in black cyberpunk techwear with glowing cyan light strips"),
+  // light & tech
+  light("hologram", "Hologram", 2.0, "a hologram: translucent cyan light with scanlines and flickering edges", "a translucent cyan hologram with scanlines and flickering edges"),
+  light("biolum", "Bioluminescent", 2.5, "a bioluminescent creature of the deep: glowing blue-green patterns along the skin, softly lit in the dark", "glowing with bioluminescent blue-green patterns along the skin"),
+  light("runes", "Glowing runes", 3.0, "someone marked with glowing golden runes and sigils carved across the skin and clothes, lit from within", "marked with glowing golden runes and sigils, lit from within"),
+  light("neon", "Neon", 2.0, "a figure outlined in glowing neon tubes, magenta and cyan, against shadow", "outlined in glowing magenta and cyan neon tubes"),
+  light("xray", "X-ray", .8, "an x-ray: a glowing blue-white x-ray image with the skeleton visible through translucent flesh", "a glowing blue-white x-ray image, the skeleton visible through translucent flesh"),
+];
+// your own look: words, a reference picture, or both
+export const OWN_LOOK = {id: "own", name: "Your own look", rb: 1.0, who: "the subject", keep: "the look in the reference picture"};
+export function ownLook({words = "", ref = false} = {}) {
+  const w = words.trim().replace(/[.\s]+$/, "");
+  const what = w || "the look in the reference picture";
+  return {...OWN_LOOK, ref,
+    anchor: `Transform {T} into ${what}${ref ? ", exactly as in the reference picture: its shape, materials, colours and details" : ""}. Keep the pose, the camera angle, the framing, the background and the lighting exactly the same.`,
+    desc: w ? `${w}${ref ? ", as in the reference picture" : ""}` : "the look shown in the reference picture"};
+}
+// the painted reference: a clean costume-test picture of the look, so Krea and H3 read it as one subject
+export function lookRefPrompt(words) {
+  return `A clean reference photograph of ${words.trim().replace(/[.\s]+$/, "")}, seen whole and in sharp focus, on a plain neutral grey background, soft even studio light, no text.`;
+}
 
 export const REMOVE_PROMPT = "Remove {T} from the picture completely: show only what is behind it, the background continuing naturally where it was. Keep everything else in the picture exactly the same.";
 

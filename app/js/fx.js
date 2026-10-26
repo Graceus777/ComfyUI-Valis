@@ -89,33 +89,47 @@ export class FxView {
 
   library() {
     const {$, h, G, assets} = this;
-    $("#f-lib").replaceChildren(...G.LIBRARY.map(fx => {
+    const card = (fx) => {
       const vid = h("video", {src: `${assets}/fx/${fx.id}.webm`, muted: true, loop: true, playsinline: true, autoplay: true, preload: "auto"});
       vid.addEventListener("error", () => vid.replaceWith(h("div", {class: "ph"})));
-      return h("div", {class: "fxcard", "data-id": fx.id, "data-tip": `${fx.blurb}<br><span class="tw">listens to</span> ${fx.on || fx.by}${(fx.needs || []).length ? ` · <span class="tw">needs</span> ${fx.needs.join(" and ")}` : ""}`, onclick: () => this.addLayer(fx)}, vid,
-        h("span", {class: "add"}, "+ add"), h("div", {class: "lbl"}, h("b", {}, fx.name), h("span", {}, fx.blurb)));
-    }));
+      const ps = fx.presets || [];
+      const tip = `${fx.blurb}<br><span class="tw">listens to</span> ${fx.on || fx.by}${(fx.needs || []).length ? ` · <span class="tw">needs</span> ${fx.needs.join(" and ")}` : ""}` +
+        (ps.length > 1 ? `<br><span class="tw">presets</span> ${ps.map(p => p.name).join(" · ")}` : "");
+      return h("div", {class: "fxcard", "data-id": fx.id, "data-tip": tip, onclick: () => this.addLayer(fx.id)}, vid,
+        h("span", {class: "add"}, "+ add"), h("div", {class: "lbl"}, h("b", {}, fx.name), ps.length > 1 ? null : h("span", {}, fx.blurb),
+          ps.length > 1 ? h("span", {class: "presets"}, ...ps.map((p, k) => h("button", {type: "button", class: "chip", "data-tip": p.tip || null,
+            onclick: (e) => { e.stopPropagation(); this.addLayer(k ? `${fx.id}:${p.id}` : fx.id); }}, p.name))) : null));
+    };
+    $("#f-lib").replaceChildren(...G.FX_GROUPS.flatMap(g => [
+      h("div", {class: "fxgroup", "data-tip": g.tip}, h("b", {}, g.name), h("span", {}, g.tip)),
+      ...G.LIBRARY.filter(fx => fx.group === g.id).map(card)]));
   }
 
-  addLayer(fx) {
-    this.F.layers.push({effect: fx.id, name: fx.name, on: fx.on || "", by: fx.by || "", params: {...fx.params}, needs: fx.needs});
+  addLayer(key) {
+    const f = this.G.fxPreset(key);
+    if (!f) return;
+    this.F.layers.push({effect: f.id, key: f.key, name: f.name, on: f.on || "", by: f.by || "", needs: f.needs});
     this.drawLayers();
   }
 
   drawLayers() {
-    const {$, h} = this;
+    const {$, h, G} = this;
     const dl = h("datalist", {id: "f-lanes"}, ...[...this.lanes].map(l => h("option", {value: l})));
     const rows = this.F.layers.map((l, k) => {
       const lane = h("input", {type: "text", list: "f-lanes", value: l.by || l.on, title: l.by ? "a held amount: a curve or a lane's envelope" : "the lane that fires it"});
       lane.addEventListener("input", () => { if (l.by) l.by = lane.value; else l.on = lane.value; });
+      const f = G.fxPreset(l.key || l.effect), ps = f?.lib.presets || [];
+      const pick = ps.length > 1 ? h("select", {class: "preset", tip: "The preset", onchange: (e) => {
+        const g = G.fxPreset(e.target.value); l.key = g.key; l.name = g.name; l.needs = g.needs; this.drawLayers(); }},
+        ...ps.map((p, j) => { const key = j ? `${f.id}:${p.id}` : f.id; return h("option", {value: key, selected: key === f.key}, p.name); })) : null;
       const missing = (l.needs || []).filter(n => (n === "other" && !this.F.other) || (n === "subject" && !$("#f-subject").value.trim()));
       return h("div", {class: "layer"},
-        h("div", {}, h("b", {}, l.name), missing.length ? h("div", {class: "hint", style: "margin:2px 0 0"}, `needs ${missing.join(" and ")}`) : null),
+        h("div", {}, h("b", {}, f?.lib.name || l.name), pick, missing.length ? h("div", {class: "hint", style: "margin:2px 0 0"}, `needs ${missing.join(" and ")}`) : null),
         lane, h("button", {class: "x", title: "remove", onclick: () => { this.F.layers.splice(k, 1); this.drawLayers(); }}, "×"));
     });
     $("#f-layers").replaceChildren(dl, ...rows);
     $("#f-layers-hint").style.display = this.F.layers.length ? "none" : "";
-    [...$("#f-lib").children].forEach(c => c.classList.toggle("on", this.F.layers.some(l => l.effect === c.dataset.id)));
+    [...$("#f-lib").querySelectorAll(".fxcard")].forEach(c => c.classList.toggle("on", this.F.layers.some(l => l.effect === c.dataset.id)));
   }
 
   async render() {
@@ -129,7 +143,7 @@ export class FxView {
     if (F.source === "score" && !sc) return this.toast("Make or open a score in the Score tab first: FX fires on its lanes", true);
     const g = G.fx({clip: F.clip, other: F.other, subject: $("#f-subject").value.trim(), source: F.source, audio: sc ? sc.audio : F.audio, songSpec,
       cueSheet: $("#f-cues").value, score: sc?.score || null,
-      layers: F.layers.map(l => ({effect: l.effect, on: l.on, by: l.by, params: l.params})), beds: [...F.beds], sound: $("#f-sound").checked,
+      layers: F.layers.map(l => ({...G.fxLayer(l.key || l.effect, l.on), by: l.by})), beds: [...F.beds], sound: $("#f-sound").checked,
       seconds: F.seconds || 107 / 24, prefix: `valis/fx_${Date.now().toString(36)}`, loop: $("#f-loop").checked});
     run(g, `FX · ${F.layers.map(l => l.name).join(" + ")}`, $("#f-viewer"), {onDone: (j) => {
       const v = j.outputs.find(f => VID.test(f.filename));

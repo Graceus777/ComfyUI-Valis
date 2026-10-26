@@ -3,7 +3,7 @@
 //
 //   node cli/valis.mjs swap  --video take.mp4 --character vampire_sheet.png --background ballroom.png
 //   node cli/valis.mjs turn  --a take_as_the_man.mp4 --b take_as_the_vampire.mp4 --at 3.8
-//   node cli/valis.mjs transform --video clip.mp4 --target "his head" --look vampire
+//   node cli/valis.mjs transform --video clip.mp4 --target "his head" --look bronze
 //   node cli/valis.mjs run workflows/05_transform_vampire.json --set 16.file=clip.mp4
 //
 // Local files are uploaded as SDK assets; a path like "valis/x.mp4" that isn't on this disk is read from ComfyUI's
@@ -27,7 +27,8 @@ commands
   cast       --keyframe k.png --character c.png [--prompt "..."]                                      put a character into a keyframe
   shoot      --image k.png --motion "..." [--move push --seconds 4.5]                                   H3 image-to-video
   find       --video clip.mp4 --target "her dress"                                                      SAM 3 matte + overlay
-  transform  --video clip.mp4 --target "his head" --look vampire|bride|ghostfire|smoke|chrome|stone|skeleton|fire
+  transform  --video clip.mp4 --target "his head" [--look bronze] [--ref look.png] [--words "a stag-headed spirit of bark"]
+                                                                                                    a look (57: presets.js LOOKS), your own picture and/or words, or both
   remove     --video clip.mp4 --target "the man in the mirror"
   swap       --video take.mp4 --character sheet.png [--background plate.png --person man --slow]       full character swap
   turn       --a take.mp4 --b swapped.mp4 [--at 3.8 --person man]                                       Valis turn on a word
@@ -94,9 +95,13 @@ async function build() {
       const T = need("target");
       if (cmd === "remove") return G.edit({mode: "remove", video: await file(need("video")), target: T, anchorPrompt: P.REMOVE_PROMPT.replaceAll("{T}", T),
         desc: "gone; only what was behind it remains", who: "the masked region", keep: "everything around it", prefix: `valis/edit_${stamp()}`});
-      const look = pick(P.LOOKS, opt.look || "vampire");
-      return G.edit({mode: "transform", video: await file(need("video")), target: T, anchorPrompt: look.anchor.replaceAll("{T}", T), desc: look.desc,
-        who: look.who, keep: look.keep, refBoost: look.rb, prefix: `valis/edit_${stamp()}`});
+      // your own look (a reference picture and/or words), a preset, or a preset matched to your picture
+      const ref = opt.ref ? await file(opt.ref) : null, words = opt.words || "";
+      const look = words || (ref && !opt.look) ? P.ownLook({words, ref: !!ref}) : pick(P.LOOKS, opt.look || "fire");
+      let anchor = look.anchor.replaceAll("{T}", T);
+      if (ref && look.id !== "own") anchor = anchor.replace(/\s*Keep /, " Match the look in the reference picture. Keep ");
+      return G.edit({mode: "transform", video: await file(need("video")), target: T, anchorPrompt: anchor, desc: look.desc,
+        who: T || look.who, keep: look.keep, refBoost: look.rb, lookRef: ref, prefix: `valis/edit_${stamp()}`});
     }
     case "swap": return G.swapFull({video: await file(need("video")), character: await file(need("character")), background: await file(opt.background),
       person: opt.person || "person", prompt: opt.prompt || G.swapPrompt({target: `the ${opt.person || "person"}`}), turbo: !opt.slow, prefix: `valis/swap_${stamp()}`});

@@ -51,7 +51,7 @@ export const TESTS = [
 // Chains: what comes after Create, fed with the clips and stills the Create combinations made (this run's, or the last
 // run that made them). Each runs one more tab's button on them.
 const x = (id, label, needs, fn, expect = {}) => ({id, suite: id.startsWith("x0") || id.startsWith("x1") ? "chain" : "chain", label, needs, fn, expect});
-const L = (effect, on, params = {}) => ({effect, on, params: {...(G.LIBRARY.find(l => l.id === effect)?.params || {}), ...params}});
+const L = (effect, on, params = {}) => ({effect: effect.split(":")[0], on, params: {...(G.fxPreset(effect)?.params || {}), ...params}});
 TESTS.push(
   x("x01", "Extend: 5 s more after the market shot", ["c03"], (s) => G.extend({video: s.c03, clipSeconds: 3.04, width: 384, height: 672, action: "she keeps walking toward the camera", direction: "forward", prefix: s.pre}), {width: 384, height: 672, minSeconds: 6}),
   x("x02", "Lead-in: 5 s before the street shot", ["c01"], (s) => G.extend({video: s.c01, clipSeconds: 3.04, width: 384, height: 672, action: "he walks up to the streetlamp", direction: "backward", prefix: s.pre}), {width: 384, height: 672, minSeconds: 6}),

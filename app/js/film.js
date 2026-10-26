@@ -406,11 +406,11 @@ export async function effectShots(plan, io, {only = null, onStage = () => {}} = 
   const b = base(plan);
   if (want.length) await free(io);
   for (const k of want) {
-    const s = plan.shots[k], lib = G.LIBRARY.find(l => l.id === s.effect);
+    const s = plan.shots[k], f = G.fxPreset(s.effect);
     if (!s.clip || stale(plan, s)) throw new Error(`shot ${k + 1} isn't shot${s.clip ? " at this length" : ""} yet`);
     onStage("effects", `effects and sound on shot ${k + 1} of ${plan.shots.length}`, k);
-    const layers = lib ? [{effect: lib.id, on: s.on, params: lib.params || {}}] : [];
-    const subject = lib && ((lib.needs || []).includes("subject") || lib.params?.at === "subject") ? s.subject : "";
+    const layers = f ? [G.fxLayer(s.effect, s.on)] : [];
+    const subject = f && (f.needs.includes("subject") || f.params.at === "subject") ? s.subject : "";
     // a pass is found again only if it was made from this clip with these settings (a re-shot shot, or a new effect,
     // once picked up the old pass by its name)
     const tag = hash([s.clip.filename, s.effect, s.on, s.subject, s.holdColour !== false, s.key?.filename].join("|"));

@@ -164,6 +164,14 @@ details.prompt pre { margin: 0; padding: 0 12px 12px; white-space: pre-wrap; col
 
 /* ---- FX library */
 .fxlib { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.fxgroup { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 10px; margin: 12px 0 0; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.fxgroup:first-child { margin-top: 0; }
+.fxgroup b { font: 600 12px/1 var(--font); letter-spacing: .14em; text-transform: uppercase; color: var(--text); }
+.fxgroup span { font-size: 11.5px; color: var(--muted); }
+.fxcard .lbl .presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.fxcard .lbl .presets .chip { padding: 2px 7px; font-size: 10.5px; line-height: 1.4; background: rgba(0,0,0,.55); }
+.fxcard .lbl .presets .chip:hover { border-color: var(--accent2); }
+.layer select.preset { display: block; margin-top: 4px; padding: 3px 6px; font-size: 11.5px; width: 100%; }
 .fxcard { position: relative; border-radius: var(--r-sm); overflow: hidden; border: 1px solid var(--line); background: var(--card); cursor: pointer; aspect-ratio: 9/14; }
 .fxcard video, .fxcard .ph { width: 100%; height: 100%; object-fit: cover; display: block; }
 .fxcard .ph { background: radial-gradient(120% 90% at 30% 20%, #2a3350, #0d0d14); }
@@ -507,3 +515,25 @@ body.binopen .view { height: calc(100vh - 56px - 168px); }
 .addshot { place-items: center; color: var(--muted); font-size: 14px; cursor: pointer; min-height: 120px; }
 .addshot:hover:not(:disabled) { border-color: var(--line2); color: var(--text); }
 .bgone { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+/* Edit: your own look above the presets */
+.ownlook { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 10px; background: var(--card); margin-bottom: 12px; }
+.ownlook.on { border-color: var(--accent2); box-shadow: 0 0 0 1px var(--accent2) inset; }
+.ownlook .drop { min-height: 0; padding: 14px 10px; position: relative; }
+.ownlook .drop b { color: var(--text); font-size: 13px; }
+.ownlook .drop.filled { display: flex; align-items: center; gap: 10px; padding: 8px; text-align: left; }
+.ownlook .drop.filled img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; flex: none; }
+.ownlook .drop.filled span { font-size: 12px; color: var(--muted); flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.ownlook .drop .x { background: none; border: 0; color: var(--dim); cursor: pointer; font-size: 16px; }
+.ownpaint { display: flex; gap: 8px; margin-top: 8px; }
+.ownpaint input { flex: 1; min-width: 0; }
+.ownpaint .btn { flex: none; padding: 6px 12px; }
+.ownlook .hint { margin: 8px 0 0; }
+.lookgroups { margin-bottom: 10px; }
+.lookgroups .chip { padding: 4px 9px; font-size: 11.5px; }
+.cards.looks { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.cards.looks .card { aspect-ratio: 1 / 1; }
+.cards.looks .card .lbl { font-size: 11px; padding: 14px 6px 5px; }
+.rulesets { margin: 10px 0 2px; align-items: center; }
+.rulesets .lab { font-size: 11.5px; color: var(--muted); margin-right: 2px; }
+.rulesets .chip { padding: 4px 9px; font-size: 11.5px; }

@@ -557,6 +557,12 @@ EFFECT_SOUNDS = {
     "Split": [("slip", "on", dict(gain=.8))],
     "Eras": [("slip", "on", dict(gain=.7))],
     "Projector": [("slip", "burn", dict(gain=.6))],
+    # light: a sound only where the light is a story event (a strike is heard, a flame gutters); light itself is silent
+    "Lightning": [("thunder", "on", {})],
+    "Flicker": [("candle", "on", dict(gain=.6))],
+    "Firelight": [("crackle", "on", dict(gain=.7))],
+    "Sweep": [("whoosh", "on", dict(gain=.5, limit=4))],
+    "Glint": [("shimmer", "on", dict(gain=.6))],
 }
 
 

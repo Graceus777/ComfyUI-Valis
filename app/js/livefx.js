@@ -5,6 +5,7 @@
 export const FX_COLOR = {Punch: "#ffd27f", Shockwave: "#9cc2ff", Glitch: "#ff6bd6", Frost: "#cfefff", Rays: "#fff1c9", Echo: "#b8d8ff", Datamosh: "#ff8a4c",
   Projector: "#e8dcc0", Shatter: "#d6e2ff", Lens: "#c9b6ff", Vertigo: "#8fe0d0", SlitScan: "#7fd3ff", DoubleExposure: "#ffb35c", TimeSlip: "#e6c08a",
   Tear: "#ff6b6b", Split: "#9aa0ff", Eras: "#d8b4a0",
+  Flicker: "#ffc27a", Firelight: "#ff9a4c", Lightning: "#dbe6ff", Sweep: "#ffe2a8", Glow: "#ffd9b8", Haze: "#e0c8a8", Glint: "#fffbe8", Rim: "#bfe0ff",
   // the DANSE engine's (Valis classic)
   candles: "#ffb35c", shockwave: "#9cc2ff", lightning: "#c9b6ff", rim: "#7fd3ff", crowd: "#b8d8ff", ripple: "#8fe0d0", ignite: "#ff8a4c",
   flare: "#ffd27f", vanish: "#ff6b6b", halo: "#e6f0ff", whiteout: "#ffffff", glint: "#fff1c9", punch: "#9a9aa8"};
@@ -57,7 +58,8 @@ export class LivePreview {
     }
     const sw = s?.videoWidth || s?.naturalWidth || 9, sh = s?.videoHeight || s?.naturalHeight || 16;
     const sc = Math.min(W / sw, H / sh), dw = sw * sc, dh = sh * sc, ox = (W - dw) / 2, oy = (H - dh) / 2, cx = ox + dw / 2, cy = oy + dh / 2;
-    const active = rules.map(r => ({...r, as: CLASSIC_AS[r.effect] || r.effect, ...ring(lanes[r.lane] || [], t)}));
+    // "Effect:preset" sketches as its effect; the preset decides the light's colour or side where it matters
+    const active = rules.map(r => { const [id, preset] = String(r.effect).split(":"); return {...r, preset, as: CLASSIC_AS[id] || id, ...ring(lanes[r.lane] || [], t)}; });
     const get = (name) => active.filter(a => a.as === name).reduce((m, a) => a.e > m.e ? a : m, {e: 0, last: -1e9});
     const punch = get("Punch"), dm = get("Datamosh"), echo = get("Echo"), proj = get("Projector"), vert = get("Vertigo");
     // the frame: a dragged smear for Datamosh, else a fresh draw (zoom kick for Punch, a weave for Projector, a breath for Vertigo)
@@ -113,11 +115,11 @@ export class LivePreview {
       for (let i = 0; i < 9; i++) { const a0 = -Math.PI / 2 + (i - 4) * .18; x.strokeStyle = `rgba(255,240,210,${.08 * ra.e})`; x.lineWidth = 18; x.beginPath(); x.moveTo(cx, oy + dh * .2); x.lineTo(cx + Math.cos(a0) * -dh, oy + dh * .2 + Math.sin(a0) * -dh); x.stroke(); }
       x.globalCompositeOperation = "source-over";
     }
-    // Frost: white crystals creeping in from the edges after each hit
+    // Frost: crystals creeping in from the edges after each hit
     const fr = get("Frost");
     if (fr.e > .03) {
-      const g = x.createRadialGradient(cx, cy, Math.min(dw, dh) * .25, cx, cy, Math.max(dw, dh) * .7);
-      g.addColorStop(0, "rgba(220,240,255,0)"); g.addColorStop(1, `rgba(230,245,255,${.7 * Math.min(1, fr.e)})`);
+      const g = x.createRadialGradient(cx, cy, Math.max(dw, dh) * .42, cx, cy, Math.max(dw, dh) * .72);
+      g.addColorStop(0, "rgba(220,240,255,0)"); g.addColorStop(1, `rgba(230,245,255,${.35 * Math.min(1, fr.e)})`);
       x.fillStyle = g; x.fillRect(ox, oy, dw, dh);
     }
     // Projector: flicker and scratches
@@ -137,8 +139,49 @@ export class LivePreview {
     const ln = get("Lens");
     if (ln.e > .05) { const r = Math.min(dw, dh) * .12 * (1 + .3 * ln.e); x.fillStyle = `rgba(0,0,0,${.6 * Math.min(1, ln.e)})`; x.beginPath(); x.arc(cx, cy, r, 0, 7); x.fill();
       x.strokeStyle = `rgba(255,250,235,${.6 * Math.min(1, ln.e)})`; x.lineWidth = 3; x.beginPath(); x.arc(cx, cy, r * 1.25, 0, 7); x.stroke(); }
+    // Light: sketched as light on the picture (the real ones relight it: Render for those)
+    const fl = get("Flicker");
+    if (fl.e > .02 || active.some(a => a.as === "Flicker")) {
+      const n = Math.sin(t * 11.3) * .5 + Math.sin(t * 6.1 + 1) * .3 + Math.sin(t * 17.9 + 2) * .2;
+      const tube = /tube|bulb/.test(fl.preset || active.find(a => a.as === "Flicker")?.preset || "");
+      const v = tube ? (fl.e > .3 && rand(Math.floor(t * 30)) > .5 ? -.6 : 0) : .07 * n - .25 * Math.min(1, fl.e) * Math.exp(-(t - fl.last) / .2);
+      if (v < 0) { x.fillStyle = `rgba(0,0,0,${Math.min(.7, -v)})`; x.fillRect(ox, oy, dw, dh); }
+      else { x.globalCompositeOperation = "soft-light"; x.fillStyle = `rgba(255,190,120,${Math.min(.5, v * 3)})`; x.fillRect(ox, oy, dw, dh); x.globalCompositeOperation = "source-over"; }
+    }
+    const fi = active.filter(a => a.as === "Firelight");
+    if (fi.length) {
+      const e = Math.max(...fi.map(a => a.e)), k = .35 + .1 * Math.sin(t * 13) + .08 * Math.sin(t * 29) + .4 * Math.min(1, e);
+      const g = x.createLinearGradient(ox, oy + dh, ox, oy + dh * .2); g.addColorStop(0, `rgba(255,130,50,${k})`); g.addColorStop(1, "rgba(255,130,50,0)");
+      x.globalCompositeOperation = "soft-light"; x.fillStyle = g; x.fillRect(ox, oy, dw, dh); x.globalCompositeOperation = "source-over";
+    }
+    const li = get("Lightning");
+    if (li.e > .02 && li.last > -1e8) {
+      const age = t - li.last, k = Math.max(Math.exp(-age / .045), (age > .08 ? .6 * Math.exp(-(age - .08) / .045) : 0), (age > .2 ? .8 * Math.exp(-(age - .2) / .05) : 0));
+      const g = x.createLinearGradient(ox, oy, ox + dw, oy); g.addColorStop(0, `rgba(215,228,255,${.75 * k})`); g.addColorStop(1, `rgba(215,228,255,${.2 * k})`);
+      x.globalCompositeOperation = "screen"; x.fillStyle = g; x.fillRect(ox, oy, dw, dh); x.globalCompositeOperation = "source-over";
+    }
+    for (const a of active.filter(a => a.as === "Sweep" && a.last > -1e8)) {
+      const age = (t - a.last) / 1.6; if (age < 0 || age > 1.1) continue;
+      const c = ox - dw * .3 + dw * 1.6 * age, wdt = dw * .3;
+      const g = x.createLinearGradient(c - wdt, oy, c + wdt, oy); g.addColorStop(0, "rgba(255,236,200,0)"); g.addColorStop(.5, "rgba(255,236,200,.45)"); g.addColorStop(1, "rgba(255,236,200,0)");
+      x.globalCompositeOperation = "soft-light"; x.fillStyle = g; x.fillRect(ox, oy, dw, dh); x.globalCompositeOperation = "source-over";
+    }
+    const gw = active.filter(a => a.as === "Glow");
+    if (gw.length && s && (s.readyState >= 2 || s.complete)) {
+      const e = .35 + Math.max(...gw.map(a => a.e)) * .8;
+      x.globalCompositeOperation = "screen"; x.filter = "blur(10px) brightness(1.1)"; x.globalAlpha = Math.min(.55, .3 * e);
+      try { x.drawImage(s, ox, oy, dw, dh); } catch { /* */ }
+      x.filter = "none"; x.globalAlpha = 1; x.globalCompositeOperation = "source-over";
+    }
+    const gt = get("Glint");
+    if (gt.e > .05 && gt.last > -1e8) {
+      const age = t - gt.last, k = Math.exp(-age / .14), px = ox + dw * (.3 + .4 * rand(Math.floor(gt.last * 10))), py = oy + dh * (.25 + .3 * rand(Math.floor(gt.last * 10) + 3)), R = dw * .12 * k;
+      x.globalCompositeOperation = "screen"; x.strokeStyle = `rgba(255,252,235,${.9 * k})`; x.lineWidth = 1.5;
+      for (const a0 of [0, Math.PI / 2, Math.PI / 4, -Math.PI / 4]) { const r0 = a0 % (Math.PI / 2) ? R * .5 : R; x.beginPath(); x.moveTo(px - Math.cos(a0) * r0, py - Math.sin(a0) * r0); x.lineTo(px + Math.cos(a0) * r0, py + Math.sin(a0) * r0); x.stroke(); }
+      x.globalCompositeOperation = "source-over";
+    }
     // the rest (another clip, slit-scan, tear...): a coloured wash on the hit, so you can still see when they fire
-    for (const a of active.filter(a => ["SlitScan", "DoubleExposure", "TimeSlip", "Tear", "Split", "Eras"].includes(a.as) && a.e > .05)) {
+    for (const a of active.filter(a => ["SlitScan", "DoubleExposure", "TimeSlip", "Tear", "Split", "Eras", "Rim", "Haze"].includes(a.as) && a.e > .05)) {
       x.globalCompositeOperation = "soft-light"; x.fillStyle = FX_COLOR[a.as]; x.globalAlpha = .4 * Math.min(1, a.e); x.fillRect(ox, oy, dw, dh); x.globalAlpha = 1; x.globalCompositeOperation = "source-over";
     }
     x.restore();
@@ -148,7 +191,7 @@ export class LivePreview {
     const key = firing.map(a => a.lane + a.effect).join();
     if (key !== this._bk) {
       this._bk = key;
-      this.badges.replaceChildren(...firing.map(a => { const b = document.createElement("span"); b.className = "badge"; b.style.cssText = `border-color:${FX_COLOR[a.effect] || "#888"};color:${FX_COLOR[a.effect] || "#ccc"}`; b.textContent = `${a.lane} → ${a.effect}`; return b; }));
+      this.badges.replaceChildren(...firing.map(a => { const b = document.createElement("span"); b.className = "badge"; b.style.cssText = `border-color:${FX_COLOR[a.as] || "#888"};color:${FX_COLOR[a.as] || "#ccc"}`; b.textContent = `${a.lane} → ${a.effect.replace(":", " · ")}`; return b; }));
     }
   }
 }

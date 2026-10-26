@@ -152,11 +152,24 @@
       <div class="seg" id="e-mode"></div>
       <div id="e-looks-wrap">
         <h2>Look</h2>
-        <div class="cards" id="e-looks"></div>
+        <div class="ownlook" id="e-own">
+          <div class="drop" id="e-ref"><b>Your own look</b><br>Drop a picture of it: a creature, a costume, a material<br><span class="hint">or drag a still from the bin</span></div>
+          <div class="ownpaint">
+            <input type="text" id="e-ref-words" placeholder="…or say what it is">
+            <button class="btn" id="e-ref-paint" type="button">Paint it<span class="sub">Krea 2</span></button>
+          </div>
+          <p class="hint" id="e-ref-hint"></p>
+        </div>
+        <div class="chips lookgroups" id="e-look-groups"></div>
+        <div class="cards looks" id="e-looks"></div>
       </div>
       <div id="e-swap-wrap" style="display:none">
         <h2>Becomes</h2>
         <div class="drop" id="e-char">Drop the character: an upper-body or full-body sheet works best</div>
+        <div class="ownpaint">
+          <input type="text" id="e-char-words" placeholder="…or describe them and paint a sheet">
+          <button class="btn" id="e-char-paint" type="button">Paint<span class="sub">Krea 2</span></button>
+        </div>
         <p class="hint">The whole person is replaced (H3 character swap), and keeps the clip's voice.</p>
         <input type="text" id="e-look" placeholder="what they look like: hair, face, clothes (helps the swap)" style="margin-top:8px">
         <h2>New background <span class="badge">optional</span></h2>

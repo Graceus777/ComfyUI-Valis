@@ -10,7 +10,7 @@ import {ScoreView} from "./score.js";
 import {FxView} from "./fx.js";
 import {checkSetup} from "./check.js";
 import {planFilm, makeFilm, makeSong, frameShots, shootShots, chainShot, effectShots, cutFilm, SHOT_SECONDS, shotLen, songSeconds, songShort, cutOf, lookOf,
-        makeRefs, makeSetups, makeFrames, byName, keyStale} from "./film.js";
+        makeRefs, makeSetups, makeFrames, byName, keyStale, sheetPrompt} from "./film.js";
 import {drawBuild, cropEditor} from "./filmbuild.js";
 import * as R from "./refengine.js";
 import {Bin} from "./bin.js";
@@ -441,7 +441,7 @@ $("#g-run").addEventListener("click", async () => {
 });
 
 // ------------------------------------------------------------------ EDIT
-const E = {clip: null, clipUrl: null, mode: "transform", look: null, character: null, matte: null, bg: null, clipB: null, clipBUrl: null, swapAt: -1, wave: null};
+const E = {clip: null, clipUrl: null, mode: "transform", look: null, preset: null, lookRef: null, lookRefUrl: null, character: null, matte: null, bg: null, clipB: null, clipBUrl: null, swapAt: -1, wave: null};
 const EXAMPLES = ["the man", "his head", "her dress", "the woman", "man in the mirror", "the sky", "the car"];
 $("#e-target-ex").replaceChildren(...EXAMPLES.map(t => h("button", {class: "chip", onclick: () => { $("#e-target").value = t; refreshPrompt(); }}, t)));
 seg($("#e-mode"), [{id: "transform", name: "Transform", tip: "The thing you named becomes something else (a look below): Krea 2 makes the first and last frames, H3 re-renders only the masked region"},
@@ -462,7 +462,63 @@ seg($("#e-mode"), [{id: "transform", name: "Transform", tip: "The thing you name
   if (m.id === "swap") { $("#e-rb").value = 0.8; }
   syncSliders(); refreshPrompt();
 });
-cards($("#e-looks"), P.LOOKS, (l) => { E.look = l; $("#e-rb").value = l.rb; syncSliders(); refreshPrompt(); }, "vampire");
+// ---- the look: your own (a picture, words, or both) above the presets, in groups
+const LOOKS_SORTED = P.LOOK_GROUPS.flatMap(g => P.LOOKS.filter(l => l.group === g.id));
+cards($("#e-looks"), LOOKS_SORTED.map(l => ({...l, tip: esc(l.desc[0].toUpperCase() + l.desc.slice(1))})), (l) => {
+  E.preset = l; E.look = l; $("#e-rb").value = l.rb; syncSliders(); refreshPrompt(); ownState(); }, "fire");
+$("#e-look-groups").replaceChildren(...[{id: "all", name: "All"}, ...P.LOOK_GROUPS].map(g => h("button", {class: "chip" + (g.id === "all" ? " on" : ""), type: "button", "data-id": g.id,
+  onclick: () => {
+    $$("#e-look-groups .chip").forEach(c => c.classList.toggle("on", c.dataset.id === g.id));
+    $$("#e-looks .card").forEach(c => { c.style.display = g.id === "all" || P.LOOKS.find(l => l.id === c.dataset.id)?.group === g.id ? "" : "none"; });
+  }}, g.name)));
+const REF_EMPTY = () => [h("b", {}, "Your own look"), h("br"), "Drop a picture of it: a creature, a costume, a material", h("br"), h("span", {class: "hint"}, "or drag a still from the bin")];
+function useOwn() {
+  E.look = P.ownLook({words: $("#e-ref-words").value, ref: !!E.lookRef});
+  $$("#e-looks .card").forEach(c => c.classList.remove("on"));
+  if (Number($("#e-rb").value) < 1) $("#e-rb").value = 1.0;
+  syncSliders(); refreshPrompt(); ownState();
+}
+function usePreset() {
+  E.look = E.preset || P.LOOKS.find(l => l.id === "fire");
+  $$("#e-looks .card").forEach(c => c.classList.toggle("on", c.dataset.id === E.look.id));
+  $("#e-rb").value = E.look.rb; syncSliders(); refreshPrompt(); ownState();
+}
+function ownState() {
+  const own = E.look?.id === "own";
+  $("#e-own").classList.toggle("on", own);
+  $("#e-ref-hint").textContent = own
+    ? (E.lookRef ? ($("#e-ref-words").value.trim() ? "Your picture and your words: Krea 2 and H3 both see the picture." : "Your picture: Krea 2 and H3 both see it. A few words about it help H3 keep it.")
+      : "Your words. A picture makes it exact: drop one, or Paint it.")
+    : E.lookRef ? `${E.look?.name || "The preset"}, matched to your picture. Take the picture away to use the preset alone.`
+      : $("#e-ref-words").value.trim() ? `${E.look?.name || "The preset"}. Your words are kept: type in them to use your own look again.`
+      : "Drop a picture or say what it is, or pick a preset below.";
+}
+function setLookRef(ref, url = null, label = "") {
+  E.lookRef = ref; E.lookRefUrl = url;
+  if (ref) fillDrop($("#e-ref"), h("img", {src: url, alt: ""}), h("span", {}, label),
+    h("button", {class: "x", type: "button", tip: "Take the picture away", onclick: (e) => { e.stopPropagation(); setLookRef(null); }}, "×"));
+  else fillDrop($("#e-ref"), ...REF_EMPTY());
+  $("#e-ref").classList.toggle("filled", !!ref);
+  if (ref) useOwn(); else if (E.look?.id === "own" && !$("#e-ref-words").value.trim()) usePreset(); else if (E.look?.id === "own") useOwn(); else { refreshPrompt(); ownState(); }
+}
+dropzone($("#e-ref"), "image/*", async (f) => { const u = await api.upload(f); setLookRef(api.inputRef(u), URL.createObjectURL(f), f.name); });
+$("#e-ref")._onItem = (it) => { if (it.kind === "still") setLookRef(api.fileRef(it.file), api.viewUrl(it.file), it.label || it.file.filename); };
+$("#e-ref-words").addEventListener("input", () => { if ($("#e-ref-words").value.trim() || E.lookRef) useOwn(); else usePreset(); });
+$("#e-own").addEventListener("click", (e) => { if (e.target === $("#e-own") && E.look?.id !== "own" && (E.lookRef || $("#e-ref-words").value.trim())) useOwn(); });
+// Paint it: a clean reference picture of the look from the words (Krea 2, one still), which becomes the picture
+$("#e-ref-paint").addEventListener("click", () => {
+  const words = $("#e-ref-words").value.trim();
+  if (!words) { $("#e-ref-words").focus(); return toast("Say what the look is, then Paint it", true); }
+  const btn = $("#e-ref-paint"); btn.disabled = true; btn.firstChild.textContent = "Painting…";
+  const done = () => { btn.disabled = false; btn.firstChild.textContent = "Paint it"; };
+  run(G.keyframes({prompt: P.lookRefPrompt(words), width: 768, height: 1024, seeds: [7000 + Math.floor(Math.random() * 9000)], prefix: `valis/look_ref_${Date.now().toString(36)}`}),
+    "Paint the look", null, {onDone: (j) => {
+      done();
+      const f = j.outputs.find(o => /\.(png|jpe?g|webp)$/i.test(o.filename));
+      if (f) { setLookRef(api.fileRef(f), api.viewUrl(f), `painted: ${words}`); Bin.add?.(f, {from: "Edit", label: `look: ${words}`}); }
+    }}).then((job) => { if (!job) done(); });
+});
+ownState();
 async function editEst() {
   const graph = E.mode === "turn" ? G.turn({a: "x.mp4", b: "y.mp4"}) : E.mode === "swap" ? G.swapFull({video: "x.mp4", character: "c.png", prompt: "x", turbo: true})
     : G.edit({mode: E.mode, video: "x.mp4", target: "x", anchorPrompt: "x", desc: "x"});
@@ -483,7 +539,10 @@ $("#e-look").addEventListener("input", refreshPrompt);
 function refreshPrompt() {
   const T = $("#e-target").value.trim() || "the subject";
   let p = "";
-  if (E.mode === "transform" && E.look) p = E.look.anchor.replaceAll("{T}", T);
+  if (E.mode === "transform" && E.look) {
+    p = E.look.anchor.replaceAll("{T}", T);
+    if (E.lookRef && E.look.id !== "own") p = p.replace(/\s*Keep /, " Match the look in the reference picture. Keep ");
+  }
   if (E.mode === "remove") p = P.REMOVE_PROMPT.replaceAll("{T}", T);
   if (E.mode === "swap") p = G.swapPrompt({target: T, look: $("#e-look").value.trim()});
   $("#e-prompt").value = p;
@@ -564,6 +623,21 @@ dropzone($("#e-clip"), "video/*", async (f) => {
   try { const u = await api.upload(f); setClip(api.inputRef(u), URL.createObjectURL(f), f.name); }
   catch (e) { toast(e.message, true); }
 });
+// Paint: a costume-test sheet of the character from words (Krea 2, as the Film tab paints its cast)
+$("#e-char-paint").addEventListener("click", () => {
+  const words = $("#e-char-words").value.trim();
+  if (!words) { $("#e-char-words").focus(); return toast("Describe the character, then Paint", true); }
+  const btn = $("#e-char-paint"); btn.disabled = true; btn.firstChild.textContent = "Painting…";
+  const done = () => { btn.disabled = false; btn.firstChild.textContent = "Paint"; };
+  run(G.keyframes({prompt: sheetPrompt({look: words}), width: 832, height: 1216, seeds: [7000 + Math.floor(Math.random() * 9000)], prefix: `valis/swap_sheet_${Date.now().toString(36)}`}),
+    "Paint the character", null, {onDone: (j) => {
+      done();
+      const f = j.outputs.find(o => /\.(png|jpe?g|webp)$/i.test(o.filename));
+      if (!f) return;
+      E.character = api.fileRef(f); fillDrop($("#e-char"), h("img", {src: api.viewUrl(f)}), h("span", {}, `painted: ${words}`));
+      if (!$("#e-look").value.trim()) { $("#e-look").value = words; refreshPrompt(); }
+    }}).then((job) => { if (!job) done(); });
+});
 dropzone($("#e-char"), "image/*", async (f) => {
   try { const u = await api.upload(f); E.character = api.inputRef(u); fillDrop($("#e-char"), h("img", {src: URL.createObjectURL(f)}), h("span", {}, f.name)); }
   catch (e) { toast(e.message, true); }
@@ -602,10 +676,14 @@ $("#e-render").addEventListener("click", async () => {
       }});
   }
   const look = E.mode === "transform" ? E.look : null;
-  const desc = look ? look.desc : E.mode === "remove" ? `gone: only the background continues where ${target} was` : "the person from the reference image, with the same face and hair";
+  if (look?.id === "own" && !E.lookRef && !$("#e-ref-words").value.trim()) return toast("Your own look needs a picture or a few words (or pick a preset)", true);
+  const ref = E.mode === "transform" ? E.lookRef : null;
+  const desc = look ? (ref && look.id !== "own" ? `${look.desc}, as in the reference picture` : look.desc)
+    : E.mode === "remove" ? `gone: only the background continues where ${target} was` : "the person from the reference image, with the same face and hair";
+  // H3 is told what you named ("her dress"); the look's own word for it only when the name is missing
   const g = G.edit({mode: E.mode, video: E.clip, audio: await audioRef(), target, anchorPrompt: $("#e-prompt").value, desc,
-    who: look?.who || target, keep: look?.keep || "the face and the details", refBoost: Number($("#e-rb").value), grow: Number($("#e-grow").value),
-    character: E.character, prefix: `valis/edit_${Date.now().toString(36)}`});
+    who: target || look?.who, keep: look?.keep || "the face and the details", refBoost: Number($("#e-rb").value), grow: Number($("#e-grow").value),
+    character: E.character, lookRef: ref, prefix: `valis/edit_${Date.now().toString(36)}`});
   const before = E.clipUrl;
   run(g, `${E.mode[0].toUpperCase() + E.mode.slice(1)} “${target}”`, $("#e-viewer"), {onDone: (j) => {
     const v = j.outputs.find(f => VID.test(f.filename) && !/matte|_guide_|_raw_|_kept_/.test(f.filename));
@@ -1211,7 +1289,8 @@ function fdraw() {
         h("input", {type: "checkbox", checked: sh.holdColour !== false, onchange: (e) => { sh.holdColour = e.target.checked ? undefined : false; sh.fx = null; fsave(); fsteps(); }}), " keep the keyframe's colours"),
       h("div", {class: "frow"},
         h("input", {type: "text", value: sh.subject, placeholder: "subject", tip: "What SAM 3 tracks for the effect", oninput: (e) => { sh.subject = e.target.value; fsave(); }}),
-        h("select", {tip: "The effect", onchange: (e) => { sh.effect = e.target.value; sh.fx = null; fsave(); fsteps(); }}, ...G.FILM_EFFECTS.map(x => h("option", {value: x, selected: x === sh.effect}, x))),
+        h("select", {tip: "The effect", onchange: (e) => { sh.effect = e.target.value; sh.fx = null; fsave(); fsteps(); }}, h("option", {value: "none", selected: !G.fxPreset(sh.effect)}, "no effect"),
+          ...G.FX_GROUPS.map(g => h("optgroup", {label: g.name}, ...G.FX_CHOICES.filter(c => c.group === g.id).map(c => h("option", {value: c.key, selected: c.key === sh.effect}, c.name))))),
         h("select", {tip: "The lane of the song that fires it", onchange: (e) => { sh.on = e.target.value; sh.fx = null; fsave(); fsteps(); }}, ...G.FILM_LANES.map(x => h("option", {value: x, selected: x === sh.on}, `on ${x}`)))));
     // drop a still or a clip from the bin onto a shot
     card.addEventListener("dragover", (e) => { e.preventDefault(); card.classList.add("over"); });
@@ -1348,6 +1427,11 @@ const TIPS = {
   // edit
   "#e-clip": "The clip to change: a video you drop, or one from the bin", "#e-target": "Name what to change, as you'd say it: the man, his head, her dress, the car. SAM 3 follows it through every frame",
   "#e-looks": "What it becomes. The look's words go to Krea 2 (the new first and last frames) and to H3",
+  "#e-ref": "A picture of what it becomes: Krea 2 makes the new first and last frames from it, and H3 sees it as a reference. Works alone or with a preset",
+  "#e-ref-words": "What it becomes, in your words. With no picture they are the look; with one, they help H3 keep it",
+  "#e-ref-paint": "Paints a clean reference picture of your words with Krea 2 (a few seconds) and uses it as the picture",
+  "#e-char-paint": "Paints a costume-test sheet of the character from your words with Krea 2 and uses it for the swap",
+  "#e-look-groups": "Show one group of presets",
   "#e-char": "The character who replaces the person: an upper-body or full-body sheet works best", "#e-look": "Their hair, face and clothes in words: helps H3 keep them",
   "#e-bg": "Optional: a new place. The take is keyed onto it first, so the new scene and the new character are lit together",
   "#e-match": "After the swap, match its tone, colour and grain to the plate (no AI)", "#e-clipb": "The second take: the one it turns into",

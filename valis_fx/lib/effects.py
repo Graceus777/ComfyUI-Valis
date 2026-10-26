@@ -9,13 +9,15 @@ sheet music, a syllable, or a line in a soundless cue sheet.
     Lens            a gravitational lens at a tracked point: space bends, an Einstein ring, a dark core
     Datamosh        the next frame never arrives: the last picture is dragged along the new motion
     Echo            the subject sheds afterimages on each hit: they drift, grow and fade
-    Shatter         the frame cracks from the impact point and falls away in shards (onto another scene)
-    Frost           frost grows across the frame from the hits, dendritic, freezing what it covers
+    Shatter         a pane in front of the lens cracks from the impact point; the shards near it fall (or all of it, onto another scene)
+    Frost           frost grows in from the frame's edges on the hits, dendritic, frosting the glass, and thaws
     Vertigo         a dolly zoom from a subject mask: the subject holds, the world is pushed away (real pixels only)
     Tear            reality rips open along a jagged seam; another scene burns behind it
     Projector       the image becomes a projected film: flicker, gate weave, scratches, dust, burn-in
     Glitch          block displacement and channel split on the hits
     Punch           exposure flash + zoom kick + chromatic split on the hits
+
+The light effects (Flicker, Firelight, Lightning, Sweep, Glow, Haze, Glint, Rim) are in light.py and join the library here.
 """
 import math
 
@@ -387,12 +389,17 @@ class Echo:
 
 # ---------------------------------------------------------------------------------------------------------------
 class Shatter:
-    """The frame is glass. On the hit, cracks race out from the impact point; after `hold` the shards fall,
-    turning and catching the light, onto `behind` (another clip, or black)."""
+    """A pane of glass in front of the lens. On the hit, thin cracks race out from the impact point (to `extent` of the
+    frame); after `hold` the shards near the impact (within `radius`) fall away, turning and catching the light, and
+    the shot carries on behind them, seen through the cracked pane (each shard bends it a little).
+    fall: "some" (the shards near the impact), "none" (it only cracks), or "all" (the whole frame falls away onto
+    `behind`: another clip, or black). crack: how dark and bright the crack lines are."""
 
-    def __init__(self, on="impact", at=None, behind=None, cells=80, hold=.28, fall=1.8, gravity=1500, spin=1.6, seed=11,
-                 once=True, rim=.9):
+    def __init__(self, on="impact", at=None, behind=None, cells=80, hold=.28, fall="some", gravity=1500, spin=1.6, seed=11,
+                 once=True, rim=.35, radius=.1, extent=.65, crack=.55, time=1.8):
         self.__dict__.update(locals()); del self.__dict__["self"]
+        if isinstance(fall, (int, float)):        # older settings: fall was the time the shards take
+            self.time, self.fall = float(fall), "all"
         self._g = None
 
     def _build(self, ctx, th, frame):
@@ -405,17 +412,28 @@ class Shatter:
         dx, dy = xx - c[0] / 2, yy - c[1] / 2
         rr = np.sqrt(dx * dx + dy * dy); th_ = np.arctan2(dy, dx)
         nsp = 11 + int(r.integers(0, 6))
-        spokes = np.sort(r.uniform(0, 2 * math.pi, nsp))
-        wob = (value_noise(h2, w2, 60, self.seed + 5, 3) - .5) * .07
+        spokes = np.sort((np.linspace(0, 2 * math.pi, nsp, endpoint=False) + r.uniform(-.35, .35, nsp) * 2 * math.pi / nsp + r.uniform(0, 6.3)) % (2 * math.pi))
+        sc = max(h2, w2) / 672
+        # a crack wanders sideways by a few pixels and kinks, it doesn't swing wider the further it runs
+        side = (value_noise(h2, w2, 40 * sc, self.seed + 5, 3) - .5) * 26 * sc + (value_noise(h2, w2, 7 * sc, self.seed + 8, 2) - .5) * 6 * sc
+        wob = side / np.maximum(rr, 12 * sc)
         a_ = (th_ + wob + 2 * math.pi) % (2 * math.pi)
         sector = np.searchsorted(spokes, a_) % nsp
-        rings = np.cumsum(r.uniform(.6, 1.4, 12) * np.geomspace(18, 140, 12))
-        ring = np.searchsorted(rings, rr * (1 + (value_noise(h2, w2, 50, self.seed + 6, 3) - .5) * .08))
+        rings = np.cumsum(r.uniform(.6, 1.4, 12) * np.geomspace(18, 140, 12) * sc)
+        ring = np.searchsorted(rings, rr * (1 + (value_noise(h2, w2, 50 * sc, self.seed + 6, 3) - .5) * .12))
+        # the lines that show: every radial crack, but only broken arcs of the rings, near the impact (a full ring
+        # of circles reads as a dartboard)
+        d0 = lambda a: (np.abs(np.diff(a, axis=0, prepend=a[:1])) + np.abs(np.diff(a, axis=1, prepend=a[:, :1]))) > 0
+        arcs = value_noise(h2, w2, 22 * sc, self.seed + 7, 2) > .56
+        show = (d0(sector) | (d0(ring) & arcs & (ring <= 4))).astype(np.float32)
         lab = (ring * nsp + sector).astype(np.int32)
         _, lab = np.unique(lab, return_inverse=True); lab = lab.reshape(h2, w2).astype(np.int32)
         self.cells = int(lab.max()) + 1
         lab = cv2.resize(lab.astype(np.float32), (W, H), interpolation=cv2.INTER_NEAREST).astype(np.int32)
-        edges = ((np.abs(np.diff(lab, axis=0, prepend=lab[:1])) + np.abs(np.diff(lab, axis=1, prepend=lab[:, :1]))) > 0).astype(np.float32)
+        secf = cv2.resize(sector.astype(np.float32), (W, H), interpolation=cv2.INTER_NEAREST).astype(np.int32)
+        edges = (cv2.resize(show, (W, H), interpolation=cv2.INTER_NEAREST) > .5).astype(np.float32)
+        if self.fall == "all":                  # the old look: every shard's outline
+            edges = ((np.abs(np.diff(lab, axis=0, prepend=lab[:1])) + np.abs(np.diff(lab, axis=1, prepend=lab[:, :1]))) > 0).astype(np.float32)
         XX, YY = grid(H, W)
         dist = np.sqrt((XX - c[0]) ** 2 + (YY - c[1]) ** 2)
         shards = []
@@ -429,7 +447,28 @@ class Shatter:
             dist0 = float(np.linalg.norm(v)) / max(W, H)
             shards.append(dict(k=k, box=(x0, x1, y0, y1), c=sc, v=vn * r.uniform(60, 380) * (1.2 - dist0) + np.array([0, -r.uniform(0, 160)]),
                                w=r.normal(0, self.spin), delay=dist0 * .5 + r.uniform(0, .12), z=r.uniform(.002, .02)))
-        self._g = dict(th=th, frame=frame.copy(), lab=lab, edges=edges, dist=dist, shards=shards, c=c)
+        S = max(W, H) / 1344
+        nsec = int(secf.max()) + 1
+        offx = r.normal(0, 1.1 * S, nsec).astype(np.float32); offy = r.normal(0, 1.1 * S, nsec).astype(np.float32)
+        gain = (1 + r.normal(0, .015, nsec)).astype(np.float32)
+        fade = smooth(self.extent * max(W, H), self.extent * max(W, H) * .55, dist).astype(np.float32)
+        R = self.radius * max(W, H)
+        falls = np.zeros(self.cells + 1, bool)
+        for sh in shards:
+            sh["falls"] = self.fall == "all" or (self.fall == "some" and float(np.linalg.norm(sh["c"] - np.array(c, np.float32))) < R)
+            falls[sh["k"]] = sh["falls"]
+        # the cracks only run as far as `extent`; fallen shards leave a hole with no pane in it
+        hole = falls[lab].astype(np.float32)
+        self._g = dict(th=th, frame=frame.copy(), lab=lab, edges=edges * fade, dist=dist, shards=shards, c=c,
+                       dx=offx[secf] * fade, dy=offy[secf] * fade, gain=1 + (gain[secf] - 1) * fade, hole=hole, xx=XX, yy=YY)
+
+    def _cracks(self, img, cr):
+        """Thin cracks: a dark line where the glass splits, a bright one beside it where its edge catches the light."""
+        k = self.crack
+        line = blur(cr, .6)
+        lit = blur(np.roll(cr, 1, axis=1) * (1 - cr), .6)
+        out = img * (1 - (k * line)[..., None])
+        return screen(out, (k * .6 * lit)[..., None] * np.array([.95, .97, 1.0], np.float32))
 
     def __call__(self, ctx, img):
         hits = ctx.cues.times(self.on)
@@ -444,28 +483,36 @@ class Shatter:
         G = self._g
         age = ctx.t - G["th"]
         H, W = ctx.H, ctx.W
-        behind = ctx.clip(self.behind) if self.behind else np.zeros_like(img)
+        if self.fall == "all":
+            behind = ctx.clip(self.behind) if self.behind else np.zeros_like(img)
+        else:
+            behind = img                                       # the shot carries on behind the pane
+        # the pane: the live picture, each shard bending it a little, the cracks over it
         if age < self.hold:
-            # cracks race outward; the shards shift a pixel or two, catching light
             front = age / self.hold * max(W, H) * 1.2
-            cr = G["edges"] * (G["dist"] < front)
-            cr = cv2.dilate(cr, np.ones((2, 2), np.uint8))
-            out = img.copy()
-            out = screen(out, (blur(cr, 1.2) * 1.0 + blur(cr, 5) * .5)[..., None] * np.array([.95, .97, 1.0], np.float32))
-            return out
+            reach = (G["dist"] < front).astype(np.float32)
+            pane = cv2.remap(img, G["xx"] + G["dx"] * reach, G["yy"] + G["dy"] * reach, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT_101)
+            pane = pane * (1 + (G["gain"] - 1) * reach)[..., None]
+            return self._cracks(pane, G["edges"] * reach)
         t2 = age - self.hold
-        if t2 > self.fall + .6:
+        if self.fall == "all" and t2 > self.time + .6:
             return behind
-        out = behind.copy()
+        if self.fall == "all":
+            out = behind.copy()
+        else:
+            pane = cv2.remap(img, G["xx"] + G["dx"], G["yy"] + G["dy"], cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT_101)
+            pane = self._cracks(pane * G["gain"][..., None], G["edges"] * (1 - G["hole"]))
+            out = pane * (1 - G["hole"][..., None]) + behind * G["hole"][..., None]
         src = G["frame"]; lab = G["lab"]
-        order = sorted(G["shards"], key=lambda s: -s["z"])
+        order = sorted([s_ for s_ in G["shards"] if s_["falls"]], key=lambda s_: -s_["z"])
         for s in order:
             tt = max(0.0, t2 - s["delay"])
+            if tt > self.time + .6:
+                continue
             x0, x1, y0, y1 = s["box"]
             pad = 2
             x0, y0 = max(0, x0 - pad), max(0, y0 - pad); x1, y1 = min(W, x1 + pad), min(H, y1 + pad)
             if tt <= 0:
-                M = np.float32([[1, 0, 0], [0, 1, 0]])
                 ang = 0.0; scale = 1.0; off = np.zeros(2)
             else:
                 off = s["v"] * tt + np.array([0, .5 * self.gravity * tt * tt])
@@ -474,10 +521,8 @@ class Shatter:
             M[:, 2] += off
             piece = src[y0:y1, x0:x1]
             msk = (lab[y0:y1, x0:x1] == s["k"]).astype(np.float32)
-            Mfull = M.copy()
-            # warp the shard's crop into the full frame
             T = np.float32([[1, 0, x0], [0, 1, y0]])
-            A = np.vstack([Mfull, [0, 0, 1]]) @ np.vstack([T, [0, 0, 1]])
+            A = np.vstack([M, [0, 0, 1]]) @ np.vstack([T, [0, 0, 1]])
             wp = cv2.warpAffine(piece, A[:2], (W, H), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
             wm = cv2.warpAffine(msk, A[:2], (W, H), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
             if wm.max() <= 0:
@@ -485,19 +530,24 @@ class Shatter:
             edge = np.clip(wm - cv2.erode(wm, np.ones((3, 3), np.uint8)), 0, 1)
             shade = .85 + .3 * math.cos(math.radians(ang) * 2)
             wp = wp * shade + edge[..., None] * self.rim * np.array([.9, .95, 1.0], np.float32)
-            out = out * (1 - wm[..., None]) + wp * wm[..., None]
+            a_ = wm[..., None] * (1.0 if self.fall == "all" else .9)      # a shard of glass: a little of what's behind shows through
+            out = out * (1 - a_) + wp * a_
         return out
 
 
 # ---------------------------------------------------------------------------------------------------------------
 class Frost:
-    """Frost grows across the frame from where the hits land (mask edges, or points), dendritic: it takes the cheap
-    paths of a noise field first. What it covers freezes: cold, pale, crystalline, a refracting surface; its front
-    glitters."""
+    """Frost on the glass in front of the lens: it grows in from the frame's edges where the hits land (or from mask
+    edges, or points), dendritic, taking the cheap paths of a noise field first. What it covers is frosted glass: the
+    picture behind goes soft, pale and cold, and the front glitters as it grows.
+    reach: how far in from the edges it can grow (a fraction of the frame; 1 = across the whole frame).
+    thaw: seconds the frost takes to melt after a hit (0: it stays and each hit adds to it).
+    opacity: how frosted it gets at its thickest; crystals: how much the ice's own texture shows."""
 
-    def __init__(self, on="hit", at=None, speed=.55, cover=1.0, tint=(.82, .92, 1.0), seed=9, sparkle=.8):
+    def __init__(self, on="hit", at=None, speed=.55, cover=1.0, tint=(.82, .92, 1.0), seed=9, sparkle=.5, reach=.18, thaw=2.5,
+                 opacity=.75, crystals=.35, hold=.6, lift=.04):
         self.__dict__.update(locals()); del self.__dict__["self"]
-        self._T = None; self._seeds = []; self._tex = None
+        self._T = None; self._seeds = []; self._tex = None; self._last = None; self._level = 0.0; self._ti = None
 
     def _arrival(self, ctx):
         from skimage.graph import MCP_Geometric
@@ -517,58 +567,77 @@ class Frost:
         new = ctx.cues.hits(self.on, ctx.t - 1 / ctx.fps + 1e-6, ctx.t + 1e-6)
         for th in new:
             r = np.random.default_rng((self.seed + int(ctx.cues.key(th) * 1000)) % 2 ** 32)
+            if self.thaw and self._level < .3:  # what was there has melted: this hit grows a new frost
+                self._seeds = []
             if isinstance(self.at, tuple):
-                x, y = self.at
+                pts = [self.at]
             elif self.at:
                 m = ctx.mask(self.at, soft=0)
                 e = (m > .5).astype(np.uint8); e = e - cv2.erode(e, np.ones((5, 5), np.uint8))
                 ys, xs = np.nonzero(e)
-                if len(xs):
-                    k = r.integers(len(xs)); x, y = xs[k], ys[k]
-                else:
-                    x, y = W * r.random(), H * r.random()
-            else:
-                side = r.integers(4)
-                x, y = [(0, H * r.random()), (W - 1, H * r.random()), (W * r.random(), 0), (W * r.random(), H - 1)][side]
-            self._seeds.append((th, x, y))
+                pts = [(xs[k], ys[k]) for k in r.integers(len(xs), size=1)] if len(xs) else [(W * r.random(), H * r.random())]
+            else:                               # two corners' worth of edge: frost forms where the glass is coldest
+                pts = []
+                for side in r.choice(4, 2, replace=False):
+                    pts.append([(0, H * r.random()), (W - 1, H * r.random()), (W * r.random(), 0), (W * r.random(), H - 1)][side])
+            for (x, y) in pts:
+                self._seeds.append((th, x, y))
+            self._last = th
         if new.size:
             self._arrival(ctx)
         if self._T is None:
             return img
         if self._tex is None:
             r = np.random.default_rng(self.seed)
-            tex = np.zeros((H, W), np.float32)
             S = max(H, W) / 1344
-            for ang in (0, 60, 120):
-                pts = (r.random((H, W)) > 1 - .0011 / S ** 2).astype(np.float32) * r.uniform(.4, 1, (H, W)).astype(np.float32)
-                L = int(36 * S) | 1
-                k = np.zeros((L, L), np.float32); k[L // 2, :] = np.linspace(.2, 1, L) ** .5 * np.linspace(1, .2, L) ** .5
-                M = cv2.getRotationMatrix2D((L / 2 - .5, L / 2 - .5), ang + r.normal(0, 4), 1.0)
-                k = cv2.warpAffine(k, M, (L, L)); k /= k.max()
-                tex = np.maximum(tex, cv2.filter2D(pts, -1, k))
-            dust = (r.random((H, W)) > .97).astype(np.float32) * .5
-            tex = np.clip(tex * 1.4 + blur(dust, .7) * 2, 0, 1)
-            self._tex = (blur(tex, .6) * .85 + tex * .15).astype(np.float32)
+            # ice veins: ridged fractal noise (fern-like ridges at three scales) with a fine glittering dust on top
+            tex = np.zeros((H, W), np.float32)
+            for k, (sc, amp) in enumerate(((90, .5), (38, .35), (15, .25))):
+                n = value_noise(H, W, sc * S, self.seed + 11 + k, 2)
+                tex += amp * (1 - np.abs(2 * n - 1)) ** 6
+            dust = (r.random((H, W)) > .985).astype(np.float32) * r.uniform(.3, 1, (H, W)).astype(np.float32)
+            tex = np.clip(tex * 1.3 + blur(dust, .6) * 1.2, 0, 1)
+            self._tex = (blur(tex, .6) * .8 + tex * .2).astype(np.float32)
             dens = value_noise(H, W, 160 * S, self.seed + 4, 3)
             xx, yy = grid(H, W)
-            edge = np.minimum(np.minimum(xx, W - 1 - xx) / W, np.minimum(yy, H - 1 - yy) / H)       # frost gathers at the frame's edges
-            self._dens = (smooth(.25, .75, dens) * .5 + smooth(.32, .02, edge) * .7).clip(0, 1).astype(np.float32)
+            edge = np.minimum(np.minimum(xx, W - 1 - xx) / W, np.minimum(yy, H - 1 - yy) / H)       # 0 at the frame's edge
+            if self.reach >= 1:                 # the old whole-frame frost
+                self._dens = (smooth(.25, .75, dens) * .5 + smooth(.32, .02, edge) * .7).clip(0, 1).astype(np.float32)
+            else:                               # it thins out toward `reach` from the edges, ragged
+                rag = self.reach * (.65 + .7 * dens)
+                self._dens = (smooth(rag, rag * .2, edge) * (.6 + .4 * smooth(.3, .7, dens))).clip(0, 1).astype(np.float32)
             gx = cv2.Sobel(blur(self._tex, 2), cv2.CV_32F, 1, 0, ksize=3); gy = cv2.Sobel(blur(self._tex, 2), cv2.CV_32F, 0, 1, ksize=3)
             self._ref = np.stack([gx, gy], -1) * 3 * S
+            self._S = S
         age = ctx.t - self._T
-        F = smooth(0, .3, age) * self.cover * self._dens ** 1.3
-        if F.max() <= 0:
+        melt = 1.0
+        if self.thaw and self._last is not None:
+            # the frost's strength: it firms up after a hit and holds, then melts away over `thaw` seconds
+            dt = 1 / ctx.fps if self._ti is None else max(0.0, ctx.t - self._ti)
+            self._ti = ctx.t
+            if ctx.t - self._last < self.hold:
+                self._level = self._level + (1 - self._level) * min(1.0, dt / .25)
+            else:
+                self._level *= math.exp(-dt / (self.thaw * .45))
+            melt = self._level if ctx.t - self._last >= .05 else max(self._level, 1.0 if self._level > .3 else 0.0)
+        F = smooth(0, .3, age) * self.cover * self._dens ** 1.3 * melt * self.opacity
+        if F.max() <= 0.002:
             return img
+        S = self._S
         refr = warp_pull(img, self._ref * F[..., None])
-        L = lum(refr)
-        cold = screen(L[..., None] * np.array(self.tint, np.float32), np.full_like(img, .18) * np.array(self.tint, np.float32))
-        crystals = (self._tex * smooth(0, .6, age) * self._dens ** 2)[..., None]
+        frosted = blur(refr, 3.5 * S)                       # frosted glass: what's behind goes soft
+        L = lum(frosted)
+        cold = frosted * .5 + L[..., None] * np.array(self.tint, np.float32) * .5
+        cold = screen(cold, np.full_like(img, self.lift) * np.array(self.tint, np.float32))
+        # the ice catches the light there is: it glitters in a bright scene and barely shows in a dark one
+        catch = .15 + .85 * smooth(0, .45, blur(lum(img), .04 * math.hypot(H, W)))
+        crystals = (self._tex * smooth(0, .6, age) * self._dens ** 2 * melt * catch)[..., None] * self.crystals
         cold = screen(cold, crystals * np.array([.85, .93, 1.0], np.float32))
         out = img * (1 - F[..., None]) + cold * F[..., None]
-        front = np.exp(-(age / .05) ** 2) * (age > -0.02)
+        front = np.exp(-(age / .05) ** 2) * (age > -0.02) * self._dens
         r = np.random.default_rng(ctx.i)
         sp = (r.random((H, W)) > .985).astype(np.float32) * front * self.sparkle
-        glit = blur(front * .5 + sp * 3, 1.5)
+        glit = blur(front * .35 + sp * 3, 1.5) * melt * catch
         return screen(out, np.clip(glit, 0, 1)[..., None] * np.array([.85, .93, 1.0], np.float32))
 
 
@@ -942,3 +1011,5 @@ class Punch:
 
 LIBRARY = {c.__name__: c for c in (DoubleExposure, TimeSlip, SlitScan, Lens, Datamosh, Echo, Shatter, Frost, Vertigo, Shockwave, Rays, Split, Eras,
                                     Tear, Projector, Glitch, Punch)}
+from .light import LIGHT          # noqa: E402  (light.py needs only core)
+LIBRARY.update(LIGHT)

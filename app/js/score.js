@@ -23,7 +23,18 @@ const ORDER = ["bar", "downbeat", "beat", "kick", "snare", "hat", "onset", "melo
 const SEC_COL = {prologue: "#2b2238", midnight: "#1c2440", call: "#2b2440", waltz: "#1d3036", build: "#33301d", drop: "#3a2219", breakdown: "#1d2430",
   reveal: "#2a1a22", finale: "#3a1f1f", dawn: "#3a311d", intro: "#22283a", verse: "#1d2a33", chorus: "#2e2238", outro: "#26262c"};
 // first rules for a score made here: whatever of these lanes it has
-const STARTER = [["downbeat", "Shockwave"], ["kick", "Punch"], ["snare", "Glitch"], ["melody", "Rays"], ["bar", "Projector"]];
+// light first: a score made here starts with effects that read as the scene's own light
+const STARTER = [["beat", "Flicker"], ["downbeat", "Rays"], ["melody", "Glow"], ["bar", "Sweep"], ["kick", "Punch"]];
+// a set of rules to start from, by mood: each names the lanes it would like; a score without one gets the nearest it has
+const RULE_SETS = [
+  {id: "candle", name: "Candlelit", tip: "Flames that breathe on the beat, a glow on the melody, a glint on the downbeats", rules: [["beat", "Flicker"], ["melody", "Glow:dream"], ["downbeat", "Glint"]]},
+  {id: "storm", name: "Storm", tip: "Lightning on the downbeats, a bulb browning out on the kick, heat in the air", rules: [["downbeat", "Lightning"], ["kick", "Flicker:bulb"], ["bar", "Rays:moon"]]},
+  {id: "fire", name: "Fire", tip: "Firelight on the beat, the air shimmering, a glint on the downbeats", rules: [["beat", "Firelight"], ["bar", "Haze"], ["downbeat", "Glint"]]},
+  {id: "night", name: "Night drive", tip: "Headlights on the bars, neon glow on the beat, a kick on the kick", rules: [["bar", "Sweep"], ["beat", "Glow:neon"], ["kick", "Punch"]]},
+  {id: "memory", name: "Memory", tip: "Projected film on the bars, a dreamy glow, moonlight on the downbeats", rules: [["bar", "Projector"], ["melody", "Glow:dream"], ["downbeat", "Rays:moon"]]},
+  {id: "impact", name: "Impact", tip: "The loud set: a ripple on the downbeats, a kick, a glitch on the snare", rules: [["downbeat", "Shockwave"], ["kick", "Punch"], ["snare", "Glitch"]]},
+];
+const NEAREST = ["beat", "downbeat", "kick", "bar", "melody", "onset", "snare", "hat"];
 const SOURCES = [
   {id: "song", name: "From a song", tip: "Drop any song: Valis hears its beats, bars, kick, snare and hats, how loud and bright it is, and lays out sections and shots on its bars."},
   {id: "yue", name: "YuE2 writes it", tip: "YuE2 writes the sheet music and plays it; the score has every note it wrote (melody, bass, chords) as well as the beats."},
@@ -45,7 +56,7 @@ export class ScoreView {
   build() {
     seg($("#s-source"), SOURCES, (x) => this.setSource(x.id), "song");
     this.secRules = section("Effects on the music", {id: "s-sec-rules", open: true, tip: "Each rule: a lane of the score fires an effect. Library effects work on any score; the classic engine's are made for the example."},
-      h("div", {class: "seg", id: "s-engine"}), h("div", {class: "map", id: "s-map"}), h("button", {class: "btn small", id: "s-add", type: "button", style: "margin-top:8px"}, "+ Add a rule"),
+      h("div", {class: "seg", id: "s-engine"}), h("div", {class: "chips rulesets", id: "s-sets"}), h("div", {class: "map", id: "s-map"}), h("button", {class: "btn small", id: "s-add", type: "button", style: "margin-top:8px"}, "+ Add a rule"),
       h("label", {class: "bkind", style: "display:block;margin-top:8px", tip: "Each effect plays a sound of its own on its hits, mixed under the music. Untick it to keep the song alone, as it is (a score you composed)"},
         h("input", {type: "checkbox", id: "s-fxsound", checked: true}), " the effects make sounds"),
       h("h3", {class: "lab", tip: "SAM 3 follows this in every shot: Echo, Lens, Vertigo, Double exposure and the classic reveals use it"}, "Subject"),
@@ -54,9 +65,10 @@ export class ScoreView {
       h("div", {class: "row", style: "margin-bottom:8px"}, h("button", {class: "btn small", type: "button", id: "s-fill", tip: "Lay the newest clips from the bin on the shots that have none, in order"}, "Fill from the bin")),
       h("div", {class: "map", id: "s-shots"}));
     $("#s-sections").replaceChildren(this.secRules, this.secShots);
-    seg($("#s-engine"), [{id: "library", name: "Library", tip: "The Valis library (the FX tab's effects): any lane, any score"}, {id: "classic", name: "Classic", tip: "ValisFX, the engine the first Valis film (DANSE MACABRE) was made with: candles, ghost crowd, reveals. Made for the example's lanes"}],
+    this.engineSeg = seg($("#s-engine"), [{id: "library", name: "Library", tip: "The Valis library (the FX tab's effects): any lane, any score"}, {id: "classic", name: "Classic", tip: "ValisFX, the engine the first Valis film (DANSE MACABRE) was made with: candles, ghost crowd, reveals. Made for the example's lanes"}],
       (x) => { this.engine = x.id; if (this.sc) { this.rules = this.defaultRules(); this.renderRules(); this.draw(); } }, "library");
-    $("#s-add").addEventListener("click", () => { this.rules.push({lane: this.lanes?.[0] || "kick", effect: this.engine === "classic" ? "flare" : "Punch"}); this.renderRules(); this.draw(); });
+    $("#s-sets").replaceChildren(h("span", {class: "lab"}, "Start from"), ...RULE_SETS.map(rs => h("button", {class: "chip", type: "button", tip: rs.tip, onclick: () => this.useSet(rs)}, rs.name)));
+    $("#s-add").addEventListener("click", () => { this.rules.push({lane: this.lanes?.[0] || "kick", effect: this.engine === "classic" ? "flare" : "Rays"}); this.renderRules(); this.draw(); });
     $("#s-fill").addEventListener("click", () => this.fill());
     $("#s-play").addEventListener("click", () => this.toggle());
     $("#s-render").addEventListener("click", () => this.renderAll());
@@ -168,6 +180,17 @@ export class ScoreView {
     a.click();
   }
 
+  // a rule set on this score: each lane it names, or the nearest lane the score has
+  useSet(rs) {
+    if (!this.sc) return toast("Make or open a score first", true);
+    if (this.engine === "classic") { this.engine = "library"; this.engineSeg?.set("library", true); }       // the sets are library effects
+    const has = (l) => this.sc.events[l]?.length, used = new Set();
+    this.rules = rs.rules.map(([lane, effect]) => {
+      const l = has(lane) && !used.has(lane) ? lane : NEAREST.find(x => has(x) && !used.has(x)) || this.lanes[0];
+      used.add(l); return {lane: l, effect};
+    });
+    this.renderRules(); this.draw();
+  }
   // ---- the score
   defaultRules() {
     if (this.engine === "classic") return DANSE_RULES.filter(r => this.sc.events[r.lane]?.length);
@@ -185,14 +208,16 @@ export class ScoreView {
     this.renderRules(); this.renderShots(); this.live.mount(); this.draw(); this.preview(); this.estimates();
   }
   renderRules() {
-    const effects = this.engine === "classic" ? CLASSIC : G.LIBRARY;
+    const classic = this.engine === "classic";
+    const blurb = (id) => classic ? "" : (G.FX_CHOICES.find(c => c.key === id)?.blurb || "");
     this.secRules.setValue(`${this.rules.length} rule${this.rules.length === 1 ? "" : "s"}${this.engine === "classic" ? " · classic engine" : ""}`);
     $("#s-map").replaceChildren(...this.rules.map((r, k) => {
       const lane = h("select", {onchange: (e) => { r.lane = e.target.value; this.draw(); }, tip: "The lane that fires it"},
         ...this.lanes.map(x => h("option", {value: x, selected: x === r.lane}, `${x.replaceAll("_", " ")} (${this.sc.events[x].length})`)));
-      const fx = h("select", {onchange: (e) => { r.effect = e.target.value; this.draw(); }, tip: esc(effects.find(e => e.id === r.effect)?.blurb || "")},
-        ...effects.map(x => h("option", {value: x.id, selected: x.id === r.effect}, x.name)));
-      return h("div", {class: "maprow rule"}, h("i", {class: "swatch", style: `background:${FX_COLOR[r.effect] || "#777"}`}), lane, h("span", {class: "arrow"}, "→"), fx,
+      const fx = h("select", {onchange: (e) => { r.effect = e.target.value; this.renderRules(); this.draw(); }, tip: esc(blurb(r.effect))},
+        ...(classic ? CLASSIC.map(x => h("option", {value: x.id, selected: x.id === r.effect}, x.name))
+          : G.FX_GROUPS.map(g => h("optgroup", {label: g.name}, ...G.FX_CHOICES.filter(c => c.group === g.id).map(c => h("option", {value: c.key, selected: c.key === r.effect}, c.name))))));
+      return h("div", {class: "maprow rule"}, h("i", {class: "swatch", style: `background:${FX_COLOR[r.effect.split(":")[0]] || "#777"}`}), lane, h("span", {class: "arrow"}, "→"), fx,
         h("button", {class: "x", type: "button", tip: "Remove", onclick: () => { this.rules.splice(k, 1); this.renderRules(); this.draw(); }}, "×"));
     }));
   }
@@ -245,8 +270,8 @@ export class ScoreView {
     const g = this.engine === "classic"
       ? G.valisShot({clip: a.clip.ref, score, startBar: shot.start_bar, section: sec?.name || "", layer: null, rules: this.rules.map(r => ({event: r.lane, effect: r.effect})),
           targetA: $("#s-a").value.trim(), targetB: $("#s-b").value.trim(), prefix: `valis/score_${shot.id}_${tag}`})
-      : G.fx({clip: a.clip.ref, subject: G.LIBRARY.some(l => this.rules.some(r => r.effect === l.id) && ((l.needs || []).includes("subject") || l.params?.at === "subject")) ? $("#s-a").value.trim() : "",
-          source: "score", score, audio: this.audioRef, layers: this.rules.map(r => { const l = G.LIBRARY.find(x => x.id === r.effect); return {effect: r.effect, on: r.lane, params: l?.params || {}}; }),
+      : G.fx({clip: a.clip.ref, subject: this.rules.some(r => { const f = G.fxPreset(r.effect); return f && (f.needs.includes("subject") || f.params.at === "subject"); }) ? $("#s-a").value.trim() : "",
+          source: "score", score, audio: this.audioRef, layers: this.rules.map(r => G.fxLayer(r.effect, r.lane)).filter(Boolean),
           sound: $("#s-fxsound").checked, seconds: this.span(shot), start: shot.start_frame / 24, fit: true, prefix: `valis/score_${shot.id}_${tag}`});
     return new Promise((res) => this.run(g, `Score · ${shot.id}`, null, {onDone: (j) => {
       const v = j.outputs.find(f => /\.(mp4|webm|mov)$/i.test(f.filename));
@@ -286,7 +311,7 @@ export class ScoreView {
   }
 
   // ---- the timeline and the live preview
-  colorFor(lane) { const r = this.rules.find(r => r.lane === lane); return r ? FX_COLOR[r.effect] || "#bbb" : null; }
+  colorFor(lane) { const r = this.rules.find(r => r.lane === lane); return r ? FX_COLOR[r.effect.split(":")[0]] || "#bbb" : null; }
   draw() {
     const c = this.canvas, sc = this.sc; if (!sc) return;
     const dpr = devicePixelRatio || 1, W = c.clientWidth, laneH = 17, top = 70;

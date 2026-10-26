@@ -346,20 +346,32 @@ function kreaLoaders() {
   };
 }
 
-function kreaEdit(b, img, prompt, seed, prefix, refBoost, subject = null) {
+function kreaEdit(b, img, prompt, seed, prefix, refBoost, subject = null, megapixels = 1.0) {
   const i = (k) => String(b + k), g = {};
-  g[i(4)] = N("ImageScaleToTotalPixels", {image: img, upscale_method: "lanczos", megapixels: 1.0, resolution_steps: 16});
+  g[i(4)] = N("ImageScaleToTotalPixels", {image: img, upscale_method: "lanczos", megapixels, resolution_steps: 16});
   g[i(5)] = N("VAEEncode", {pixels: [i(4), 0], vae: ["202", 0]});
   g[i(6)] = N("GetImageSize", {image: [i(4), 0]});
   g[i(7)] = N("EmptySD3LatentImage", {width: [i(6), 0], height: [i(6), 1], batch_size: 1});
   const patch = {model: ["203", 0], source_latent: [i(5), 0], vae: ["202", 0], source_image: [i(4), 0], target_latent: [i(7), 0], ref_boost: refBoost, ref_boost_a: 1.0, fit_mode: "fit"};
   if (subject) patch.source_image_b = subject;
   g[i(8)] = N("Krea2EditModelPatch", patch);
-  g[i(9)] = N("Krea2EditGroundedEncode", {clip: ["201", 0], prompt, image: [i(4), 0], grounding_px: 768, system_prompt: ""});
-  g[i(10)] = N("Krea2EditGroundedEncode", {clip: ["201", 0], prompt: "", image: [i(4), 0], grounding_px: 768, system_prompt: ""});
+  // a second picture (a character, a look) is grounded too, as the film frames do it
+  const b2 = subject ? {image_b: subject} : {};
+  g[i(9)] = N("Krea2EditGroundedEncode", {clip: ["201", 0], prompt, image: [i(4), 0], grounding_px: 768, system_prompt: "", ...b2});
+  g[i(10)] = N("Krea2EditGroundedEncode", {clip: ["201", 0], prompt: "", image: [i(4), 0], grounding_px: 768, system_prompt: "", ...b2});
   g[i(11)] = N("KSampler", {model: [i(8), 0], positive: [i(9), 0], negative: [i(10), 0], latent_image: [i(7), 0], seed, steps: 10, cfg: 1.0, sampler_name: "euler", scheduler: "simple", denoise: 1.0});
   g[i(12)] = N("VAEDecode", {samples: [i(11), 0], vae: ["202", 0]});
   if (prefix) g[i(13)] = N("SaveImage", {images: [i(12), 0], filename_prefix: prefix});
+  return g;
+}
+
+// One still in a look: the Transform's own first step (a Krea 2 identity edit) on a picture, with the look's reference
+// picture if it has one. The look picker's thumbnails are made with it (tools/look_thumbs.mjs).
+export function lookStill({image, prompt, refBoost = 1.0, lookRef = null, seed = 31, prefix = "valis/look", megapixels = 1.0}) {
+  const g = {...kreaLoaders(), "40": N("LoadImage", {image})};
+  let subject = null;
+  if (lookRef) { g["41"] = N("LoadImage", {image: lookRef}); subject = ["41", 0]; }
+  Object.assign(g, kreaEdit(300, ["40", 0], prompt, seed, prefix, refBoost, subject, megapixels));
   return g;
 }
 
@@ -478,7 +490,7 @@ const REMOVE_PROMPT_FALLBACK = (t) => `Remove ${t} from the picture completely: 
 
 // mode: "transform" (Krea anchors), "remove" (the Person Remover LoRA; plainRemove: the old Qwen plates + masked H3), "swap"
 export function edit({mode, video, audio, target, anchorPrompt, desc, who = "the subject", keep = "its shape and material",
-                      refBoost = 0.5, grow = 12, crop = 1.3, character = null, lastFrame = -1, maxSeconds = 15, prefix = "valis/edit", engine, plainRemove = false,
+                      refBoost = 0.5, grow = 12, crop = 1.3, character = null, lookRef = null, lastFrame = -1, maxSeconds = 15, prefix = "valis/edit", engine, plainRemove = false,
                       megapixels}) {
   if (mode === "remove" && !plainRemove) return removePerson({video, audio, target, anchorPrompt, grow, maxSeconds, prefix, ...(megapixels ? {megapixels} : {})});
   const g = track(video, target, {audio, grow, maxSeconds});
@@ -500,6 +512,8 @@ export function edit({mode, video, audio, target, anchorPrompt, desc, who = "the
     Object.assign(g, kreaLoaders());
     let subject = null;
     if (mode === "swap" && character) { g["60"] = N("LoadImage", {image: character}); subject = ["60", 0]; }
+    // a transform's reference picture: what the look is (dropped, or painted from words)
+    if (mode === "transform" && lookRef) { g["60"] = N("LoadImage", {image: lookRef}); subject = ["60", 0]; }
     Object.assign(g, kreaEdit(300, ["46", 0], anchorPrompt, 31, `${prefix}_anchor_first`, refBoost, subject),
                      kreaEdit(320, ["47", 0], anchorPrompt, 31, `${prefix}_anchor_last`, refBoost, subject));
     first = ["312", 0]; last = ["332", 0];
@@ -507,6 +521,7 @@ export function edit({mode, video, audio, target, anchorPrompt, desc, who = "the
   const refs = {"ref_images.ref_image_0": first, "ref_images.ref_image_1": last, "ref_audios.ref_audio_0": ["18", 1]};
   let extra = "";
   if (mode === "swap" && character) { refs["ref_images.ref_image_2"] = ["60", 0]; extra = " <Picture 3> shows the same character up close."; }
+  if (mode === "transform" && lookRef) { refs["ref_images.ref_image_2"] = ["60", 0]; extra = " <Picture 3> shows the look up close."; }
   const anchor = (c, which, img) => N("H3IdentityAnchor", {conditioning: c, vae: ["3", 0], latent: ["6", 1], frame_count: ["18", 4], width: ["25", 0], height: ["25", 1], anchor: which, image: img});
   Object.assign(g, {
     "1": N("CLIPLoader", {clip_name: MODELS.h3TE, type: "minimax", device: "default"}),
@@ -689,25 +704,94 @@ export function valisShot({clip, score, startBar, mode = "auto", section = "", l
 
 // ---------------------------------------------------------------- the Valis library (nodes_lib.py)
 // Effects for the FX tab: what each needs, the lane it listens to by default, and its settings.
-export const LIBRARY = [
-  {id: "DoubleExposure", name: "Double exposure", blurb: "A silhouette becomes a window into another scene, screen-printed.", needs: ["subject", "other"], on: "beat", params: {}},
-  {id: "TimeSlip", name: "Time slip", blurb: "Another era breaks through on the music: flicker cuts, a light-first bleed, burning holes.", needs: ["other"], on: "beat", params: {mode: "flicker", era: "daguerreotype"}},
-  {id: "Shatter", name: "Shatter", blurb: "The frame cracks like glass and falls away onto another scene.", needs: [], on: "downbeat", params: {}},
-  {id: "Lens", name: "Gravity lens", blurb: "Space bends around the subject: an Einstein ring and a dark core.", needs: ["subject"], on: "kick", params: {}},
-  {id: "SlitScan", name: "Slit-scan", blurb: "Time smears down the frame: every row lives a moment in the past.", needs: [], by: "loud", on: "", params: {map: "y"}},
-  {id: "Datamosh", name: "Datamosh", blurb: "The next frame never arrives: the picture is dragged along the motion.", needs: [], on: "kick", params: {}},
-  {id: "Echo", name: "Echo", blurb: "The subject sheds afterimages on every hit.", needs: ["subject"], on: "beat", params: {}},
-  {id: "Tear", name: "Tear", blurb: "Reality rips along a seam; another scene burns behind it.", needs: ["other"], on: "", by: "loud", params: {}},
-  {id: "Frost", name: "Frost", blurb: "Frost grows across the frame from each hit.", needs: [], on: "downbeat", params: {}},
-  {id: "Vertigo", name: "Vertigo", blurb: "A dolly zoom: the subject holds, the world rushes away.", needs: ["subject"], on: "", by: "loud", params: {}},
-  {id: "Projector", name: "Projector", blurb: "Projected film: flicker, gate weave, scratches, dust.", needs: [], on: "beat", params: {}},
-  {id: "Glitch", name: "Glitch", blurb: "Blocks slip and channels split on the hits.", needs: [], on: "hat", params: {}},
-  {id: "Punch", name: "Punch", blurb: "A flash, a zoom kick and a colour split on the hits.", needs: [], on: "kick", params: {}},
-  {id: "Shockwave", name: "Shockwave", blurb: "A ring of bent space races out from the subject on each hit, with a colour fringe.", needs: [], on: "downbeat", params: {at: "subject"}},
-  {id: "Rays", name: "Light shafts", blurb: "Light streams out of the brightest thing in the frame on each hit: shafts, bloom, a cold streak.", needs: [], on: "beat", params: {}},
-  {id: "Split", name: "Split time", blurb: "The frame splits down the middle: the other clip on one side, a glowing seam between.", needs: ["other"], on: "downbeat", params: {clips: ["a", "b"]}},
-  {id: "Eras", name: "Era cut", blurb: "Cuts to the other clip and back on every hit, each cut bleeding into the last.", needs: ["other"], on: "beat", params: {clips: ["a", "b"]}},
+// The library, in groups. Light comes first: those effects relight the shot itself (a flame's breath, a strike off-screen,
+// a beam through blinds) and read as the scene's own light. Break & blend are strong graphic moments: one or two a film.
+// presets: named settings of the same effect; the first is the default. A layer, a Score rule or a Film shot names one as
+// "Effect:preset" ("Effect" alone is the first). A preset may say what it needs on top of the effect (Shatter's Break away
+// falls onto another clip).
+export const FX_GROUPS = [
+  {id: "light", name: "Light", tip: "They relight the shot itself, so they read as the scene's own light rather than a layer on top"},
+  {id: "lens", name: "Camera & lens", tip: "The camera reacts: a kick, a ripple, a dolly zoom, a lens bending space, a film projector"},
+  {id: "time", name: "Time", tip: "The picture's time comes apart: afterimages, slit-scan, another era, frames that never arrive"},
+  {id: "break", name: "Break & blend", tip: "Strong, graphic moments: one or two in a film. Glass, ice, a tear, another scene"},
 ];
+export const LIBRARY = [
+  // light
+  {id: "Flicker", group: "light", name: "Flicker", blurb: "The scene's own light breathes like a practical: a candle, a fire, a strip light, a failing bulb.", needs: [], on: "beat", params: {style: "candle"},
+   presets: [{id: "candle", name: "Candle", params: {style: "candle"}, tip: "Warm and irregular; a hit makes it gutter and flare back"},
+             {id: "fire", name: "Fireplace", params: {style: "fire"}, tip: "Warmer and faster, flaring on the hits"},
+             {id: "tube", name: "Strip light", params: {style: "tube"}, tip: "A fluorescent tube that stutters off and on at the hits"},
+             {id: "bulb", name: "Failing bulb", params: {style: "bulb"}, tip: "A steady hum that browns out on the hits"}]},
+  {id: "Firelight", group: "light", name: "Firelight", blurb: "Warm firelight from off-screen licks up the scene and flares on the hits.", needs: [], on: "beat", params: {at: "below"},
+   presets: [{id: "hearth", name: "From below", params: {at: "below"}}, {id: "torch", name: "Torch at the side", params: {at: "left", reach: .6, speed: 1.4}},
+             {id: "blaze", name: "Blaze", params: {at: "below", amount: 1.0, flare: 1.2, reach: 1.0}, tip: "The whole frame in the glow of something burning"}]},
+  {id: "Lightning", group: "light", name: "Lightning", blurb: "A strike off-screen lights the room from one side: stuttering flashes, an afterglow, thunder. No bolt.", needs: [], on: "downbeat", params: {at: "left"},
+   presets: [{id: "strike", name: "Strike", params: {at: "left"}}, {id: "above", name: "From above", params: {at: "top"}},
+             {id: "distant", name: "Distant", params: {at: "right", strength: .45, strikes: 2, fill: .6}, tip: "Far off: a softer flicker of light"}]},
+  {id: "Sweep", group: "light", name: "Light sweep", blurb: "A beam crosses the scene on each hit: headlights through a window, light through blinds, a lighthouse.", needs: [], on: "downbeat", params: {},
+   presets: [{id: "headlights", name: "Headlights", params: {}}, {id: "blinds", name: "Through blinds", params: {slats: 9, angle: -25, width: .6, dur: 2.2}},
+             {id: "lighthouse", name: "Lighthouse", params: {width: .18, dur: 1.0, strength: 1.2, tint: [.86, .93, 1.0]}}]},
+  {id: "Glow", group: "light", name: "Glow", blurb: "Bright things bloom and halate like film around a light, breathing with the music.", needs: [], on: "beat", params: {},
+   presets: [{id: "halation", name: "Halation", params: {}}, {id: "dream", name: "Dream", params: {base: .6, amount: .5, threshold: .5, radius: .045, halation: .2}},
+             {id: "neon", name: "Neon", params: {threshold: .55, halation: 0, tint: [.86, .9, 1.0], amount: 1.0}}]},
+  {id: "Rays", group: "light", name: "Light shafts", blurb: "Light streams out of the brightest thing in the frame on each hit: shafts, bloom, a cold streak.", needs: [], on: "beat", params: {},
+   presets: [{id: "sun", name: "Sun shafts", params: {}}, {id: "moon", name: "Moonbeams", params: {tint: [.75, .85, 1.0], strength: .7, streak: .2}},
+             {id: "candle", name: "Candle glow", params: {tint: [1.0, .78, .5], strength: .6, samples: 20, decay: .5, streak: 0}}]},
+  {id: "Glint", group: "light", name: "Glint", blurb: "A star glint flashes on the brightest small point: a blade, an eye, a jewel.", needs: [], on: "beat", params: {},
+   presets: [{id: "star", name: "Star", params: {}}, {id: "flash", name: "Lens flash", params: {rays: 2, size: .14, angle: 0}}, {id: "sparkle", name: "Sparkle", params: {size: .05, life: .25}}]},
+  {id: "Rim", group: "light", name: "Rim light", blurb: "The subject's edge catches a back light on each hit.", needs: ["subject"], on: "beat", params: {},
+   presets: [{id: "back", name: "Back light", params: {}}, {id: "cold", name: "Cold edge", params: {tint: [.75, .88, 1.0]}}, {id: "warm", name: "Warm edge", params: {tint: [1.0, .8, .55]}}]},
+  {id: "Haze", group: "light", name: "Heat haze", blurb: "The air shimmers and rises above the hot, bright things in the frame.", needs: [], on: "beat", params: {},
+   presets: [{id: "heat", name: "Above the fire", params: {}}, {id: "road", name: "Off the ground", params: {at: "bottom"}}, {id: "air", name: "Everywhere", params: {at: "all", base: .4, strength: .6}}]},
+  // camera & lens
+  {id: "Punch", group: "lens", name: "Punch", blurb: "A zoom kick and a colour split on the hits.", needs: [], on: "kick", params: {},
+   presets: [{id: "kick", name: "Kick", params: {flash: 0, zoom: .02, split: 2}}, {id: "flash", name: "Flash", params: {flash: .25, zoom: .025, split: 3}, tip: "With a white flash: loud"}]},
+  {id: "Shockwave", group: "lens", name: "Shockwave", blurb: "A ring of bent space races out from the subject on each hit.", needs: [], on: "downbeat", params: {at: "subject"},
+   presets: [{id: "ripple", name: "Ripple", params: {strength: 9, glow: .15, chroma: .15, width: 22}},
+             {id: "blast", name: "Blast", params: {}, tip: "The full ring with a bright front and a colour fringe"}]},
+  {id: "Vertigo", group: "lens", name: "Vertigo", blurb: "A dolly zoom: the subject holds, the world rushes away.", needs: ["subject"], on: "", by: "loud", params: {}},
+  {id: "Lens", group: "lens", name: "Gravity lens", blurb: "Space bends around the subject: an Einstein ring and a dark core.", needs: ["subject"], on: "kick", params: {}},
+  {id: "Projector", group: "lens", name: "Projector", blurb: "Projected film: flicker, gate weave, scratches, dust.", needs: [], on: "beat", params: {},
+   presets: [{id: "light", name: "Light touch", params: {flicker: .05, weave: .8, scratches: .3, dust: .25}}, {id: "reel", name: "Old reel", params: {}}]},
+  // time
+  {id: "Echo", group: "time", name: "Echo", blurb: "The subject sheds afterimages on every hit.", needs: ["subject"], on: "beat", params: {}},
+  {id: "SlitScan", group: "time", name: "Slit-scan", blurb: "Time smears down the frame: every row lives a moment in the past.", needs: [], by: "loud", on: "", params: {map: "y"}},
+  {id: "TimeSlip", group: "time", name: "Time slip", blurb: "Another era breaks through on the music: flicker cuts, a light-first bleed, burning holes.", needs: ["other"], on: "beat", params: {mode: "flicker", era: "daguerreotype"}},
+  {id: "Datamosh", group: "time", name: "Datamosh", blurb: "The next frame never arrives: the picture is dragged along the motion.", needs: [], on: "kick", params: {}},
+  {id: "Eras", group: "time", name: "Era cut", blurb: "Cuts to the other clip and back on every hit, each cut bleeding into the last.", needs: ["other"], on: "beat", params: {clips: ["a", "b"]}},
+  // break & blend
+  {id: "Shatter", group: "break", name: "Shatter", blurb: "A pane in front of the lens cracks; the shards by the impact fall away and the shot carries on behind.", needs: [], on: "downbeat", params: {},
+   presets: [{id: "pane", name: "Cracked pane", params: {}}, {id: "hairline", name: "Hairline", params: {fall: "none", crack: .4}, tip: "It only cracks"},
+             {id: "away", name: "Break away", params: {fall: "all", behind: "b"}, needs: ["other"], tip: "The whole frame falls away onto the other clip"}]},
+  {id: "Frost", group: "break", name: "Frost", blurb: "Frost creeps in from the edges of the glass on each hit and thaws.", needs: [], on: "downbeat", params: {},
+   presets: [{id: "breath", name: "Breath on glass", params: {}}, {id: "creep", name: "Creeping", params: {reach: .35, thaw: 0}, tip: "It stays and grows with every hit"},
+             {id: "whiteout", name: "Whiteout", params: {reach: 1, thaw: 0, opacity: 1, crystals: 1, sparkle: .8, lift: .18}, tip: "Across the whole frame: loud"}]},
+  {id: "Glitch", group: "break", name: "Glitch", blurb: "Blocks slip and channels split on the hits.", needs: [], on: "hat", params: {},
+   presets: [{id: "slip", name: "Tape slip", params: {blocks: 6, shift: 14, split: 3}}, {id: "hard", name: "Hard", params: {}}]},
+  {id: "Tear", group: "break", name: "Tear", blurb: "Reality rips along a seam; another scene burns behind it.", needs: ["other"], on: "", by: "loud", params: {}},
+  {id: "DoubleExposure", group: "break", name: "Double exposure", blurb: "A silhouette becomes a window into another scene, screen-printed.", needs: ["subject", "other"], on: "beat", params: {}},
+  {id: "Split", group: "break", name: "Split time", blurb: "The frame splits down the middle: the other clip on one side, a glowing seam between.", needs: ["other"], on: "downbeat", params: {clips: ["a", "b"]}},
+];
+// "Effect:preset" (or "Effect") -> the effect, its preset, and the settings and lanes to use
+export function fxPreset(key) {
+  const [id, pid] = String(key || "").split(":");
+  const lib = LIBRARY.find(l => l.id === id);
+  if (!lib) return null;
+  const ps = lib.presets || [], preset = ps.find(x => x.id === pid) || ps[0] || null;
+  return {lib, preset, id: lib.id, key: preset && preset !== ps[0] ? `${lib.id}:${preset.id}` : lib.id,
+    name: preset && ps.length > 1 ? `${lib.name} · ${preset.name}` : lib.name, params: {...(lib.params || {}), ...(preset?.params || {})},
+    needs: [...new Set([...(lib.needs || []), ...(preset?.needs || [])])], on: lib.on || "", by: lib.by || ""};
+}
+// every effect and preset as one list (the Score rules, a Film shot), by group
+export const FX_CHOICES = LIBRARY.flatMap(l => (l.presets?.length ? l.presets : [null]).map((p, k) => {
+  const f = fxPreset(p && k ? `${l.id}:${p.id}` : l.id);
+  return {key: f.key, name: f.name, group: l.group, blurb: p?.tip || l.blurb};
+}));
+// the layer the renderer takes for a key on a lane
+export function fxLayer(key, on, extra = {}) {
+  const f = fxPreset(key);
+  return f ? {effect: f.id, on: on ?? f.on, by: f.by, params: {...f.params, ...extra}} : null;
+}
 export const BEDS = ["rain", "wind", "sea", "fire", "room", "neon"];
 export const CUE_SHEET_EXAMPLE = `# a soundless cue sheet: seconds or bar:beat, one cue per line
 bpm 108 4/4
@@ -1025,7 +1109,9 @@ export function upscale({video, resolution = 1080, batch = 9, seed = 42, prefix 
 // disk): it writes the shot list and the song brief as JSON. film.js runs the rest: YuE2 writes and performs the song,
 // Krea 2 frames every shot, H3 shoots it, SAM 3 tracks the subject, the library fires one effect per shot on the song's
 // lanes, the sound design is synthesized in its key, and the cut lands every shot on the song's bar lines.
-export const FILM_EFFECTS = ["Shockwave", "Rays", "Echo", "Glitch", "Punch", "Frost", "Datamosh", "SlitScan", "Projector", "Lens", "Vertigo", "none"];
+// what the film planner may pick (light first); a shot card can take any effect and preset (FX_CHOICES)
+export const FILM_EFFECTS = ["Flicker", "Firelight", "Lightning", "Sweep", "Glow", "Rays", "Glint", "Haze", "Shockwave", "Echo", "Punch", "Projector",
+  "Frost", "Datamosh", "SlitScan", "Glitch", "Lens", "Vertigo", "none"];
 export const FILM_LANES = ["kick", "snare", "hat", "beat", "downbeat", "bar", "melody", "bass"];
 
 export function filmPlanPrompt({idea, shots = 6, genre = null}) {
@@ -1044,7 +1130,7 @@ Write the plan as one JSON object and nothing else: no prose before or after it,
     "subject": "two or three words naming the main thing in frame, for a tracker, e.g. the woman, the lantern",
     "effect": one of ${JSON.stringify(FILM_EFFECTS)},
     "on": one of ${JSON.stringify(FILM_LANES)}}]}
-Rules: every shot is rendered on its own from its own sentence, so a character is only in a shot if "who" names them; not every shot needs everyone; vary the framing from shot to shot; build to an impact in the last third. Effects: Shockwave or Punch on downbeat for an impact, Rays on beat for a light source, Echo on beat for a moving body, Frost or Datamosh on kick for dread, Projector on bar for a memory, Lens on downbeat for the uncanny, Glitch on hat for machines, Vertigo on bar for a realisation, SlitScan on melody for time passing; "none" for a quiet shot.`;
+Rules: every shot is rendered on its own from its own sentence, so a character is only in a shot if "who" names them; not every shot needs everyone; vary the framing from shot to shot; build to an impact in the last third. Effects: prefer light that belongs to the scene: Flicker on beat for candles, lamps and fires in the frame, Firelight on beat for a fire just off-screen, Lightning on downbeat for a storm, Sweep on bar for headlights or a beam passing, Glow on melody for a dream or a lit night, Rays on beat for sun or moon through a gap, Glint on downbeat for a blade or a jewel, Haze on bar for heat; then Shockwave or Punch on downbeat for an impact, Echo on beat for a moving body, Projector on bar for a memory, Frost or Datamosh on kick for dread, SlitScan on melody for time passing, Glitch on hat for machines, Lens on downbeat for the uncanny, Vertigo on bar for a realisation; "none" for a quiet shot. Most shots should be light or "none"; save the strong effects for one or two moments.`;
 }
 
 export function filmPlan({idea, shots = 6, genre = null, prefix = "valis/film_plan"}) {
