@@ -42,6 +42,7 @@ function placeTip(target) {
   tipEl.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
 }
 function showTip(target) {
+  if (!target.isConnected) return;                  // redrawn while the pause ran
   tipFor = target;
   tipEl.innerHTML = target.dataset.tip;
   tipEl.classList.add("on");
@@ -57,7 +58,8 @@ export function initTips() {
     hideTip();
     if (t) tipTimer = setTimeout(() => showTip(t), 380);
   });
-  document.addEventListener("focusin", (e) => { const t = e.target.closest?.("[data-tip]"); if (t) showTip(t); });
+  // keyboard focus only: a clicked button keeps focus, and when a redraw removes it the tip was left hanging in a corner
+  document.addEventListener("focusin", (e) => { const t = e.target.closest?.("[data-tip]"); if (t && e.target.matches?.(":focus-visible")) showTip(t); });
   document.addEventListener("focusout", hideTip);
   document.addEventListener("mousedown", hideTip);
   addEventListener("scroll", () => { if (tipEl.classList.contains("on")) hideTip(); }, true);   // a scroll hides a shown tip, not one about to show
