@@ -385,6 +385,20 @@ export async function shootShots(plan, io, {genre = null, only = null, onStage =
   return plan;
 }
 
+// a shot that starts on the last frame of the shot before it, so the scene carries straight on (the place, the people and
+// where they stand); then it is shot as usual
+export async function chainShot(plan, k, io, {onStage = () => {}} = {}) {
+  const prev = plan.shots[k - 1], s = plan.shots[k];
+  if (!s || !prev) throw new Error("only a shot after another one can start on its last frame");
+  if (!prev.clip) throw new Error(`shot ${k} isn't shot yet`);
+  onStage("keyframes", `shot ${k + 1} starts on the last frame of shot ${k}`, k);
+  const r = await io.run(G.lastFrame({clip: io.ref(prev.clip), prefix: `${pre(plan)}_shot_${k}_last`}), `Film · shot ${k + 1} from shot ${k}`);
+  const f = png(r);
+  if (!f) throw new Error(`no last frame from shot ${k}`);
+  s.key = f; s.keyFrom = prev.clip.filename; s.clip = null; s.fx = null;
+  return plan;
+}
+
 export async function effectShots(plan, io, {only = null, onStage = () => {}} = {}) {
   const m = plan.music; if (!m?.audio) throw new Error("make the song first");
   const cut = (m.cut = cutOf(plan)), len = shotLen(plan);

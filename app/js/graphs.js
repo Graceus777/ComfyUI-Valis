@@ -1169,6 +1169,17 @@ export function filmSeat({plate, people, prompt, seed = 8401, steps = 25, prefix
 // under it (every chunk of the cut must carry audio of the same kind)
 // song: {audio, start, seconds}: one unbroken stretch of the music under the whole cut instead of each shot's own sound
 // (a score played as it is, joined back together at every cut, ticked at the joins)
+// a clip's last frame as a still: the next shot starts exactly where this one ends (hard continuity), where a fresh
+// still would paint the place and the people again from words
+export function lastFrame({clip, prefix = "valis/last"}) {
+  return {
+    "1": N("LoadVideo", {file: clip}),
+    "2": N("GetVideoComponents", {video: ["1", 0]}),
+    "3": N("ImageFromBatch", {image: ["2", 0], batch_index: -1, length: 1}),
+    "4": N("SaveImage", {images: ["3", 0], filename_prefix: prefix}),
+  };
+}
+
 export function filmCut({shots, title = null, prefix = "valis/film", song = null}) {
   const g = {}, vids = {};
   shots.forEach((s, k) => {

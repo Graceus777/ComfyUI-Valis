@@ -9,7 +9,7 @@ import {palettePicker} from "./palettepick.js";
 import {ScoreView} from "./score.js";
 import {FxView} from "./fx.js";
 import {checkSetup} from "./check.js";
-import {planFilm, makeFilm, makeSong, frameShots, shootShots, effectShots, cutFilm, SHOT_SECONDS, shotLen, songSeconds, songShort, cutOf, lookOf,
+import {planFilm, makeFilm, makeSong, frameShots, shootShots, chainShot, effectShots, cutFilm, SHOT_SECONDS, shotLen, songSeconds, songShort, cutOf, lookOf,
         makeRefs, makeSetups, makeFrames, byName, keyStale} from "./film.js";
 import {drawBuild, cropEditor} from "./filmbuild.js";
 import * as R from "./refengine.js";
@@ -1160,6 +1160,7 @@ async function fstep(id, only = null) {
     if (id === "song") { if (!only) p.music = null; await makeSong(p, filmIO, {onStage}); }
     if (id === "keys") await frameShots(p, filmIO, {genre: M.genre, only, onStage});
     if (id === "shots") await shootShots(p, filmIO, {genre: M.genre, only, onStage});
+    if (id === "chain") await chainShot(p, only[0], filmIO, {onStage});
     if (id === "fx") { if (!p.music?.audio) await makeSong(p, filmIO, {onStage}); await effectShots(p, filmIO, {only, onStage}); }
     if (id === "cut") { await cutFilm(p, filmIO, {onStage}); $("#m-viewer").replaceChildren(media(p.film)); finishBar($("#m-finish"), p.film, $("#m-viewer"), null); Bin.add(p.film, {from: "Film", label: p.title}); }
     $("#m-status").textContent = "";
@@ -1194,9 +1195,13 @@ function fdraw() {
       h("div", {class: "fh"}, h("b", {}, String(k + 1)), h("span", {class: "who"}, ((sh.frame ? sh.with : sh.who) || []).join(", ") || (sh.frame ? `frame ${sh.frame}` : "no one")),
         h("span", {class: "fbtns"},
           h("button", {class: "ibtn", type: "button", disabled: M.busy, tip: "A new keyframe for this shot (a new seed)", onclick: () => { sh.keySeed = (sh.keySeed ?? 7101 + k) + 101; fstep("keys", [k]); }}, "⟳ still"),
+          k ? h("button", {class: "ibtn", type: "button", disabled: M.busy || !p.shots[k - 1].clip, tip: "Start this shot on the last frame of the shot before it, so the scene carries straight on (the same place, the same people where they stood). Then shoot it", onclick: () => fstep("chain", [k])}, "⇠ chain") : null,
           h("button", {class: "ibtn", type: "button", disabled: M.busy || !sh.key, tip: "Shoot (or re-shoot) this shot with H3", onclick: () => { if (sh.clip) sh.shotSeed = (sh.shotSeed ?? 51101 + k) + 1; fstep("shots", [k]); }}, "▶ shoot"),
           h("button", {class: "ibtn", type: "button", tip: "Work on this shot in Create (camera, light, palette, trained moves), then send the still or the shot back here", onclick: () => toCreate(k)}, "Create ↗"),
-          h("button", {class: "ibtn", type: "button", disabled: M.busy || p.shots.length < 2, tip: "Remove this shot", onclick: () => { p.shots.splice(k, 1); fsave(); fdraw(); }}, "×"))),
+          h("button", {class: "ibtn", type: "button", disabled: M.busy || p.shots.length < 2, tip: "Remove this shot (click twice: there is no undo)", onclick: (e) => {
+            const b = e.currentTarget;                    // a stray click must not take a shot out of the film: the first click only asks
+            if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "remove?"; b.classList.add("warn"); setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = "×"; b.classList.remove("warn"); } }, 3000); return; }
+            p.shots.splice(k, 1); fsave(); fdraw(); }}, "×"))),
       h("div", {class: "fmedia"}, thumb(sh.key, "keyframe", "no still yet"), thumb(sh.clip, sh.clipSeconds && Math.abs(sh.clipSeconds - shotLen(M.plan)) > .01 ? `shot at ${sh.clipSeconds.toFixed(1)} s: shoot again` : "shot", "not shot"), thumb(sh.fx, "with effects", "no effects")),
       ...shotStill(p, sh),
       h("input", {type: "text", value: sh.motion, placeholder: "what moves", tip: "What moves in the shot (H3)", oninput: (e) => { sh.motion = e.target.value; fsave(); }}),

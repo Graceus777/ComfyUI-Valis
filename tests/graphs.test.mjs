@@ -220,6 +220,22 @@ import * as F from "../app/js/film.js";
   ok(JSON.stringify(g["cat"].inputs.complete_audio) === '["st",0]' && g["st"].inputs.duration === 8.88 && g["sa"].inputs.audio === "s.flac", "Cut · the song unbroken under the whole cut");
   ok(!("complete_audio" in G.filmCut({shots: [{file: "a.mp4", seconds: 4}]})["cat"].inputs), "Cut · without a song each shot keeps its own sound");
 }
+{ // a shot can start on the last frame of the shot before it (hard continuity)
+  const g = G.lastFrame({clip: "valis/shot_6.mp4 [output]", prefix: "valis/film_x_shot_6_last"});
+  valid("Film · the last frame of a shot", g);
+  ok(g["3"].inputs.batch_index === -1 && g["3"].inputs.length === 1 && g["1"].inputs.file === "valis/shot_6.mp4 [output]" && g["4"].class_type === "SaveImage", "Film · the clip's last frame, saved as a still");
+}
+{ // chaining: the shot before must be shot; the still is its last frame, and this shot is made again from it
+  const plan = {tag: "x", shots: [{clip: {filename: "film_x_shot_1_00001_.mp4", subfolder: "valis"}}, {key: {filename: "k.png"}, clip: {filename: "old.mp4"}, fx: {filename: "fx.mp4"}}]};
+  const runs = [], io = {ref: (f) => f.filename, run: async (g, label) => { runs.push({g, label}); return {outputs: [{filename: "film_x_shot_1_last_00001_.png", subfolder: "valis", type: "output"}]}; }};
+  await F.chainShot(plan, 1, io);
+  ok(plan.shots[1].key.filename === "film_x_shot_1_last_00001_.png" && plan.shots[1].clip === null && plan.shots[1].fx === null && runs[0].g["1"].inputs.file === "film_x_shot_1_00001_.mp4"
+     && runs[0].g["4"].inputs.filename_prefix === "valis/film_x_shot_1_last", "Film · a chained shot's keyframe is the last frame of the shot before; its old shot and effects go");
+  let threw = 0;
+  try { await F.chainShot({tag: "x", shots: [{}, {}]}, 1, io); } catch { threw++; }
+  try { await F.chainShot({tag: "x", shots: [{clip: {filename: "a.mp4"}}]}, 0, io); } catch { threw++; }
+  ok(threw === 2, "Film · no chain from a shot that isn't shot, nor for the first shot");
+}
 { // a score's shot without effect sounds keeps the song as it is: trimmed to the shot, not run through the sound design
   const base = {clip: "c.mp4", source: "score", score: "s.json", audio: "a.flac", layers: [{effect: "Rays", on: "beat"}], seconds: 4.42, fit: true};
   const q = G.fx({...base, sound: false, start: 0});

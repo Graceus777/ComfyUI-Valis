@@ -397,6 +397,7 @@ body.binopen .view { height: calc(100vh - 56px - 168px); }
 .ibtn { border: 1px solid var(--line); background: var(--card2); color: #cfcfda; border-radius: 7px; padding: 3px 8px; font-size: 11.5px; cursor: pointer; white-space: nowrap; }
 .ibtn:hover:not(:disabled) { border-color: var(--line2); color: var(--text); }
 .ibtn:disabled { opacity: .4; cursor: not-allowed; }
+.ibtn.warn { border-color: rgba(255,138,76,.55); color: #ffcfb0; }
 .fmedia { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
 .fm { position: relative; aspect-ratio: 9/16; border-radius: 6px; overflow: hidden; background: #0c0c11; border: 1px solid var(--line); cursor: pointer; }
 .fm img, .fm video { width: 100%; height: 100%; object-fit: cover; display: block; }
