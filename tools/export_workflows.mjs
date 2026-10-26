@@ -107,6 +107,13 @@ const flows = {
     "Score · one shot of a score rendered with the library: the score's lanes from 8.9 s on fire Punch on the kick and Shockwave on the downbeat; the effects' sounds are mixed with the song's own slice."],
   "32_stereo_hidden_in_noise": [G.stereo({video: "valis/clip.mp4", target: "the dancers", maxObjects: 2}),
     "Stereo · hidden in noise (the Black Is Good magic-eye video, from any clip): SAM 3 + Depth Anything 3 give the dancers a rounded depth, a spinning torus joins them, Valis Stereogram hides both in TV snow you free-view (parallel); Valis Kinetogram makes the version only motion shows, in live static; Valis Static sets what the static is for both (squares, halftone or ASCII; white, pink, brown, blue or violet grain; RGB, colour-TV or a palette); Valis Stereo Decode reads the depth back after H.264 capped at 4 Mb/s and scores it."],
+  "36_transform_your_own_look": [(() => { const L = P.ownLook({words: "a stag-headed forest spirit made of dark bark and moss, with tall branching antlers", ref: true});
+      return G.edit({mode: "transform", video: "valis/clip.mp4", target: "the man", anchorPrompt: L.anchor.replaceAll("{T}", "the man"), desc: L.desc, who: L.who, keep: L.keep,
+        refBoost: L.rb, lookRef: "valis/look.png", prefix: "valis/edit_own"}); })(),
+    "Edit · Transform into your own look: a picture of the look (dropped, or painted from words with Krea 2) is the second subject of the Krea 2 identity edit that makes the new first and last frames, and <Picture 3> for H3, which re-renders only the tracked region between the two frames."],
+  "37_fx_light": [G.fx({clip: "valis/clip.mp4", source: "sheet", cueSheet: "bpm 96 4/4\nevery 1 beat from 1:1 to 3:1 beat\nevery 1 bar from 1:1 to 3:1 downbeat",
+      layers: [G.fxLayer("Lightning", "downbeat"), G.fxLayer("Flicker:candle", "beat")], prefix: "valis/fx_light"}),
+    "FX · light: a strike off-screen lights the room from the left on every downbeat (flashes, afterglow, thunder) while the candlelight breathes and gutters on the beat. Both relight the picture rather than lie on it."],
 };
 
 const index = [];

@@ -101,7 +101,7 @@ async function build() {
       let anchor = look.anchor.replaceAll("{T}", T);
       if (ref && look.id !== "own") anchor = anchor.replace(/\s*Keep /, " Match the look in the reference picture. Keep ");
       return G.edit({mode: "transform", video: await file(need("video")), target: T, anchorPrompt: anchor, desc: look.desc,
-        who: T || look.who, keep: look.keep, refBoost: look.rb, lookRef: ref, prefix: `valis/edit_${stamp()}`});
+        who: look.who || T, keep: look.keep, refBoost: look.rb, lookRef: ref, prefix: `valis/edit_${stamp()}`});
     }
     case "swap": return G.swapFull({video: await file(need("video")), character: await file(need("character")), background: await file(opt.background),
       person: opt.person || "person", prompt: opt.prompt || G.swapPrompt({target: `the ${opt.person || "person"}`}), turbo: !opt.slow, prefix: `valis/swap_${stamp()}`});

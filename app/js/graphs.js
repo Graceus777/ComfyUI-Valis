@@ -346,7 +346,7 @@ function kreaLoaders() {
   };
 }
 
-function kreaEdit(b, img, prompt, seed, prefix, refBoost, subject = null, megapixels = 1.0) {
+function kreaEdit(b, img, prompt, seed, prefix, refBoost, subject = null, megapixels = 1.0, groundB = false) {
   const i = (k) => String(b + k), g = {};
   g[i(4)] = N("ImageScaleToTotalPixels", {image: img, upscale_method: "lanczos", megapixels, resolution_steps: 16});
   g[i(5)] = N("VAEEncode", {pixels: [i(4), 0], vae: ["202", 0]});
@@ -355,8 +355,9 @@ function kreaEdit(b, img, prompt, seed, prefix, refBoost, subject = null, megapi
   const patch = {model: ["203", 0], source_latent: [i(5), 0], vae: ["202", 0], source_image: [i(4), 0], target_latent: [i(7), 0], ref_boost: refBoost, ref_boost_a: 1.0, fit_mode: "fit"};
   if (subject) patch.source_image_b = subject;
   g[i(8)] = N("Krea2EditModelPatch", patch);
-  // a second picture (a character, a look) is grounded too, as the film frames do it
-  const b2 = subject ? {image_b: subject} : {};
+  // groundB: the second picture (a look) is grounded in the prompt too, as the film frames do it. Cast leaves it out,
+  // as it always has.
+  const b2 = subject && groundB ? {image_b: subject} : {};
   g[i(9)] = N("Krea2EditGroundedEncode", {clip: ["201", 0], prompt, image: [i(4), 0], grounding_px: 768, system_prompt: "", ...b2});
   g[i(10)] = N("Krea2EditGroundedEncode", {clip: ["201", 0], prompt: "", image: [i(4), 0], grounding_px: 768, system_prompt: "", ...b2});
   g[i(11)] = N("KSampler", {model: [i(8), 0], positive: [i(9), 0], negative: [i(10), 0], latent_image: [i(7), 0], seed, steps: 10, cfg: 1.0, sampler_name: "euler", scheduler: "simple", denoise: 1.0});
@@ -371,7 +372,7 @@ export function lookStill({image, prompt, refBoost = 1.0, lookRef = null, seed =
   const g = {...kreaLoaders(), "40": N("LoadImage", {image})};
   let subject = null;
   if (lookRef) { g["41"] = N("LoadImage", {image: lookRef}); subject = ["41", 0]; }
-  Object.assign(g, kreaEdit(300, ["40", 0], prompt, seed, prefix, refBoost, subject, megapixels));
+  Object.assign(g, kreaEdit(300, ["40", 0], prompt, seed, prefix, refBoost, subject, megapixels, true));
   return g;
 }
 
@@ -514,14 +515,20 @@ export function edit({mode, video, audio, target, anchorPrompt, desc, who = "the
     if (mode === "swap" && character) { g["60"] = N("LoadImage", {image: character}); subject = ["60", 0]; }
     // a transform's reference picture: what the look is (dropped, or painted from words)
     if (mode === "transform" && lookRef) { g["60"] = N("LoadImage", {image: lookRef}); subject = ["60", 0]; }
-    Object.assign(g, kreaEdit(300, ["46", 0], anchorPrompt, 31, `${prefix}_anchor_first`, refBoost, subject),
-                     kreaEdit(320, ["47", 0], anchorPrompt, 31, `${prefix}_anchor_last`, refBoost, subject));
+    const gb = mode === "transform" && !!lookRef;
+    Object.assign(g, kreaEdit(300, ["46", 0], anchorPrompt, 31, `${prefix}_anchor_first`, refBoost, subject, 1.0, gb),
+                     kreaEdit(320, ["47", 0], anchorPrompt, 31, `${prefix}_anchor_last`, refBoost, subject, 1.0, gb));
     first = ["312", 0]; last = ["332", 0];
   }
   const refs = {"ref_images.ref_image_0": first, "ref_images.ref_image_1": last, "ref_audios.ref_audio_0": ["18", 1]};
   let extra = "";
   if (mode === "swap" && character) { refs["ref_images.ref_image_2"] = ["60", 0]; extra = " <Picture 3> shows the same character up close."; }
   if (mode === "transform" && lookRef) { refs["ref_images.ref_image_2"] = ["60", 0]; extra = " <Picture 3> shows the look up close."; }
+  // The One Node pack's H3IdentityAnchor sets the keyframe list to its own frame, so of two chained anchors only the one
+  // applied last is kept. It used to be first-then-last: the last frame was the look and the shot started from the
+  // source (a stag-headed spirit came out an ordinary man for two seconds). The first frame is applied last now, so the
+  // shot starts in the look; the last frame still goes to H3 as <Picture 2>. (Core MiniMaxH3AddGuide adds instead of
+  // replacing, but on this masked ref2va latent neither of its frames took.)
   const anchor = (c, which, img) => N("H3IdentityAnchor", {conditioning: c, vae: ["3", 0], latent: ["6", 1], frame_count: ["18", 4], width: ["25", 0], height: ["25", 1], anchor: which, image: img});
   Object.assign(g, {
     "1": N("CLIPLoader", {clip_name: MODELS.h3TE, type: "minimax", device: "default"}),
@@ -530,7 +537,7 @@ export function edit({mode, video, audio, target, anchorPrompt, desc, who = "the
     "4": N("VAELoader", {vae_name: MODELS.h3AVAE}),
     "5": N("MiniMaxH3SigmaShift", {model: ["2", 0], shift_video: 8, shift_audio: 3}),
     "6": N("MiniMaxH3ReferenceToVideo", Object.assign({clip: ["1", 0], vae: ["3", 0], audio_vae: ["4", 0], prompt: mode === "remove" ? h3RemovePrompt({who}) : h3Prompt({who, desc, keep, extra}), width: ["25", 0], height: ["25", 1], length: ["18", 4], ref_image_size: "max"}, refs)),
-    "62": anchor(["6", 0], "first", first), "65": anchor(["62", 0], "last", last),
+    "62": anchor(["6", 0], "last", last), "65": anchor(["62", 0], "first", first),
     "7": N("BasicGuider", {model: ["5", 0], conditioning: ["65", 0]}),
     "8": N("RandomNoise", {noise_seed: 31}),
     "9": N("BasicScheduler", {model: ["5", 0], scheduler: "simple", steps: 20, denoise: 1}),
@@ -556,7 +563,9 @@ export function edit({mode, video, audio, target, anchorPrompt, desc, who = "the
 // The whole frame is regenerated: the clip rides in as <Video 1> (motion, framing, scene), the character sheet as
 // <Picture 1>, and the clip's own soundtrack is anchored at frame 0 so the new face speaks the original words.
 export const SWAP_LORA = "h3_character_swap_v1.5.safetensors";
-export function swapPrompt({target = "the man", look = "", action = "facing the camera and talking straight into the lens"} = {}) {
+// action: what they do. By default whatever the take shows (it said "facing the camera and talking straight into the lens",
+// made for the cold open, and a man looking down at a photograph turned to the camera)
+export function swapPrompt({target = "the man", look = "", action = "doing exactly what they do in <Video 1>, with the same gaze and timing"} = {}) {
   if (!/^(the|a|an|his|her|their|my|your|this|that)\b/i.test(target.trim())) target = `the ${target.trim()}`;   // "man" -> "the man"
   return `Replace only ${target} in <Video 1> with the character in <Picture 1>${look ? ": " + look : ""}. ` +
     "Keep the replacement character's identity, face, hair, outfit and art style from <Picture 1>. " +

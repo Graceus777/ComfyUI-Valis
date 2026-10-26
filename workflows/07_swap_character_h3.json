@@ -52,7 +52,7 @@
         "4",
         0
       ],
-      "prompt": "Replace only the man in <Video 1> with the character in <Picture 1>. Keep the replacement character's identity, face, hair, outfit and art style from <Picture 1>. Preserve the source video's camera, background, lighting, objects and framing. Match the man's position, scale, pose and movement: facing the camera and talking straight into the lens, his lips moving in sync with his voice. Do not show the reference sheet or its background.",
+      "prompt": "Replace only the man in <Video 1> with the character in <Picture 1>. Keep the replacement character's identity, face, hair, outfit and art style from <Picture 1>. Preserve the source video's camera, background, lighting, objects and framing. Match the man's position, scale, pose and movement: doing exactly what they do in <Video 1>, with the same gaze and timing, his lips moving in sync with his voice. Do not show the reference sheet or its background.",
       "width": [
         "25",
         0

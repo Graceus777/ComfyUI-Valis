@@ -52,7 +52,7 @@
         "4",
         0
       ],
-      "prompt": "subject_definitions:\n<Subject 1> is the man as shown in <Picture 1> and <Picture 2>: a grotesque monstrous vampire: a gaunt skull-like corpse face, sunken eye sockets with burning red eyes, long jagged fangs and pointed bat-like ears.\n\nsummary:\n[video editing + reference generation] Inside the masked region the man is a grotesque monstrous vampire: a gaunt skull-like corpse face, sunken eye sockets with burning red eyes, long jagged fangs and pointed bat-like ears for the whole video, exactly as in <Picture 1>.\n\nretention_analysis:\n<Subject 1>: fully_preserved - the face, skin and head follow <Picture 1> in every frame, from the first to the last.\n\ndetailed_description:\n[Shot 1] The original camera, timing, lighting and everything outside the mask stay unchanged. Inside the mask the man is a grotesque monstrous vampire: a gaunt skull-like corpse face, sunken eye sockets with burning red eyes, long jagged fangs and pointed bat-like ears in every frame, with the same motion as the source; it matches <Picture 1> at the start and <Picture 2> at the end.\n\noverall_soundscape:\nKeep the source soundtrack unchanged.\n\nnon_diegetic_music:\nN/A",
+      "prompt": "subject_definitions:\n<Subject 1> is the figure as shown in <Picture 1> and <Picture 2>: a grotesque monstrous vampire: a gaunt skull-like corpse face, sunken eye sockets with burning red eyes, long jagged fangs and pointed bat-like ears.\n\nsummary:\n[video editing + reference generation] Inside the masked region the figure is a grotesque monstrous vampire: a gaunt skull-like corpse face, sunken eye sockets with burning red eyes, long jagged fangs and pointed bat-like ears for the whole video, exactly as in <Picture 1>.\n\nretention_analysis:\n<Subject 1>: fully_preserved - the face, skin and head follow <Picture 1> in every frame, from the first to the last.\n\ndetailed_description:\n[Shot 1] The original camera, timing, lighting and everything outside the mask stay unchanged. Inside the mask the figure is a grotesque monstrous vampire: a gaunt skull-like corpse face, sunken eye sockets with burning red eyes, long jagged fangs and pointed bat-like ears in every frame, with the same motion as the source; it matches <Picture 1> at the start and <Picture 2> at the end.\n\noverall_soundscape:\nKeep the source soundtrack unchanged.\n\nnon_diegetic_music:\nN/A",
       "width": [
         "25",
         0
@@ -519,9 +519,9 @@
         "25",
         1
       ],
-      "anchor": "first",
+      "anchor": "last",
       "image": [
-        "312",
+        "332",
         0
       ]
     }
@@ -553,9 +553,9 @@
         "25",
         1
       ],
-      "anchor": "last",
+      "anchor": "first",
       "image": [
-        "332",
+        "312",
         0
       ]
     }

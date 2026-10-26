@@ -131,8 +131,8 @@ const KEEP_ALL = "Keep the pose, the camera angle, the framing, the background a
 const KEEP_FACE = "Keep the face, the pose, the camera angle, the framing, the background and the lighting exactly the same.";
 const look = (group, id, name, rb, who, keep, anchor, desc) => ({group, id, name, thumb: `looks/${id}.jpg`, rb, who, keep, anchor, desc});
 // a creature or a spirit replaces the face (low rb); a material keeps the shape (high rb); a costume keeps the face
-const creature = (id, name, rb, what, desc) => look("creature", id, name, rb, "the person", "the face, skin and head", `Transform {T} into ${what}. Inhuman and convincing, photographed for real. ${KEEP_ALL}`, desc);
-const spirit = (id, name, rb, what, desc) => look("spirit", id, name, rb, "the person", "the face, the clothes and the light on them", `Transform {T} into ${what}. ${KEEP_ALL}`, desc);
+const creature = (id, name, rb, what, desc) => look("creature", id, name, rb, "the figure", "the face, skin and head", `Transform {T} into ${what}. Inhuman and convincing, photographed for real. ${KEEP_ALL}`, desc);
+const spirit = (id, name, rb, what, desc) => look("spirit", id, name, rb, "the figure", "the face, the clothes and the light on them", `Transform {T} into ${what}. ${KEEP_ALL}`, desc);
 const aged = (id, name, rb, what, desc) => look("age", id, name, rb, "the person", "the face and the clothes", `Make {T} ${what}. ${KEEP_ALL}`, desc);
 const material = (id, name, rb, what, desc) => look("material", id, name, rb, "the subject", "the material, its texture and the light on it", `Turn {T} into ${what}. Keep the pose, the framing and everything else exactly the same.`, desc);
 const element = (id, name, rb, what, desc) => look("element", id, name, rb, "the subject", "the material, colour and light", `Turn {T} into ${what}. Keep everything else exactly the same.`, desc);
@@ -158,10 +158,10 @@ export const LOOKS = [
     "a reptilian creature with green scaled skin and slit golden eyes"),
   creature("mummy", "Mummy", .5, "an ancient mummy: wrapped in yellowed, frayed linen bandages, dark sunken eyes showing between the wraps",
     "an ancient mummy wrapped in yellowed, frayed linen bandages"),
-  look("creature", "skeleton", "Skeleton", .6, "the person", "the bones and clothing",
+  look("creature", "skeleton", "Skeleton", .6, "the figure", "the bones and clothing",
     "Turn {T} into a living skeleton: bare bone skull and bony hands, the same clothes hanging loose. Keep the pose, the framing and everything else exactly the same.",
     "a living skeleton with a bare bone skull and bony hands, wearing the same clothes"),
-  look("creature", "vampire", "Vampire", .5, "the person", "the face, skin and head",
+  look("creature", "vampire", "Vampire", .5, "the figure", "the face, skin and head",
     "Transform {T} into a grotesque monstrous vampire: a gaunt, skull-like corpse face with grey-green leathery skin stretched over the bones, sunken dark eye sockets with burning red eyes, a wide mouth full of long jagged fangs, pointed bat-like ears. Inhuman and terrifying. Keep the pose, the camera angle, the framing, the background and the lighting exactly the same.",
     "a grotesque monstrous vampire: a gaunt skull-like corpse face, sunken eye sockets with burning red eyes, long jagged fangs and pointed bat-like ears"),
   // spirits
@@ -175,7 +175,7 @@ export const LOOKS = [
     "a figure of living black shadow with soft smoky edges and two faint glowing eyes"),
   spirit("angel", "Angel", 1.5, "an angel: luminous skin, a soft ring of golden light behind the head, white feathered wings folded behind the shoulders",
     "an angel with luminous skin, a soft golden halo and white feathered wings"),
-  look("spirit", "bride", "Ghost bride", 4.0, "the person", "the veil, the gown and her face",
+  look("spirit", "bride", "Ghost bride", 4.0, "the figure", "the veil, the gown and her face",
     "Transform {T} into a ghost bride: a long torn lace wedding veil flowing from the hair and around the shoulders, a gown of tattered ghostly lace that dissolves into mist, pale blue-white translucent skin. Keep the face, the pose, the camera angle, the framing, the background and the lighting exactly the same.",
     "a ghost bride: a long torn lace wedding veil, a gown of tattered ghostly lace that dissolves into mist, pale blue-white translucent skin"),
   // age & weather
