@@ -9,7 +9,7 @@ sheet music, a syllable, or a line in a soundless cue sheet.
     Lens            a gravitational lens at a tracked point: space bends, an Einstein ring, a dark core
     Datamosh        the next frame never arrives: the last picture is dragged along the new motion
     Echo            the subject sheds afterimages on each hit: they drift, grow and fade
-    Shatter         a pane in front of the lens cracks from the impact point; the shards near it fall (or all of it, onto another scene)
+    Shatter         the frame cracks from the impact point and falls away in shards (onto another scene)
     Frost           frost grows in from the frame's edges on the hits, dendritic, frosting the glass, and thaws
     Vertigo         a dolly zoom from a subject mask: the subject holds, the world is pushed away (real pixels only)
     Tear            reality rips open along a jagged seam; another scene burns behind it
@@ -389,17 +389,12 @@ class Echo:
 
 # ---------------------------------------------------------------------------------------------------------------
 class Shatter:
-    """A pane of glass in front of the lens. On the hit, thin cracks race out from the impact point (to `extent` of the
-    frame); after `hold` the shards near the impact (within `radius`) fall away, turning and catching the light, and
-    the shot carries on behind them, seen through the cracked pane (each shard bends it a little).
-    fall: "some" (the shards near the impact), "none" (it only cracks), or "all" (the whole frame falls away onto
-    `behind`: another clip, or black). crack: how dark and bright the crack lines are."""
+    """The frame is glass. On the hit, cracks race out from the impact point; after `hold` the shards fall,
+    turning and catching the light, onto `behind` (another clip, or black)."""
 
-    def __init__(self, on="impact", at=None, behind=None, cells=80, hold=.28, fall="some", gravity=1500, spin=1.6, seed=11,
-                 once=True, rim=.35, radius=.1, extent=.65, crack=.55, time=1.8):
+    def __init__(self, on="impact", at=None, behind=None, cells=80, hold=.28, fall=1.8, gravity=1500, spin=1.6, seed=11,
+                 once=True, rim=.9):
         self.__dict__.update(locals()); del self.__dict__["self"]
-        if isinstance(fall, (int, float)):        # older settings: fall was the time the shards take
-            self.time, self.fall = float(fall), "all"
         self._g = None
 
     def _build(self, ctx, th, frame):
@@ -412,28 +407,17 @@ class Shatter:
         dx, dy = xx - c[0] / 2, yy - c[1] / 2
         rr = np.sqrt(dx * dx + dy * dy); th_ = np.arctan2(dy, dx)
         nsp = 11 + int(r.integers(0, 6))
-        spokes = np.sort((np.linspace(0, 2 * math.pi, nsp, endpoint=False) + r.uniform(-.35, .35, nsp) * 2 * math.pi / nsp + r.uniform(0, 6.3)) % (2 * math.pi))
-        sc = max(h2, w2) / 672
-        # a crack wanders sideways by a few pixels and kinks, it doesn't swing wider the further it runs
-        side = (value_noise(h2, w2, 40 * sc, self.seed + 5, 3) - .5) * 26 * sc + (value_noise(h2, w2, 7 * sc, self.seed + 8, 2) - .5) * 6 * sc
-        wob = side / np.maximum(rr, 12 * sc)
+        spokes = np.sort(r.uniform(0, 2 * math.pi, nsp))
+        wob = (value_noise(h2, w2, 60, self.seed + 5, 3) - .5) * .07
         a_ = (th_ + wob + 2 * math.pi) % (2 * math.pi)
         sector = np.searchsorted(spokes, a_) % nsp
-        rings = np.cumsum(r.uniform(.6, 1.4, 12) * np.geomspace(18, 140, 12) * sc)
-        ring = np.searchsorted(rings, rr * (1 + (value_noise(h2, w2, 50 * sc, self.seed + 6, 3) - .5) * .12))
-        # the lines that show: every radial crack, but only broken arcs of the rings, near the impact (a full ring
-        # of circles reads as a dartboard)
-        d0 = lambda a: (np.abs(np.diff(a, axis=0, prepend=a[:1])) + np.abs(np.diff(a, axis=1, prepend=a[:, :1]))) > 0
-        arcs = value_noise(h2, w2, 22 * sc, self.seed + 7, 2) > .56
-        show = (d0(sector) | (d0(ring) & arcs & (ring <= 4))).astype(np.float32)
+        rings = np.cumsum(r.uniform(.6, 1.4, 12) * np.geomspace(18, 140, 12))
+        ring = np.searchsorted(rings, rr * (1 + (value_noise(h2, w2, 50, self.seed + 6, 3) - .5) * .08))
         lab = (ring * nsp + sector).astype(np.int32)
         _, lab = np.unique(lab, return_inverse=True); lab = lab.reshape(h2, w2).astype(np.int32)
         self.cells = int(lab.max()) + 1
         lab = cv2.resize(lab.astype(np.float32), (W, H), interpolation=cv2.INTER_NEAREST).astype(np.int32)
-        secf = cv2.resize(sector.astype(np.float32), (W, H), interpolation=cv2.INTER_NEAREST).astype(np.int32)
-        edges = (cv2.resize(show, (W, H), interpolation=cv2.INTER_NEAREST) > .5).astype(np.float32)
-        if self.fall == "all":                  # the old look: every shard's outline
-            edges = ((np.abs(np.diff(lab, axis=0, prepend=lab[:1])) + np.abs(np.diff(lab, axis=1, prepend=lab[:, :1]))) > 0).astype(np.float32)
+        edges = ((np.abs(np.diff(lab, axis=0, prepend=lab[:1])) + np.abs(np.diff(lab, axis=1, prepend=lab[:, :1]))) > 0).astype(np.float32)
         XX, YY = grid(H, W)
         dist = np.sqrt((XX - c[0]) ** 2 + (YY - c[1]) ** 2)
         shards = []
@@ -447,28 +431,7 @@ class Shatter:
             dist0 = float(np.linalg.norm(v)) / max(W, H)
             shards.append(dict(k=k, box=(x0, x1, y0, y1), c=sc, v=vn * r.uniform(60, 380) * (1.2 - dist0) + np.array([0, -r.uniform(0, 160)]),
                                w=r.normal(0, self.spin), delay=dist0 * .5 + r.uniform(0, .12), z=r.uniform(.002, .02)))
-        S = max(W, H) / 1344
-        nsec = int(secf.max()) + 1
-        offx = r.normal(0, 1.1 * S, nsec).astype(np.float32); offy = r.normal(0, 1.1 * S, nsec).astype(np.float32)
-        gain = (1 + r.normal(0, .015, nsec)).astype(np.float32)
-        fade = smooth(self.extent * max(W, H), self.extent * max(W, H) * .55, dist).astype(np.float32)
-        R = self.radius * max(W, H)
-        falls = np.zeros(self.cells + 1, bool)
-        for sh in shards:
-            sh["falls"] = self.fall == "all" or (self.fall == "some" and float(np.linalg.norm(sh["c"] - np.array(c, np.float32))) < R)
-            falls[sh["k"]] = sh["falls"]
-        # the cracks only run as far as `extent`; fallen shards leave a hole with no pane in it
-        hole = falls[lab].astype(np.float32)
-        self._g = dict(th=th, frame=frame.copy(), lab=lab, edges=edges * fade, dist=dist, shards=shards, c=c,
-                       dx=offx[secf] * fade, dy=offy[secf] * fade, gain=1 + (gain[secf] - 1) * fade, hole=hole, xx=XX, yy=YY)
-
-    def _cracks(self, img, cr):
-        """Thin cracks: a dark line where the glass splits, a bright one beside it where its edge catches the light."""
-        k = self.crack
-        line = blur(cr, .6)
-        lit = blur(np.roll(cr, 1, axis=1) * (1 - cr), .6)
-        out = img * (1 - (k * line)[..., None])
-        return screen(out, (k * .6 * lit)[..., None] * np.array([.95, .97, 1.0], np.float32))
+        self._g = dict(th=th, frame=frame.copy(), lab=lab, edges=edges, dist=dist, shards=shards, c=c)
 
     def __call__(self, ctx, img):
         hits = ctx.cues.times(self.on)
@@ -483,36 +446,28 @@ class Shatter:
         G = self._g
         age = ctx.t - G["th"]
         H, W = ctx.H, ctx.W
-        if self.fall == "all":
-            behind = ctx.clip(self.behind) if self.behind else np.zeros_like(img)
-        else:
-            behind = img                                       # the shot carries on behind the pane
-        # the pane: the live picture, each shard bending it a little, the cracks over it
+        behind = ctx.clip(self.behind) if self.behind else np.zeros_like(img)
         if age < self.hold:
+            # cracks race outward; the shards shift a pixel or two, catching light
             front = age / self.hold * max(W, H) * 1.2
-            reach = (G["dist"] < front).astype(np.float32)
-            pane = cv2.remap(img, G["xx"] + G["dx"] * reach, G["yy"] + G["dy"] * reach, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT_101)
-            pane = pane * (1 + (G["gain"] - 1) * reach)[..., None]
-            return self._cracks(pane, G["edges"] * reach)
+            cr = G["edges"] * (G["dist"] < front)
+            cr = cv2.dilate(cr, np.ones((2, 2), np.uint8))
+            out = img.copy()
+            out = screen(out, (blur(cr, 1.2) * 1.0 + blur(cr, 5) * .5)[..., None] * np.array([.95, .97, 1.0], np.float32))
+            return out
         t2 = age - self.hold
-        if self.fall == "all" and t2 > self.time + .6:
+        if t2 > self.fall + .6:
             return behind
-        if self.fall == "all":
-            out = behind.copy()
-        else:
-            pane = cv2.remap(img, G["xx"] + G["dx"], G["yy"] + G["dy"], cv2.INTER_LINEAR, borderMode=cv2.BORDER_REFLECT_101)
-            pane = self._cracks(pane * G["gain"][..., None], G["edges"] * (1 - G["hole"]))
-            out = pane * (1 - G["hole"][..., None]) + behind * G["hole"][..., None]
+        out = behind.copy()
         src = G["frame"]; lab = G["lab"]
-        order = sorted([s_ for s_ in G["shards"] if s_["falls"]], key=lambda s_: -s_["z"])
+        order = sorted(G["shards"], key=lambda s: -s["z"])
         for s in order:
             tt = max(0.0, t2 - s["delay"])
-            if tt > self.time + .6:
-                continue
             x0, x1, y0, y1 = s["box"]
             pad = 2
             x0, y0 = max(0, x0 - pad), max(0, y0 - pad); x1, y1 = min(W, x1 + pad), min(H, y1 + pad)
             if tt <= 0:
+                M = np.float32([[1, 0, 0], [0, 1, 0]])
                 ang = 0.0; scale = 1.0; off = np.zeros(2)
             else:
                 off = s["v"] * tt + np.array([0, .5 * self.gravity * tt * tt])
@@ -521,8 +476,10 @@ class Shatter:
             M[:, 2] += off
             piece = src[y0:y1, x0:x1]
             msk = (lab[y0:y1, x0:x1] == s["k"]).astype(np.float32)
+            Mfull = M.copy()
+            # warp the shard's crop into the full frame
             T = np.float32([[1, 0, x0], [0, 1, y0]])
-            A = np.vstack([M, [0, 0, 1]]) @ np.vstack([T, [0, 0, 1]])
+            A = np.vstack([Mfull, [0, 0, 1]]) @ np.vstack([T, [0, 0, 1]])
             wp = cv2.warpAffine(piece, A[:2], (W, H), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
             wm = cv2.warpAffine(msk, A[:2], (W, H), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
             if wm.max() <= 0:
@@ -530,8 +487,7 @@ class Shatter:
             edge = np.clip(wm - cv2.erode(wm, np.ones((3, 3), np.uint8)), 0, 1)
             shade = .85 + .3 * math.cos(math.radians(ang) * 2)
             wp = wp * shade + edge[..., None] * self.rim * np.array([.9, .95, 1.0], np.float32)
-            a_ = wm[..., None] * (1.0 if self.fall == "all" else .9)      # a shard of glass: a little of what's behind shows through
-            out = out * (1 - a_) + wp * a_
+            out = out * (1 - wm[..., None]) + wp * wm[..., None]
         return out
 
 

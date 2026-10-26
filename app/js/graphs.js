@@ -705,7 +705,7 @@ export function valisShot({clip, score, startBar, mode = "auto", section = "", l
 // ---------------------------------------------------------------- the Valis library (nodes_lib.py)
 // Effects for the FX tab: what each needs, the lane it listens to by default, and its settings.
 // The library, in groups. Light comes first: those effects relight the shot itself (a flame's breath, a strike off-screen,
-// a beam through blinds) and read as the scene's own light. Break & blend are strong graphic moments: one or two a film.
+// headlights passing) and read as the scene's own light. Break & blend are strong graphic moments: one or two a film.
 // presets: named settings of the same effect; the first is the default. A layer, a Score rule or a Film shot names one as
 // "Effect:preset" ("Effect" alone is the first). A preset may say what it needs on top of the effect (Shatter's Break away
 // falls onto another clip).
@@ -728,9 +728,8 @@ export const LIBRARY = [
   {id: "Lightning", group: "light", name: "Lightning", blurb: "A strike off-screen lights the room from one side: stuttering flashes, an afterglow, thunder. No bolt.", needs: [], on: "downbeat", params: {at: "left"},
    presets: [{id: "strike", name: "Strike", params: {at: "left"}}, {id: "above", name: "From above", params: {at: "top"}},
              {id: "distant", name: "Distant", params: {at: "right", strength: .45, strikes: 2, fill: .6}, tip: "Far off: a softer flicker of light"}]},
-  {id: "Sweep", group: "light", name: "Light sweep", blurb: "A beam crosses the scene on each hit: headlights through a window, light through blinds, a lighthouse.", needs: [], on: "downbeat", params: {},
-   presets: [{id: "headlights", name: "Headlights", params: {}}, {id: "blinds", name: "Through blinds", params: {slats: 9, angle: -25, width: .6, dur: 2.2}},
-             {id: "lighthouse", name: "Lighthouse", params: {width: .18, dur: 1.0, strength: 1.2, tint: [.86, .93, 1.0]}}]},
+  {id: "Sweep", group: "light", name: "Light sweep", blurb: "A beam crosses the scene on each hit: headlights through a window, a lighthouse.", needs: [], on: "downbeat", params: {},
+   presets: [{id: "headlights", name: "Headlights", params: {}}, {id: "lighthouse", name: "Lighthouse", params: {width: .18, dur: 1.0, strength: 1.2, tint: [.86, .93, 1.0]}}]},
   {id: "Glow", group: "light", name: "Glow", blurb: "Bright things bloom and halate like film around a light, breathing with the music.", needs: [], on: "beat", params: {},
    presets: [{id: "halation", name: "Halation", params: {}}, {id: "dream", name: "Dream", params: {base: .6, amount: .5, threshold: .5, radius: .045, halation: .2}},
              {id: "neon", name: "Neon", params: {threshold: .55, halation: 0, tint: [.86, .9, 1.0], amount: 1.0}}]},
@@ -760,9 +759,7 @@ export const LIBRARY = [
   {id: "Datamosh", group: "time", name: "Datamosh", blurb: "The next frame never arrives: the picture is dragged along the motion.", needs: [], on: "kick", params: {}},
   {id: "Eras", group: "time", name: "Era cut", blurb: "Cuts to the other clip and back on every hit, each cut bleeding into the last.", needs: ["other"], on: "beat", params: {clips: ["a", "b"]}},
   // break & blend
-  {id: "Shatter", group: "break", name: "Shatter", blurb: "A pane in front of the lens cracks; the shards by the impact fall away and the shot carries on behind.", needs: [], on: "downbeat", params: {},
-   presets: [{id: "pane", name: "Cracked pane", params: {}}, {id: "hairline", name: "Hairline", params: {fall: "none", crack: .4}, tip: "It only cracks"},
-             {id: "away", name: "Break away", params: {fall: "all", behind: "b"}, needs: ["other"], tip: "The whole frame falls away onto the other clip"}]},
+  {id: "Shatter", group: "break", name: "Shatter", blurb: "The frame cracks like glass and falls away onto another scene.", needs: [], on: "downbeat", params: {}},
   {id: "Frost", group: "break", name: "Frost", blurb: "Frost creeps in from the edges of the glass on each hit and thaws.", needs: [], on: "downbeat", params: {},
    presets: [{id: "breath", name: "Breath on glass", params: {}}, {id: "creep", name: "Creeping", params: {reach: .35, thaw: 0}, tip: "It stays and grows with every hit"},
              {id: "whiteout", name: "Whiteout", params: {reach: 1, thaw: 0, opacity: 1, crystals: 1, sparkle: .8, lift: .18}, tip: "Across the whole frame: loud"}]},
