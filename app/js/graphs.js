@@ -866,7 +866,7 @@ export function songScore({style, lyrics = "[Instrumental]", seconds = 30, seed 
 // frame by frame): H3 drifts the light over a shot, and SÉANCE's red lamp went warm white by the last second
 export function fx({clip, other = null, subject = "", source = "sheet", audio = null, abc = "", songSpec = null, cueSheet = "", score = null,
                     layers = [], beds = [], sound = true, seconds = 4.46, start = 0, prefix = "valis/fx", loop = false, fit = false, hold = null, holdStrength = 1.0,
-                    retime = false}) {
+                    retime = false, own = false}) {
   const g = {
     "16": N("LoadVideo", {file: clip}),
     "17": N("GetVideoComponents", {video: ["16", 0]}),
@@ -921,9 +921,10 @@ export function fx({clip, other = null, subject = "", source = "sheet", audio = 
   // no effect (a quiet shot): the frames go out as they are (the render needs a stack, and an empty one isn't a link)
   if (prev) g["80"] = N("ValisRender", r);
   const vid = {images: prev ? ["80", 0] : frames, fps: 24};
-  // without a song the clip keeps its own sound (its voices, its room): the effects' sounds go under it. They used to
-  // replace it, and a talking clip came out of the FX tab with a room bed and no voice
-  const own = ["17", 1];
+  // without a song the clip keeps its own sound (its voices, its room), at its own level: the effects' sounds go under
+  // it. They used to replace it, and a talking clip came out of the FX tab with a room bed and no voice. own: the
+  // studio sets it when the loaded Valis Sound Design can keep a sound's level (else a quiet room would be levelled up)
+  const clipSound = ["17", 1];
   if (sound || music) {
     let seg = music;
     if (music && (start || !sound)) { g["46"] = N("TrimAudioDuration", {audio: music, start_index: start, duration: seconds}); seg = ["46", 0]; }
@@ -932,10 +933,10 @@ export function fx({clip, other = null, subject = "", source = "sheet", audio = 
     if (!sound && seg) vid.audio = seg;
     else {
       g["85"] = N("ValisSoundDesign", {cues: ["50", 0], duration: seconds, beds: beds.map(b => `${b}:.45`).join(", "), hits: "", music_gain: 0.9, duck: seg ? 0.3 : 0.15, seed: 1,
-        ...(sound && prev ? {stack: [prev, 0]} : {}), music: seg || own});
+        ...(sound && prev ? {stack: [prev, 0]} : {}), ...(seg ? {music: seg} : own ? {music: clipSound, own: true} : {})});
       vid.audio = ["85", 0];
     }
-  } else vid.audio = own;
+  } else vid.audio = clipSound;
   g["81"] = N("CreateVideo", vid);
   g["82"] = N("SaveVideo", {video: ["81", 0], filename_prefix: prefix, format: "auto", codec: "auto"});
   return g;

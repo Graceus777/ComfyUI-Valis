@@ -225,6 +225,13 @@ export async function hasNode(node) {
   return HAVE[node];
 }
 
+// does this loaded node take this input? (a new input, like a new node, needs a ComfyUI restart)
+export async function hasInput(node, input) {
+  const k = `${node}.${input}`;
+  if (!(k in HAVE)) { try { const i = (await objectInfo(node))?.[node]?.input || {}; HAVE[k] = input in (i.required || {}) || input in (i.optional || {}); } catch { return false; } }
+  return HAVE[k];
+}
+
 export function outputsOf(entry) {
   const out = [];
   for (const o of Object.values(entry?.outputs || {})) {

@@ -825,10 +825,13 @@ class SoundDesign:
     def bus(self):
         return self.render(None)
 
-    def mix(self, music=None, music_sr=None, music_gain=.9, duck=0.0, master=.89, target_lufs=-16.0, under=6.0, **_):
+    def mix(self, music=None, music_sr=None, music_gain=.9, duck=0.0, master=.89, target_lufs=-16.0, under=6.0, own=False, **_):
         """The music levelled to -18 LUFS, the effects set against it and held at least `under` LU below it at every
         moment, then the whole film to `target_lufs` with a peak limiter. `duck` (0..1) dips the music under the
-        effects (off by default: the song leads)."""
+        effects (off by default: the song leads).
+        own: `music` is the clip's own sound (its voices, its room). It keeps its level: a quiet room levelled to
+        -18 LUFS came out 35 dB louder, all hiss. The effects are set against it as if it were at least -20 LUFS (the
+        level they sit at with no music), and the mix is not pushed to `target_lufs`, only limited."""
         n = _n(self.duration)
         m = None
         if music is not None:
@@ -840,6 +843,24 @@ class SoundDesign:
                 m = ss.resample_poly(m, SR // g, int(music_sr) // g, axis=0).astype(np.float32)
             m = np.pad(m, ((0, max(0, n - len(m))), (0, 0)))[:n]
             Li = lufs(m)
+            if own:
+                if Li <= -70:                       # a silent clip: the effects as if there were no music
+                    out = self.render(None)
+                    return _limit((m + out).astype(np.float32), master)
+                ref = m * 10 ** ((max(Li, -20) - Li) / 20)
+                fx = self.render(ref)
+                if np.abs(fx).max() > 0:
+                    hop = .05
+                    tf, Lf = short_term(fx, .4, hop); tm, Lm = short_term(ref, .4, hop)
+                    k = min(len(Lf), len(Lm))
+                    gr = -np.maximum(0, Lf[:k] - (np.maximum(Lm[:k], lufs(ref) - 12) - under))
+                    gs = 10 ** (np.interp(np.arange(len(fx)) / SR, tf[:k], _smooth_gain(gr, hop)) / 20)
+                    fx = fx * gs[:, None].astype(np.float32)
+                    if duck:
+                        e = np.abs(fx).mean(1); e = ss.lfilter([.002], [1, -.998], e); e = e / (e.max() + 1e-9)
+                        m = m * (1 - duck * e)[:, None]
+                self.stems = (m, fx)
+                return _limit((m + fx).astype(np.float32), master)
             if Li > -70:
                 m = m * 10 ** ((-18 - Li) / 20)
         fx = self.render(m)

@@ -252,12 +252,14 @@ import * as F from "../app/js/film.js";
   ok(!G.fx({clip: "c.mp4", layers: []})["17r"], "FX · no retime unless the studio has the node");
 }
 { // without a song the clip keeps its own sound: the effects' sounds go under it (they used to replace its voices)
-  const g = G.fx({clip: "c.mp4", layers: [{effect: "Lightning", on: "downbeat"}], cueSheet: "2:1 downbeat"});
-  ok(JSON.stringify(g["85"].inputs.music) === '["17",1]' && JSON.stringify(g["81"].inputs.audio) === '["85",0]', "FX · cue sheet: the clip's own sound under the effects' sounds");
+  const g = G.fx({clip: "c.mp4", layers: [{effect: "Lightning", on: "downbeat"}], cueSheet: "2:1 downbeat", own: true});
+  ok(JSON.stringify(g["85"].inputs.music) === '["17",1]' && g["85"].inputs.own === true && JSON.stringify(g["81"].inputs.audio) === '["85",0]', "FX · cue sheet: the clip's own sound, at its level, under the effects' sounds");
+  valid("FX · own sound", g);
+  ok(!("music" in G.fx({clip: "c.mp4", layers: [{effect: "Lightning", on: "downbeat"}]})["85"].inputs), "FX · a Sound Design that can't keep a level gets no clip sound (it would level a quiet room up)");
   const q = G.fx({clip: "c.mp4", layers: [{effect: "Lightning", on: "downbeat"}], sound: false});
   ok(JSON.stringify(q["81"].inputs.audio) === '["17",1]' && !q["85"], "FX · no effect sounds and no song: the clip's own sound, as it is");
   const r = G.fx({clip: "c.mp4", layers: [{effect: "Lightning", on: "downbeat"}], source: "song", audio: "s.flac"});
-  ok(JSON.stringify(r["85"].inputs.music) === '["45",0]', "FX · with a song, the song is the music");
+  ok(JSON.stringify(r["85"].inputs.music) === '["45",0]' && !("own" in r["85"].inputs), "FX · with a song, the song is the music");
 }
 { // a preset can listen to its own lane: a strip light or a failing bulb goes once a bar, not on every beat
   ok(G.fxPreset("Flicker:tube").on === "downbeat" && G.fxPreset("Flicker:bulb").on === "downbeat" && G.fxPreset("Flicker").on === "beat", "FX · preset lanes");

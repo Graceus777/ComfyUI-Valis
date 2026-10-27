@@ -214,13 +214,14 @@ class ValisSoundDesign:
                 "optional": {"stack": ("VALIS_STACK", {"tooltip": "each effect brings its own sound on its own lanes"}), "music": ("AUDIO",),
                              "seed": ("INT", {"default": 1, "min": 0, "max": 2 ** 31}),
                              "key": ("STRING", {"default": "", "tooltip": "the song's key for tuned sounds, e.g. 'Bb', 'Dm', 'D phrygian' (blank: from the cues' ABC, else D minor)"}),
-                             "space": (["hall", "room", "cathedral", "open", "water", "dry"], {"default": "hall", "tooltip": "the one room every sound sits in"})}}
+                             "space": (["hall", "room", "cathedral", "open", "water", "dry"], {"default": "hall", "tooltip": "the one room every sound sits in"}),
+                             "own": ("BOOLEAN", {"default": False, "tooltip": "`music` is the clip's own sound: it keeps its level (no levelling, no loudness target), the effects go under it"})}}
 
     RETURN_TYPES = ("AUDIO",)
     FUNCTION = "design"
     CATEGORY = "Valis/library"
 
-    def design(self, cues, duration, beds, hits, music_gain, duck, stack=None, music=None, seed=1, key="", space="hall"):
+    def design(self, cues, duration, beds, hits, music_gain, duck, stack=None, music=None, seed=1, key="", space="hall", own=False):
         import torch
         from .valis_fx.lib.sound import SoundDesign, SR
         from .valis_fx.lib.effects import LIBRARY
@@ -237,7 +238,7 @@ class ValisSoundDesign:
         m = msr = None
         if music is not None:
             m, msr = _audio_np(music)
-        out = sd.mix(m, msr, music_gain, duck)
+        out = sd.mix(m, msr, music_gain, duck, own=bool(own and m is not None))
         return ({"waveform": torch.from_numpy(out.T[None].copy()), "sample_rate": SR},)
 
 
