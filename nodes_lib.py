@@ -317,6 +317,37 @@ class ValisTrimHold:
         return (out, int(out.shape[0]))
 
 
+class ValisFrameRate:
+    """A clip at its own frame rate, retimed to `fps` (24: what every Valis effect, cut and shot length counts in).
+    Wan 2.2 makes 16 fps clips and phones shoot 30: played as 24 they ran fast and short (a 5 s camera move came out of the
+    FX tab as 3.4 s). Each output frame is the source frame showing at that moment, as ffmpeg's fps filter does."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"images": ("IMAGE",),
+                             "source_fps": ("FLOAT", {"default": 24.0, "min": 1, "max": 240, "step": .001, "tooltip": "the clip's own rate (Get Video Components' fps)"}),
+                             "fps": ("FLOAT", {"default": 24.0, "min": 1, "max": 240, "step": .001})}}
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "retime"
+    CATEGORY = "Valis/library"
+
+    @staticmethod
+    def indices(n, source_fps, fps):
+        """Which source frame each output frame shows (n source frames at source_fps, out at fps, same duration)."""
+        if n < 1 or abs(source_fps - fps) < 1e-3:
+            return list(range(n))
+        m = max(1, int(round(n * fps / source_fps)))
+        return [min(n - 1, int((k + .5) * source_fps / fps)) for k in range(m)]
+
+    def retime(self, images, source_fps, fps):
+        import torch
+        idx = self.indices(int(images.shape[0]), float(source_fps), float(fps))
+        if len(idx) == images.shape[0] and idx == list(range(len(idx))):
+            return (images,)
+        return (images[torch.tensor(idx, dtype=torch.long)],)
+
+
 class ValisDollyZoom:
     """A dolly zoom from a real camera move: give it a push-in (or pull-back) shot and the subject's mask (SAM 3 track),
     and every frame is re-framed so the subject keeps one size and place while the background's perspective keeps
@@ -585,7 +616,8 @@ class ValisVoiceTurn:
 
 NODE_CLASS_MAPPINGS = {"ValisScoreMake": ValisScoreMake, "ValisCues": ValisCues, "ValisLayer": ValisLayer, "ValisRender": ValisRender, "ValisSoundDesign": ValisSoundDesign, "ValisTitleCard": ValisTitleCard,
                        "ValisSwapCheck": ValisSwapCheck, "ValisSwapMatch": ValisSwapMatch, "ValisVoiceTurn": ValisVoiceTurn,
-                       "ValisColorPalette": ValisColorPalette, "ValisTrimHold": ValisTrimHold, "ValisDollyZoom": ValisDollyZoom, "ValisWhipPan": ValisWhipPan, "ValisCanny": ValisCanny, "ValisPoseCheck": ValisPoseCheck}
+                       "ValisColorPalette": ValisColorPalette, "ValisTrimHold": ValisTrimHold, "ValisDollyZoom": ValisDollyZoom, "ValisWhipPan": ValisWhipPan, "ValisCanny": ValisCanny, "ValisPoseCheck": ValisPoseCheck,
+                       "ValisFrameRate": ValisFrameRate}
 NODE_DISPLAY_NAME_MAPPINGS = {"ValisScoreMake": "Valis Score (make)", "ValisCues": "Valis Cues (score / music / sheet music / voice / cue sheet)", "ValisLayer": "Valis Layer (library effect)",
                               "ValisRender": "Valis Render (library stack)", "ValisSoundDesign": "Valis Sound Design",
                               "ValisSwapCheck": "Valis Swap Check (pre)", "ValisSwapMatch": "Valis Swap Match (post)",
@@ -594,4 +626,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {"ValisScoreMake": "Valis Score (make)", "ValisCues
                               "ValisDollyZoom": "Valis Dolly Zoom (lock the subject through a push or pull)",
                               "ValisWhipPan": "Valis Whip Pan (speed-ramp a real pan into a whip)",
                               "ValisCanny": "Valis Canny (batched: long clips without running out of VRAM)",
-                              "ValisPoseCheck": "Valis Pose Check (is this clip readable for Motion Transfer?)"}
+                              "ValisPoseCheck": "Valis Pose Check (is this clip readable for Motion Transfer?)",
+                              "ValisFrameRate": "Valis Frame Rate (retime a clip to 24 fps)"}

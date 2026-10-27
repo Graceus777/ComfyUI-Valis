@@ -518,25 +518,57 @@ def d_tick(rng, vel=1.0, key=None, beat=.5):
     return fade(stereo(x, _u(rng, -.7, .7)), .0005, .002), .0
 
 
+def d_buzz(rng, vel=1.0, key=None, beat=.5, dur=None):
+    """A fluorescent tube catching: mains buzz cut by the same off-on stutter as the light (Flicker's tube), a tick at
+    each strike, then the steady hum dying away."""
+    dur = dur or .7
+    n = _n(dur); t = np.arange(n) / SR
+    f0 = 120.0 if rng.random() < .5 else 100.0
+    x = np.zeros(n, np.float32)
+    for k in range(1, 16):
+        x += (np.sin(2 * np.pi * f0 * k * t + rng.uniform(0, 6.28)) / k ** .7).astype(np.float32)
+    x = bp(x, 90, 4000) + bp(noise(dur, rng), 2000, 6000) * .05
+    gate = np.ones(n, np.float32)
+    for a, b in ((0, .05), (.09, .13), (.2, .23)):
+        gate[_n(a):_n(b)] = 0
+    gate = np.convolve(gate, np.hanning(_n(.004)) / np.hanning(_n(.004)).sum(), "same").astype(np.float32)
+    x = x * gate * np.exp(-np.maximum(t - .3, 0) / .2).astype(np.float32)
+    for a in (.05, .13, .23):
+        L = _n(.006); i = _n(a)
+        x[i:i + L] += (bp(noise(.006, rng), 1500, 7000) * env_exp(.006, .002, .0002))[:len(x[i:i + L])] * 1.5
+    return fade(stereo(x * .35 * vel, _u(rng, -.3, .3))), .0
+
+
+def d_hum(rng, vel=1.0, key=None, beat=.5, dur=None):
+    """A filament browning out: a low mains hum that swells and sags with the light (Flicker's failing bulb)."""
+    dur = dur or .8
+    n = _n(dur); t = np.arange(n) / SR
+    f0 = 100.0 if rng.random() < .5 else 120.0
+    x = np.zeros(n, np.float32)
+    for k in range(1, 8):
+        x += (np.sin(2 * np.pi * f0 * k * t * (1 - .01 * t) + rng.uniform(0, 6.28)) / k ** 1.3).astype(np.float32)
+    return fade(stereo(lp(x, 700) * env_ar(dur, .04, .55) * .45 * vel, _u(rng, -.2, .2))), .0
+
+
 DESIGNS = {"bell": d_bell, "whoosh": d_whoosh, "swell": d_swell, "boom": d_boom, "shimmer": d_shimmer, "ghost": d_ghost,
            "slip": d_slip, "lens": d_lens, "frost": d_frost, "crackle": d_crackle, "candle": d_candle, "ignite": d_ignite,
            "heartbeat": d_heartbeat, "thunder": d_thunder, "shatter": d_shatter, "tear": d_tear, "stutter": d_stutter,
-           "tick": d_tick}
+           "tick": d_tick, "buzz": d_buzz, "hum": d_hum}
 ALIASES = {"impact": "boom", "echo": "ghost", "timeslip": "slip", "datamosh": "stutter", "glitch": "tick", "reverse_swell": "swell"}
 
 # how loud each design sits, in dB under the music's own short-term loudness at that moment (story sounds like a
 # bell or thunder are features; the effect sounds are underneath)
 LEVEL = {"bell": -6, "thunder": -6, "heartbeat": -10, "boom": -12, "lens": -13, "whoosh": -14, "swell": -14,
          "tear": -15, "shatter": -14, "ghost": -15, "slip": -16, "shimmer": -16, "frost": -17, "crackle": -16,
-         "ignite": -14, "candle": -18, "stutter": -18, "tick": -20}
+         "ignite": -14, "candle": -18, "stutter": -18, "tick": -20, "buzz": -18, "hum": -20}
 # how much of each goes to the film's room
 SEND = {"bell": .45, "thunder": .3, "heartbeat": .1, "boom": .45, "lens": .4, "whoosh": .2, "swell": .1, "tear": .3,
         "shatter": .4, "ghost": .6, "slip": .3, "shimmer": .5, "frost": .4, "crackle": .15, "ignite": .2, "candle": .15,
-        "stutter": .2, "tick": .2}
+        "stutter": .2, "tick": .2, "buzz": .15, "hum": .1}
 # pacing: at least this many beats between two of the same sound, and at most this many in one shot
 PACE = {"bell": (2, 4), "thunder": (8, 2), "heartbeat": (1, 99), "boom": (4, 2), "lens": (4, 2), "whoosh": (2, 3),
         "swell": (4, 2), "tear": (4, 2), "shatter": (8, 1), "ghost": (4, 2), "slip": (2, 3), "shimmer": (4, 2),
-        "frost": (4, 2), "crackle": (2, 4), "ignite": (4, 2), "candle": (2, 4), "stutter": (2, 3), "tick": (1, 6)}
+        "frost": (4, 2), "crackle": (2, 4), "ignite": (4, 2), "candle": (2, 4), "stutter": (2, 3), "tick": (1, 6), "buzz": (2, 4), "hum": (2, 4)}
 # a dense lane only sounds on its accents: hits at or above this quantile of the lane's velocities
 ACCENT = {"heartbeat": 0.0, "thunder": 0.0, "bell": 0.0, "crackle": .3}
 
@@ -559,6 +591,9 @@ EFFECT_SOUNDS = {
     # light: a sound only where the light is a story event (a strike is heard, a flame gutters); light itself is silent
     "Lightning": [("thunder", "on", {})],
     "Flicker": [("candle", "on", dict(gain=.6))],
+    # a preset's own sound, by style ("Effect:style"): a strip light buzzes as it catches, a filament hums as it sags
+    "Flicker:tube": [("buzz", "on", dict(gain=.7))],
+    "Flicker:bulb": [("hum", "on", dict(gain=.7))],
     "Firelight": [("crackle", "on", dict(gain=.7))],
     "Sweep": [("whoosh", "on", dict(gain=.5, limit=4))],
     "Glint": [("shimmer", "on", dict(gain=.6))],
@@ -737,7 +772,8 @@ class SoundDesign:
 
     def for_stack(self, effects, gain=1.0):
         for fx in effects:
-            for design, attr, opt in EFFECT_SOUNDS.get(type(fx).__name__, []):
+            name = type(fx).__name__
+            for design, attr, opt in EFFECT_SOUNDS.get(f"{name}:{getattr(fx, 'style', '')}", EFFECT_SOUNDS.get(name, [])):
                 lane = getattr(fx, attr, None)
                 if lane and isinstance(lane, (str, list, tuple)):
                     o = dict(opt)

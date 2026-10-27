@@ -419,7 +419,8 @@ export async function effectShots(plan, io, {only = null, onStage = () => {}} = 
       G.fx({clip: io.ref(s.clip), subject, source: "song", audio: io.ref(m.audio), abc: m.abc, layers, sound: true,
             hold: s.key && s.holdColour !== false ? io.ref(s.key) : null,
             seconds: Math.max(len, cut.seconds), fit: cut.seconds > len,
-            start: k * cut.seconds, prefix: `${pre(plan)}_fx_${k + 1}_${tag}${only ? "_" + Date.now().toString(36) : ""}`}), `Film · effects ${k + 1}`);
+            start: k * cut.seconds, prefix: `${pre(plan)}_fx_${k + 1}_${tag}${only ? "_" + Date.now().toString(36) : ""}`,
+            retime: !!(io.has && await io.has("ValisFrameRate"))}), `Film · effects ${k + 1}`);
     s.fx = r.outputs.find(isVideo) || null;
     if (!s.fx) throw new Error(`effects on shot ${k + 1} saved no video`);
   }

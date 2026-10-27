@@ -244,6 +244,27 @@ import * as F from "../app/js/film.js";
   const r = G.fx({...base, sound: true, start: 4.42});
   ok(r["85"]?.class_type === "ValisSoundDesign" && JSON.stringify(r["81"].inputs.audio) === '["85",0]' && "stack" in r["85"].inputs, "Score · with effect sounds the sound design mixes them under the song");
 }
+{ // a clip at another frame rate is retimed to 24 first (Wan 2.2's 16 fps camera moves came out 1.5x fast and a third short)
+  const g = G.fx({clip: "c.mp4", layers: [{effect: "Flicker", on: "beat"}], retime: true, fit: true, seconds: 4.46});
+  ok(g["17r"]?.class_type === "ValisFrameRate" && JSON.stringify(g["17r"].inputs.source_fps) === '["17",2]' && g["17r"].inputs.fps === 24
+     && JSON.stringify(g["18a"].inputs.image) === '["17r",0]' && JSON.stringify(g["18c"].inputs.image1) === '["17r",0]', "FX · retime: the clip at 24 before fit and the effects");
+  valid("FX · retimed", g);
+  ok(!G.fx({clip: "c.mp4", layers: []})["17r"], "FX · no retime unless the studio has the node");
+}
+{ // without a song the clip keeps its own sound: the effects' sounds go under it (they used to replace its voices)
+  const g = G.fx({clip: "c.mp4", layers: [{effect: "Lightning", on: "downbeat"}], cueSheet: "2:1 downbeat"});
+  ok(JSON.stringify(g["85"].inputs.music) === '["17",1]' && JSON.stringify(g["81"].inputs.audio) === '["85",0]', "FX · cue sheet: the clip's own sound under the effects' sounds");
+  const q = G.fx({clip: "c.mp4", layers: [{effect: "Lightning", on: "downbeat"}], sound: false});
+  ok(JSON.stringify(q["81"].inputs.audio) === '["17",1]' && !q["85"], "FX · no effect sounds and no song: the clip's own sound, as it is");
+  const r = G.fx({clip: "c.mp4", layers: [{effect: "Lightning", on: "downbeat"}], source: "song", audio: "s.flac"});
+  ok(JSON.stringify(r["85"].inputs.music) === '["45",0]', "FX · with a song, the song is the music");
+}
+{ // a preset can listen to its own lane: a strip light or a failing bulb goes once a bar, not on every beat
+  ok(G.fxPreset("Flicker:tube").on === "downbeat" && G.fxPreset("Flicker:bulb").on === "downbeat" && G.fxPreset("Flicker").on === "beat", "FX · preset lanes");
+  ok(G.fxLayer("Flicker:tube").on === "downbeat" && G.fxLayer("Flicker:tube", "kick").on === "kick", "FX · a lane you pick beats the preset's");
+  const lanes = new Set([...G.CUE_SHEET_EXAMPLE.matchAll(/\b(beat|downbeat|kick|hat)\b/g)].map(m => m[1]));
+  ok(G.LIBRARY.filter(l => l.on).every(l => ["beat", "downbeat", "kick", "hat"].includes(l.on) ? lanes.has(l.on) : true), "FX · the example cue sheet fires every default lane");
+}
 { // your own sheet music: YuE2 plays it as written (no sheet of its own, no voice move), and the score is made from it
   const abc = "X:1\nT:\nM:4/4\nL:1/32\nQ:1/4=108\n";
   const g = G.songScore({style: "solo piano", abc, seconds: 60});

@@ -144,7 +144,7 @@ export class FxView {
     const g = G.fx({clip: F.clip, other: F.other, subject: $("#f-subject").value.trim(), source: F.source, audio: sc ? sc.audio : F.audio, songSpec,
       cueSheet: $("#f-cues").value, score: sc?.score || null,
       layers: F.layers.map(l => ({...G.fxLayer(l.key || l.effect, l.on), by: l.by})), beds: [...F.beds], sound: $("#f-sound").checked,
-      seconds: F.seconds || 107 / 24, prefix: `valis/fx_${Date.now().toString(36)}`, loop: $("#f-loop").checked});
+      seconds: F.seconds || 107 / 24, prefix: `valis/fx_${Date.now().toString(36)}`, loop: $("#f-loop").checked, retime: await api.hasNode("ValisFrameRate")});
     run(g, `FX · ${F.layers.map(l => l.name).join(" + ")}`, $("#f-viewer"), {onDone: (j) => {
       const v = j.outputs.find(f => VID.test(f.filename));
       if (v) $("#f-viewer").replaceChildren(h("video", {src: api.viewUrl(v), controls: true, autoplay: true, loop: true, playsinline: true}));

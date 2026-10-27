@@ -122,10 +122,13 @@ class Flicker:
     the frame by default, followed as it moves) and falls off over `radius` of the frame; `ambient` of it is the
     whole room breathing with it."""
 
-    STYLES = {"candle": dict(tint=(1.0, .74, .45), speed=1.0, depth=.22, hit=-.5),
-              "fire": dict(tint=(1.0, .62, .32), speed=1.8, depth=.3, hit=.45),
-              "tube": dict(tint=(.86, .95, 1.0), speed=0.0, depth=.0, hit=-.9),
-              "bulb": dict(tint=(1.0, .86, .66), speed=.25, depth=.03, hit=-.7)}
+    # dim: how the light is taken away when it dips (a flame shrinks, a filament browns out). The light's own tint
+    # taken away would leave the room colder; a dying flame or filament goes dimmer and warmer, so blue goes first.
+    # (A failing bulb turned the mask workshop grey-blue on every hit.) A tube just goes out.
+    STYLES = {"candle": dict(tint=(1.0, .74, .45), dim=(.82, .92, 1.0), speed=1.0, depth=.22, hit=-.5),
+              "fire": dict(tint=(1.0, .62, .32), dim=(.82, .92, 1.0), speed=1.8, depth=.3, hit=.45),
+              "tube": dict(tint=(.86, .95, 1.0), dim=(1.0, 1.0, 1.0), speed=0.0, depth=.0, hit=-.9),
+              "bulb": dict(tint=(1.0, .86, .66), dim=(.72, .86, 1.0), speed=.25, depth=.03, hit=-.7)}
 
     def __init__(self, on=None, by=None, style="candle", at="bright", amount=1.0, radius=.5, ambient=.45, tint=None, tau=.3, seed=7):
         self.__dict__.update(locals()); del self.__dict__["self"]
@@ -173,7 +176,7 @@ class Flicker:
             r = self.radius * _diag(ctx)
             d2 = ((xx - p[0]) ** 2 + (yy - p[1]) ** 2) / (2 * r * r)
             self._M = (self.ambient + (1 - self.ambient) * np.exp(-d2)).astype(np.float32)
-        return relight(img, self._M, g, self.tint, fill=.25)
+        return relight(img, self._M, g, self.tint if g > 0 else self._st.get("dim", self.tint), fill=.25)
 
 
 # ---------------------------------------------------------------------------------------------------------------

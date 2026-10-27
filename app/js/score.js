@@ -272,7 +272,8 @@ export class ScoreView {
           targetA: $("#s-a").value.trim(), targetB: $("#s-b").value.trim(), prefix: `valis/score_${shot.id}_${tag}`})
       : G.fx({clip: a.clip.ref, subject: this.rules.some(r => { const f = G.fxPreset(r.effect); return f && (f.needs.includes("subject") || f.params.at === "subject"); }) ? $("#s-a").value.trim() : "",
           source: "score", score, audio: this.audioRef, layers: this.rules.map(r => G.fxLayer(r.effect, r.lane)).filter(Boolean),
-          sound: $("#s-fxsound").checked, seconds: this.span(shot), start: shot.start_frame / 24, fit: true, prefix: `valis/score_${shot.id}_${tag}`});
+          sound: $("#s-fxsound").checked, seconds: this.span(shot), start: shot.start_frame / 24, fit: true, prefix: `valis/score_${shot.id}_${tag}`,
+          retime: await api.hasNode("ValisFrameRate")});
     return new Promise((res) => this.run(g, `Score · ${shot.id}`, null, {onDone: (j) => {
       const v = j.outputs.find(f => /\.(mp4|webm|mov)$/i.test(f.filename));
       if (v) { this.results[shot.id] = v; Bin.add(v, {from: "Score", label: `${this.sc.title || "score"} ${shot.id}`}); }

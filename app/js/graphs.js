@@ -729,8 +729,8 @@ export const LIBRARY = [
   {id: "Flicker", group: "light", name: "Flicker", blurb: "The scene's own light breathes like a practical: a candle, a fire, a strip light, a failing bulb.", needs: [], on: "beat", params: {style: "candle"},
    presets: [{id: "candle", name: "Candle", params: {style: "candle"}, tip: "Warm and irregular; a hit makes it gutter and flare back"},
              {id: "fire", name: "Fireplace", params: {style: "fire"}, tip: "Warmer and faster, flaring on the hits"},
-             {id: "tube", name: "Strip light", params: {style: "tube"}, tip: "A fluorescent tube that stutters off and on at the hits"},
-             {id: "bulb", name: "Failing bulb", params: {style: "bulb"}, tip: "A steady hum that browns out on the hits"}]},
+             {id: "tube", name: "Strip light", params: {style: "tube"}, on: "downbeat", tip: "A fluorescent tube that stutters off and on, once a bar"},
+             {id: "bulb", name: "Failing bulb", params: {style: "bulb"}, on: "downbeat", tip: "A steady hum that browns out, once a bar"}]},
   {id: "Firelight", group: "light", name: "Firelight", blurb: "Warm firelight from off-screen licks up the scene and flares on the hits.", needs: [], on: "beat", params: {at: "below"},
    presets: [{id: "hearth", name: "From below", params: {at: "below"}}, {id: "torch", name: "Torch at the side", params: {at: "left", reach: .6, speed: 1.4}},
              {id: "blaze", name: "Blaze", params: {at: "below", amount: 1.0, flare: 1.2, reach: 1.0}, tip: "The whole frame in the glow of something burning"}]},
@@ -745,7 +745,7 @@ export const LIBRARY = [
   {id: "Rays", group: "light", name: "Light shafts", blurb: "Light streams out of the brightest thing in the frame on each hit: shafts, bloom, a cold streak.", needs: [], on: "beat", params: {},
    presets: [{id: "sun", name: "Sun shafts", params: {}}, {id: "moon", name: "Moonbeams", params: {tint: [.75, .85, 1.0], strength: .7, streak: .2}},
              {id: "candle", name: "Candle glow", params: {tint: [1.0, .78, .5], strength: .6, samples: 20, decay: .5, streak: 0}}]},
-  {id: "Glint", group: "light", name: "Glint", blurb: "A star glint flashes on the brightest small point: a blade, an eye, a jewel.", needs: [], on: "beat", params: {},
+  {id: "Glint", group: "light", name: "Glint", blurb: "A star glint flashes on the brightest small point: a blade, an eye, a jewel.", needs: [], on: "downbeat", params: {},
    presets: [{id: "star", name: "Star", params: {}}, {id: "flash", name: "Lens flash", params: {rays: 2, size: .14, angle: 0}}, {id: "sparkle", name: "Sparkle", params: {size: .05, life: .25}}]},
   {id: "Rim", group: "light", name: "Rim light", blurb: "The subject's edge catches a back light on each hit.", needs: ["subject"], on: "beat", params: {},
    presets: [{id: "back", name: "Back light", params: {}}, {id: "cold", name: "Cold edge", params: {tint: [.75, .88, 1.0]}}, {id: "warm", name: "Warm edge", params: {tint: [1.0, .8, .55]}}]},
@@ -770,7 +770,7 @@ export const LIBRARY = [
   // break & blend
   {id: "Frost", group: "break", name: "Frost", blurb: "Frost creeps in from the edges of the glass on each hit and thaws.", needs: [], on: "downbeat", params: {},
    presets: [{id: "breath", name: "Breath on glass", params: {}}, {id: "creep", name: "Creeping", params: {reach: .35, thaw: 0}, tip: "It stays and grows with every hit"},
-             {id: "whiteout", name: "Whiteout", params: {reach: 1, thaw: 0, opacity: 1, crystals: 1, sparkle: .8, lift: .18}, tip: "Across the whole frame: loud"}]},
+             {id: "whiteout", name: "Whiteout", params: {reach: 1, thaw: 0, opacity: 1, crystals: .3, sparkle: .4, lift: .14}, tip: "The whole pane frosts over: loud"}]},
   {id: "Glitch", group: "break", name: "Glitch", blurb: "Blocks slip and channels split on the hits.", needs: [], on: "hat", params: {},
    presets: [{id: "slip", name: "Tape slip", params: {blocks: 6, shift: 14, split: 3}}, {id: "hard", name: "Hard", params: {}}]},
   {id: "Tear", group: "break", name: "Tear", blurb: "Reality rips along a seam; another scene burns behind it.", needs: ["other"], on: "", by: "loud", params: {}},
@@ -785,7 +785,7 @@ export function fxPreset(key) {
   const ps = lib.presets || [], preset = ps.find(x => x.id === pid) || ps[0] || null;
   return {lib, preset, id: lib.id, key: preset && preset !== ps[0] ? `${lib.id}:${preset.id}` : lib.id,
     name: preset && ps.length > 1 ? `${lib.name} · ${preset.name}` : lib.name, params: {...(lib.params || {}), ...(preset?.params || {})},
-    needs: [...new Set([...(lib.needs || []), ...(preset?.needs || [])])], on: lib.on || "", by: lib.by || ""};
+    needs: [...new Set([...(lib.needs || []), ...(preset?.needs || [])])], on: preset?.on || lib.on || "", by: lib.by || ""};
 }
 // every effect and preset as one list (the Score rules, a Film shot), by group
 export const FX_CHOICES = LIBRARY.flatMap(l => (l.presets?.length ? l.presets : [null]).map((p, k) => {
@@ -800,10 +800,12 @@ export function fxLayer(key, on, extra = {}) {
 export const BEDS = ["rain", "wind", "sea", "fire", "room", "neon"];
 export const CUE_SHEET_EXAMPLE = `# a soundless cue sheet: seconds or bar:beat, one cue per line
 bpm 108 4/4
-1:1   beat
 every 1 beat from 1:1 to 3:1 beat
+every 1/2 beat from 1:1 to 3:1 hat
 2:1   downbeat
-3:1   kick 1.2
+1:3   kick
+2:1   kick 1.2
+2:3   kick
 ramp loud 0 0 4.4 1`;
 
 // YuE2 writes the sheet music (ABC), then sings and plays it. Returns the graph and where its audio and ABC come out.
@@ -863,19 +865,23 @@ export function songScore({style, lyrics = "[Instrumental]", seconds = 30, seed 
 // hold: a picture (a film shot's keyframe) every frame's colours are matched to first (core Transfer Color, MKL in Lab,
 // frame by frame): H3 drifts the light over a shot, and SÉANCE's red lamp went warm white by the last second
 export function fx({clip, other = null, subject = "", source = "sheet", audio = null, abc = "", songSpec = null, cueSheet = "", score = null,
-                    layers = [], beds = [], sound = true, seconds = 4.46, start = 0, prefix = "valis/fx", loop = false, fit = false, hold = null, holdStrength = 1.0}) {
+                    layers = [], beds = [], sound = true, seconds = 4.46, start = 0, prefix = "valis/fx", loop = false, fit = false, hold = null, holdStrength = 1.0,
+                    retime = false}) {
   const g = {
     "16": N("LoadVideo", {file: clip}),
     "17": N("GetVideoComponents", {video: ["16", 0]}),
   };
+  let frames = ["17", 0];
+  // retime (the studio sets it when Valis Frame Rate is loaded): a clip at another rate is played at 24 first, since every
+  // effect, cue and cut here counts in 24. Wan 2.2's 16 fps camera moves came out 1.5x fast and a third short.
+  if (retime) { g["17r"] = N("ValisFrameRate", {images: ["17", 0], source_fps: ["17", 2], fps: 24}); frames = ["17r", 0]; }
   // fit: the clip fills exactly `seconds` (a score's shot): a longer clip is cut there, a shorter one holds its last frame
   // to the bar line, so the shots cut together stay on the bars
-  let frames = ["17", 0];
   if (fit && !loop) {
     const want = Math.min(4096, Math.max(1, Math.round(seconds * 24)));
-    g["18a"] = N("ImageFromBatch", {image: ["17", 0], batch_index: -1, length: 1});
+    g["18a"] = N("ImageFromBatch", {image: frames, batch_index: -1, length: 1});
     g["18b"] = N("RepeatImageBatch", {image: ["18a", 0], amount: want});
-    g["18c"] = N("ImageBatch", {image1: ["17", 0], image2: ["18b", 0]});
+    g["18c"] = N("ImageBatch", {image1: frames, image2: ["18b", 0]});
     g["18"] = N("ImageFromBatch", {image: ["18c", 0], batch_index: 0, length: want});
     frames = ["18", 0];
   }
@@ -915,6 +921,9 @@ export function fx({clip, other = null, subject = "", source = "sheet", audio = 
   // no effect (a quiet shot): the frames go out as they are (the render needs a stack, and an empty one isn't a link)
   if (prev) g["80"] = N("ValisRender", r);
   const vid = {images: prev ? ["80", 0] : frames, fps: 24};
+  // without a song the clip keeps its own sound (its voices, its room): the effects' sounds go under it. They used to
+  // replace it, and a talking clip came out of the FX tab with a room bed and no voice
+  const own = ["17", 1];
   if (sound || music) {
     let seg = music;
     if (music && (start || !sound)) { g["46"] = N("TrimAudioDuration", {audio: music, start_index: start, duration: seconds}); seg = ["46", 0]; }
@@ -922,11 +931,11 @@ export function fx({clip, other = null, subject = "", source = "sheet", audio = 
     // quiet dawn came out 13 dB louder than it was written, with a jump in level at every cut
     if (!sound && seg) vid.audio = seg;
     else {
-      g["85"] = N("ValisSoundDesign", {cues: ["50", 0], duration: seconds, beds: beds.map(b => `${b}:.45`).join(", "), hits: "", music_gain: 0.9, duck: 0.3, seed: 1,
-        ...(sound && prev ? {stack: [prev, 0]} : {}), ...(seg ? {music: seg} : {})});
+      g["85"] = N("ValisSoundDesign", {cues: ["50", 0], duration: seconds, beds: beds.map(b => `${b}:.45`).join(", "), hits: "", music_gain: 0.9, duck: seg ? 0.3 : 0.15, seed: 1,
+        ...(sound && prev ? {stack: [prev, 0]} : {}), music: seg || own});
       vid.audio = ["85", 0];
     }
-  }
+  } else vid.audio = own;
   g["81"] = N("CreateVideo", vid);
   g["82"] = N("SaveVideo", {video: ["81", 0], filename_prefix: prefix, format: "auto", codec: "auto"});
   return g;
