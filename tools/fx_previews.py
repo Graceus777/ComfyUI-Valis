@@ -6,7 +6,7 @@ small cue sheet, encoded by ffmpeg as VP9 at the size the library cards show.
 
 plan.json says which clip each preview plays on: {"Effect": {"a": "clip.mp4", "b": "other.mp4", "mask": "matte.mp4"}, ...}
 ("b" for the effects that open onto a second scene, "mask" for the ones that need the subject: a SAM 3 matte of a, e.g.
-the Edit tab's Find). Cut the clips short (about three seconds) first, e.g.
+the Edit tab's Find; "params" over the default preset's, for an effect whose default is too quiet to read on a card). Cut the clips short (about three seconds) first, e.g.
     ffmpeg -ss 28 -t 3 -i film.mp4 -vf "scale=432:768:force_original_aspect_ratio=increase,crop=432:768" -r 24 a.mp4
 """
 import json
@@ -22,7 +22,9 @@ from valis_fx.lib.cues import Cues               # noqa: E402
 from valis_fx.lib.effects import LIBRARY         # noqa: E402
 
 W, H, FPS, SECONDS = 240, 420, 24, 2.667
-SHEET = "0.33 downbeat\n0.33 beat\n0.33 kick\n1.0 beat\n1.0 hat\n1.67 downbeat\n1.67 beat\n1.67 kick\n2.33 beat\n2.33 hat\n"
+# hats every sixth of a second: Glitch's tape slip lasts a frame or two, and on two hats its card looked still
+SHEET = ("0.33 downbeat\n0.33 beat\n0.33 kick\n1.0 beat\n1.67 downbeat\n1.67 beat\n1.67 kick\n2.33 beat\n"
+         "every 0.167s from 0.5 to 1.2 hat\nevery 0.167s from 1.8 to 2.5 hat\n")
 
 
 def render(spec, plan, out_dir, names):
@@ -37,6 +39,7 @@ def render(spec, plan, out_dir, names):
         if p.get("mask"):
             ctx.add_mask("subject", path=p["mask"], fps=FPS)
         params = dict(sp.get("params") or {})
+        params.update(p.get("params") or {})          # a card can show a louder preset when the default barely reads at card size
         # a held effect (by a curve) is held by the beat's envelope here: the sheet has no curves
         if sp.get("by"):
             params.setdefault("by", "beat")
