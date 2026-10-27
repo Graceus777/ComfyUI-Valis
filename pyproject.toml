@@ -1,10 +1,10 @@
 [project]
 name = "comfyui-valis"
-description = "Music-driven VFX for ComfyUI: a score's events (kicks, strokes, syllables) drive SAM 3-tracked reveals, shockwaves and light, in an open Higgsfield-style studio that runs every job through the Comfy SDK."
+description = "An open film studio for ComfyUI: one line to a scored, cut short film, with Cinema Studio, Genjutsu, a name-it-and-change-it editor and a library of effects fired by any song, on open weights through the Comfy SDK."
 version = "0.9.0"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
-dependencies = ["numpy", "opencv-python", "scipy", "comfy-api-proxy==0.1.6"]
+dependencies = ["numpy", "opencv-python", "scipy", "scikit-image", "comfy-api-proxy==0.1.6"]
 
 [project.urls]
 Repository = "https://github.com/Graceus777/ComfyUI-Valis"

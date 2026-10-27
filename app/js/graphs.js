@@ -253,7 +253,7 @@ function endAnchor({end, last, width, height, prefix}) {
   return {...g, "__last": ["ls", 0]};
 }
 
-// ---------------------------------------------------------------- loops (Create · Loop)
+// ---------------------------------------------------------------- loops (Extras · Loop)
 // A shot that plays forever, made by H3 itself: pxl-pshr's MiniMax H3 Loop (github.com/pxl-pshr/ComfyUI-MiniMaxH3-Loop,
 // GPL-3.0, a separate pack) samples the latent with its end wrapped round to its start and decodes it the same way, so the
 // join is denoised like any other frame. No pinned last frame, no crossfade. The keyframe goes in as a reference
@@ -910,7 +910,7 @@ export function fx({clip, other = null, subject = "", source = "sheet", audio = 
   const r = {images: frames, cues: ["50", 0], stack: [prev, 0], fps: 24, start: 0};
   if (other) { g["40"] = N("LoadVideo", {file: other}); g["41"] = N("GetVideoComponents", {video: ["40", 0]}); r.other = ["41", 0]; }
   if (subject) { Object.assign(g, personMatte(frames, subject, 30, 10)); r.subject = ["33", 0]; }
-  // loop: the clip already loops (Create · Loop); the stack is rendered so it loops with it (Valis Loop · Render: the cues
+  // loop: the clip already loops (Extras · Loop); the stack is rendered so it loops with it (Valis Loop · Render: the cues
   // repeat, every effect is played once round first, what still differs is sealed), the clip keeps its own sound, plus a GIF
   if (loop) {
     g["80"] = N("ValisLoopRender", {...r, warmup: -1, seal: 12});
