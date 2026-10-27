@@ -825,13 +825,15 @@ class SoundDesign:
     def bus(self):
         return self.render(None)
 
-    def mix(self, music=None, music_sr=None, music_gain=.9, duck=0.0, master=.89, target_lufs=-16.0, under=6.0, own=False, **_):
+    def mix(self, music=None, music_sr=None, music_gain=.9, duck=0.0, master=.84, target_lufs=-16.0, under=6.0, own=False, **_):
         """The music levelled to -18 LUFS, the effects set against it and held at least `under` LU below it at every
         moment, then the whole film to `target_lufs` with a peak limiter. `duck` (0..1) dips the music under the
         effects (off by default: the song leads).
         own: `music` is the clip's own sound (its voices, its room). It keeps its level: a quiet room levelled to
         -18 LUFS came out 35 dB louder, all hiss. The effects are set against it as if it were at least -20 LUFS (the
-        level they sit at with no music), and the mix is not pushed to `target_lufs`, only limited."""
+        level they sit at with no music), and the mix is not pushed to `target_lufs`, only limited.
+        master: the limiter's ceiling. At .89 a thunder crack came back from the AAC encoder at 1.07 (over full scale);
+        .84 leaves 1.5 dB for it."""
         n = _n(self.duration)
         m = None
         if music is not None:
