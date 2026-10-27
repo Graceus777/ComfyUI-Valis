@@ -58,13 +58,13 @@ score-driven pass can be played without generating anything.
 | **Extras** | **Stereogram**: hide whatever moves in a clip in a field of dots, as a magic-eye stereogram (parallel or cross-eyed) and a kinetogram (it exists only while it moves), drawn in squares, halftone or letters, with a check that the depth survives an upload. **Loop**: a shot that plays forever, H3 joining its end to its start ([MiniMax H3 Loop](https://github.com/pxl-pshr/ComfyUI-MiniMaxH3-Loop)), then effects that loop with it. **Stage** (experimental): one still split into depth layers and played by a live 2.5D camera. |
 | **Renders** | The queue, *Free memory*, *Stop*, everything made (the bin, kept between sessions) to send to any tab, and **Setup**: every workflow checked against this ComfyUI, with missing node packs and model files listed per feature. **Detect hardware** reads the GPU, driver, CUDA, cuDNN, attention kernels and ComfyUI's flags, and sets the safe shot size for this GPU. The **end-to-end test** renders every Create combination and every chain after it at low resolution and checks each result. |
 
-| Score | Edit · Turn |
+| Film | Score |
 |---|---|
-| ![The Score tab: event lanes, rules and a shot rendered with Valis](docs/score.jpg) | ![Turn: the take turns into the swap on a chosen word](docs/edit_turn.jpg) |
-| **Create** | **Renders and Setup** |
-| ![Create: the director's panel, Krea 2 keyframes and a MiniMax H3 shot](docs/create.jpg) | ![Renders: everything made so far, and the setup check](docs/renders_setup.jpg) |
-
-![The FX tab: effects previewed live, stacked as layers on a clip and fired by a cue sheet, a song or YuE2's own sheet music](docs/fx.jpg)
+| ![Film: THE IRON SAINT's plan, its cast and place, and the shot cards with each keyframe and its MiniMax H3 shot](docs/film.jpg) | ![The Score tab: THE IRON SAINT's piano as a score, one rule (beat to light shafts) and the live preview on the music](docs/score.jpg) |
+| **Edit · Transform** | **Create** |
+| ![Edit: her crimson cloak, found by SAM 3, transformed to liquid chrome, before and after](docs/edit.jpg) | ![Create: shot 1 of THE IRON SAINT opened from its card, with the camera moves and its keyframe](docs/create.jpg) |
+| **FX** | **Renders and Setup** |
+| ![The FX tab: the 24 effects, light first, two stacked as layers on a clip and fired by a cue sheet](docs/fx.jpg) | ![Renders: the machine, the end-to-end test and everything made so far](docs/renders_setup.jpg) |
 
 ## What's new here
 
