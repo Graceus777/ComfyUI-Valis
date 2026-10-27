@@ -733,8 +733,10 @@ class SoundDesign:
             return self
         ts = np.asarray(self.cues.times(on), float)
         vs = np.asarray(self.cues.vel(on) if isinstance(on, str) else np.ones(len(ts)), float)
+        if every > 1:                               # every n-th hit of the whole lane, so the count holds across shots
+            ts, vs = ts[::every], vs[::every]
         keep = (ts >= -.05) & (ts < self.duration)
-        ts, vs = ts[keep][::every], vs[keep][::every]
+        ts, vs = ts[keep], vs[keep]
         if not len(ts):
             return self
         vmax = vs.max() if vs.max() > 0 else 1.0
@@ -777,6 +779,8 @@ class SoundDesign:
                 lane = getattr(fx, attr, None)
                 if lane and isinstance(lane, (str, list, tuple)):
                     o = dict(opt)
+                    if attr == "on" and int(getattr(fx, "every", 1) or 1) > 1:     # the sound keeps the effect's pace
+                        o.setdefault("every", int(fx.every))
                     self.hits(design, lane, o.pop("gain", 1.0) * gain, limit=o.pop("limit", None), **o)
         return self
 

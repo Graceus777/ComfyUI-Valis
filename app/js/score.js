@@ -28,7 +28,7 @@ const STARTER = [["beat", "Flicker"], ["downbeat", "Rays"], ["melody", "Glow"], 
 // a set of rules to start from, by mood: each names the lanes it would like; a score without one gets the nearest it has
 const RULE_SETS = [
   {id: "candle", name: "Candlelit", tip: "Flames that breathe on the beat, a glow on the melody, a glint on the downbeats", rules: [["beat", "Flicker"], ["melody", "Glow:dream"], ["downbeat", "Glint"]]},
-  {id: "storm", name: "Storm", tip: "Lightning on the downbeats, a bulb browning out on the kick, heat in the air", rules: [["downbeat", "Lightning"], ["kick", "Flicker:bulb"], ["bar", "Rays:moon"]]},
+  {id: "storm", name: "Storm", tip: "Lightning every fourth bar, a bulb browning out once a bar, moonlight at each new section", rules: [["downbeat", "Lightning:storm"], ["bar", "Flicker:bulb"], ["section", "Rays:moon"]]},
   {id: "fire", name: "Fire", tip: "Firelight on the beat, the air shimmering, a glint on the downbeats", rules: [["beat", "Firelight"], ["bar", "Haze"], ["downbeat", "Glint"]]},
   {id: "night", name: "Night drive", tip: "Headlights on the bars, neon glow on the beat, a kick on the kick", rules: [["bar", "Sweep"], ["beat", "Glow:neon"], ["kick", "Punch"]]},
   {id: "memory", name: "Memory", tip: "Projected film on the bars, a dreamy glow, moonlight on the downbeats", rules: [["bar", "Projector"], ["melody", "Glow:dream"], ["downbeat", "Rays:moon"]]},

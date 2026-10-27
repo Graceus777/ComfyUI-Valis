@@ -207,9 +207,11 @@ class Firelight:
 # ---------------------------------------------------------------------------------------------------------------
 class Lightning:
     """A strike off-screen lights the scene from one side (`at`): two or three stuttering flashes in the first third of
-    a second and a short afterglow. It whitens and cools what it lights and lifts the shadows; no bolt is drawn."""
+    a second and a short afterglow. It whitens and cools what it lights and lifts the shadows; no bolt is drawn.
+    every: strike on every n-th hit of the lane, counted over the whole song, so a storm over a Score's shots keeps
+    its pace across the cuts (on every downbeat it struck 24 times in a minute of THE IRON SAINT)."""
 
-    def __init__(self, on="downbeat", at="left", strength=1.0, tint=(.8, .88, 1.0), strikes=3, life=.9, fill=1.0, wash=.3, reach=1.0, seed=17):
+    def __init__(self, on="downbeat", at="left", strength=1.0, tint=(.8, .88, 1.0), strikes=3, life=.9, fill=1.0, wash=.3, reach=1.0, every=1, seed=17):
         self.__dict__.update(locals()); del self.__dict__["self"]
         self._ramp = None
 
@@ -226,6 +228,8 @@ class Lightning:
 
     def __call__(self, ctx, img):
         hits = ctx.cues.hits(self.on, ctx.t - self.life, ctx.t + 1e-6)
+        if self.every > 1:
+            hits = [th for th in hits if ctx.cues.count(self.on, th - 1e-6) % int(self.every) == 0]
         if not len(hits):
             return img
         k = max(self._flash(ctx, th, ctx.t - th) for th in hits) * self.strength

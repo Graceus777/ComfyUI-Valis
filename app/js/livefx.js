@@ -1,3 +1,4 @@
+import {fxPreset} from "./graphs.js";
 // The Score tab's live preview: the shot's own clip (or still) drawn on a canvas in step with the song, with every
 // mapped effect firing on its lane as you watch. Each effect here is a quick sketch of the real one (a flash and a kick
 // for Punch, a ring for Shockwave, slipping slices for Glitch...), cheap enough to run live; Render makes the real thing
@@ -59,7 +60,8 @@ export class LivePreview {
     const sw = s?.videoWidth || s?.naturalWidth || 9, sh = s?.videoHeight || s?.naturalHeight || 16;
     const sc = Math.min(W / sw, H / sh), dw = sw * sc, dh = sh * sc, ox = (W - dw) / 2, oy = (H - dh) / 2, cx = ox + dw / 2, cy = oy + dh / 2;
     // "Effect:preset" sketches as its effect; the preset decides the light's colour or side where it matters
-    const active = rules.map(r => { const [id, preset] = String(r.effect).split(":"); return {...r, preset, as: CLASSIC_AS[id] || id, ...ring(lanes[r.lane] || [], t)}; });
+    const active = rules.map(r => { const [id, preset] = String(r.effect).split(":"), ev = fxPreset(r.effect)?.params?.every || 1, ts = lanes[r.lane] || [];
+      return {...r, preset, as: CLASSIC_AS[id] || id, ...ring(ev > 1 ? ts.filter((_, i) => i % ev === 0) : ts, t)}; });
     const get = (name) => active.filter(a => a.as === name).reduce((m, a) => a.e > m.e ? a : m, {e: 0, last: -1e9});
     const punch = get("Punch"), dm = get("Datamosh"), echo = get("Echo"), proj = get("Projector"), vert = get("Vertigo");
     // the frame: a dragged smear for Datamosh, else a fresh draw (zoom kick for Punch, a weave for Projector, a breath for Vertigo)

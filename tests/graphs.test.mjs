@@ -261,6 +261,10 @@ import * as F from "../app/js/film.js";
   const r = G.fx({clip: "c.mp4", layers: [{effect: "Lightning", on: "downbeat"}], source: "song", audio: "s.flac"});
   ok(JSON.stringify(r["85"].inputs.music) === '["45",0]' && !("own" in r["85"].inputs), "FX · with a song, the song is the music");
 }
+{ // a storm keeps its pace across a film's cuts: Lightning:storm strikes every fourth hit of its lane, counted over the song
+  const f = G.fxPreset("Lightning:storm");
+  ok(f && f.params.every === 4 && f.on === "downbeat" && G.FX_CHOICES.some(c => c.key === "Lightning:storm"), "FX · Lightning Storm preset");
+}
 { // a preset can listen to its own lane: a strip light or a failing bulb goes once a bar, not on every beat
   ok(G.fxPreset("Flicker:tube").on === "downbeat" && G.fxPreset("Flicker:bulb").on === "downbeat" && G.fxPreset("Flicker").on === "beat", "FX · preset lanes");
   ok(G.fxLayer("Flicker:tube").on === "downbeat" && G.fxLayer("Flicker:tube", "kick").on === "kick", "FX · a lane you pick beats the preset's");
