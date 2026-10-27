@@ -3,7 +3,7 @@
 // size, the estimate), and a screenshot of each screen goes to tests/ui/screens/.
 //
 //   npm i -D playwright && npx playwright install chromium     (once)
-//   node tests/ui/run.mjs [--object-info path] [--media dir] [--screens dir]
+//   node tests/ui/run.mjs [--object-info path] [--media dir] [--screens dir] [--port 8288]
 import {spawn} from "node:child_process";
 import path from "node:path";
 import fs from "node:fs";
@@ -14,7 +14,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2), opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
 const require = createRequire(import.meta.url);
 const {chromium} = require("playwright");
-const PORT = 8288, URL = `http://localhost:${PORT}/valis`, SHOTS = opt("--screens", path.join(here, "screens"));
+const PORT = Number(opt("--port", 8288)), URL = `http://localhost:${PORT}/valis`, SHOTS = opt("--screens", path.join(here, "screens"));
 fs.mkdirSync(SHOTS, {recursive: true});
 const srv = spawn(process.execPath, [path.join(here, "mock_server.mjs"), String(PORT), ...args.filter((a, i) => /^--(object-info|media)$/.test(args[i - 1]) || /^--(object-info|media)$/.test(a))], {stdio: ["ignore", "pipe", "inherit"]});
 await new Promise(r => srv.stdout.once("data", r));
