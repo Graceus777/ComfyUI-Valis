@@ -48,8 +48,9 @@
     </aside>
     <div class="stage">
       <div>
+        <p class="kick">Film</p>
         <h1>Script to film</h1>
-        <p class="lede">Write the script, or say what the film is about and let Qwen3 draft one. Build it from references so the same people stay in the same places: a sheet for every character, the set from every camera setup, frames that change one thing at a time, and shots cut from them. Look at every still before anything is shot; then the song, the shots, the effects and the cut on the bars, each step alone or all that's missing at once.</p>
+        <p class="lede">Write the script, or one line for Qwen3 to draft. References keep the same people in the same places, shot after shot.</p>
       </div>
       <div id="m-recent" class="recent"></div>
       <div class="plan" id="m-planbox"></div>
@@ -78,8 +79,9 @@
     </aside>
     <div class="stage">
       <div>
+        <p class="kick">Create · one shot</p>
         <h1>Direct a shot</h1>
-        <p class="lede">Pick a look, frame it, then shoot it. Krea 2 makes two keyframes; pick one and MiniMax H3 shoots it. Hover any choice to see what it does and the words it adds.</p>
+        <p class="lede">Pick a look and frame it. Krea 2 paints two keyframes; MiniMax H3 shoots the one you choose.</p>
       </div>
       <div class="viewer" id="c-viewer"><div class="empty"><b>Nothing framed yet</b>Describe the shot and press Frame it.</div></div>
       <div class="finish" id="c-finish"></div>
@@ -129,8 +131,9 @@
     </aside>
     <div class="stage">
       <div>
+        <p class="kick">Genjutsu · motion</p>
         <h1>Genjutsu</h1>
-        <p class="lede">Keep a video's motion, camera and timing; change who is in it, where they are, or the whole look. The motion is read as skeletons (SDPose) or edges and drives MiniMax H3 through its Fun ControlNet; your images set the cast and the place.</p>
+        <p class="lede">Keep a performance's motion, camera and timing. Change who is in it, where they are, or the whole look.</p>
       </div>
       <div class="viewer" id="g-viewer"><div class="empty"><b>No video yet</b>Drop a clip to start.</div></div>
       <div class="gj-report" id="g-report"></div>
@@ -206,8 +209,9 @@
     </aside>
     <div class="stage">
       <div>
+        <p class="kick">Edit · SAM 3 + H3</p>
         <h1>Point at it. Change it.</h1>
-        <p class="lede">Name anything in the clip and SAM 3 follows it through every frame. Transform it into a new look or remove it (only the masked region is re-rendered), swap in a whole new character, or turn one take into another on a word.</p>
+        <p class="lede">Name anything in the clip and SAM 3 follows it. Transform it, remove it, swap the person, or turn the take on a word.</p>
       </div>
       <div class="viewer" id="e-viewer"><div class="empty"><b>No clip yet</b>Drop a video on the left.</div></div>
       <div class="strip" id="e-strip"></div>
@@ -231,8 +235,9 @@
     </aside>
     <div class="stage">
       <div>
+        <p class="kick">Score</p>
         <h1>The score is the director</h1>
-        <p class="lede">A score is every hit in a song, lane by lane. Make one from any song, from a song YuE2 writes, or from a cue sheet; map lanes to effects, lay clips on the shots, and the preview plays them on the music with the effects firing live. Render makes the real thing; Cut joins it on the bars.</p>
+        <p class="lede">Every hit in a song, lane by lane. Map the lanes to effects and watch the cut play live before you render.</p>
       </div>
       <div class="viewer score-viewer" id="s-viewer"><div class="empty"><b>Preview</b>Make or open a score, give its shots clips, and press Play.</div></div>
       <div class="timeline">
@@ -291,8 +296,9 @@
     </aside>
     <div class="stage">
       <div>
+        <p class="kick">FX · 24 effects</p>
         <h1>Bend the picture, on cue</h1>
-        <p class="lede">A library of effects that each listen to a lane: a kick, a note in the sheet music, a syllable, or a line in a soundless cue sheet. Stack them on any clip. Every effect brings its own synthesised sound, placed on the same sample as the picture.</p>
+        <p class="lede">Effects that fire on a kick, a note or a line in a cue sheet, each with its own sound on the same frame.</p>
       </div>
       <div class="fxlib" id="f-lib"></div>
       <div class="viewer" id="f-viewer" style="min-height:360px"><div class="empty"><b>No render yet</b>Pick a clip, add layers, render.</div></div>
@@ -313,6 +319,7 @@
     </aside>
     <div class="stage">
       <div>
+        <p class="kick">Extras</p>
         <h1>Hidden in noise</h1>
         <p class="lede">Two ways to hide a moving thing in a field of dots. The <b>stereogram</b> (magic eye): free-view it, parallel or cross-eyed, and the thing stands out of the dots in 3D. The <b>kinetogram</b>: the thing is made of the same dots as the field and only its dots move, so every paused frame is plain noise and it exists only while it moves. A decode check reads the depth back after an H.264 round trip, to see if it survives an upload.</p>
       </div>
@@ -336,6 +343,7 @@
     </aside>
     <div class="stage">
       <div>
+        <p class="kick">Extras</p>
         <h1>Loops</h1>
         <p class="lede">A shot that plays forever, made by H3 itself: MiniMax H3 Loop samples the video with its end wrapped round to its start, so the join is denoised like any other frame. No crossfade. Saved as MP4 and GIF; send it to FX to add effects that loop with it.</p>
       </div>
@@ -400,6 +408,7 @@
     </aside>
     <div class="stage">
       <div>
+        <p class="kick">Extras</p>
         <h1>Stage <span class="badge">experimental</span></h1>
         <p class="lede">Name what's in the picture. Valis cuts it into real depth layers and paints in what each one hides, so a camera can move through it: push in, arc, crane, dolly zoom. Every move plays live, at the still's own resolution, with no new render.</p>
       </div>
@@ -442,8 +451,9 @@
     </aside>
     <div class="stage">
       <div>
+        <p class="kick">Renders</p>
         <h1>Renders</h1>
-        <p class="lede">Everything the studio has made (the bin, kept between sessions). Click anything to send it to a tab: a still becomes Create's first frame, a clip goes to Edit, FX, Genjutsu, a Film shot or Extras.</p>
+        <p class="lede">Everything you've made. Click anything to send it to a tab.</p>
       </div>
       <div id="r-test-results"></div>
       <div class="strip" id="r-grid"></div>
