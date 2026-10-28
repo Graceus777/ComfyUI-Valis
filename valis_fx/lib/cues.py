@@ -110,6 +110,18 @@ class Cues:
             out.curves[prefix + k] = v
         return out
 
+    def with_sheet(self, ab, heard=True):
+        """These cues with YuE2's sheet music (`ab`, aligned to the same audio) laid over them. The sheet is exact where
+        the analysis guesses: its beat grid replaces the heard one (joined, every beat fired twice), its bar starts are
+        the downbeats, and its tempo, meter and key stand (the analysis assumes 4/4: a 3/4 waltz came out in bars of four).
+        heard: these cues came from the song's audio."""
+        out = self.merge(ab, replace=("beat",) if heard else ())
+        out.meta.update({k: v for k, v in ab.meta.items() if k in ("key", "meter_unit", "sections", "chords")})
+        out.bpm, out.meter = ab.bpm or out.bpm, ab.meter or out.meter
+        if heard and len(ab.times("bar")):
+            out.lanes["downbeat"] = np.asarray(ab.times("bar"), np.float64); out.vals["downbeat"] = np.ones(len(out.lanes["downbeat"]))
+        return out
+
     def shifted(self, dt):
         """Every cue moved by dt seconds (held curves too, so a shot starting at t0 can use .shifted(-t0))."""
         n = int(round(dt * self.fps))

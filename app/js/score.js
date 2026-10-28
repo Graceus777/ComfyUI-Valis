@@ -140,7 +140,7 @@ export class ScoreView {
   engineSet(id) { this.engine = id === "classic" ? "classic" : "library"; $$("#s-engine button").forEach(b => b.classList.toggle("on", b.dataset.id === this.engine)); }
   // the song as a ComfyUI input: the example's ships with the pack and is uploaded the first time a job needs it
   async ensureAudio() {
-    if (this.audioRef || !this.audioUrl || this.audioUrl.startsWith("blob:")) return this.audioRef;
+    if (this.audioRef || !/\/valis\/app\/assets\//.test(this.audioUrl || "")) return this.audioRef;
     try {
       const r = await fetch(this.audioUrl); if (!r.ok) return null;
       const u = await api.upload(new File([await r.blob()], this.audioUrl.split("/").pop(), {type: "audio/mpeg"}));
@@ -151,6 +151,7 @@ export class ScoreView {
   async loadFiles(files) {
     const j = files.find(f => f.name.endsWith(".json")), a = files.find(f => f.type.startsWith("audio/"));
     if (a) { this.audio.src = this.audioUrl = URL.createObjectURL(a); const u = await api.upload(a); this.audioRef = api.inputRef(u); }
+    if (j && !a) { this.audio.removeAttribute("src"); this.audioRef = null; this.audioUrl = null; }      // a score without its song: not the last one's
     if (j) { const sc = JSON.parse(await j.text()); this.thumbs = []; this.scoreRef = null; this.scoreFile = j; this.engineSet(sc.valis_engine || (sc.made_by ? "library" : "classic")); this.set(sc); }
   }
   // a made score comes back as a .json in output/valis/scores; its song is the file you gave, or YuE2's
@@ -160,6 +161,7 @@ export class ScoreView {
     const sc = JSON.parse(await (await fetch(api.viewUrl(jf))).text());
     this.scoreFile = new File([JSON.stringify(sc)], jf.filename, {type: "application/json"}); this.scoreRef = null; this.thumbs = [];
     if (audio) { this.audio.src = this.audioUrl = audio.url; this.audioRef = audio.ref; }
+    else { this.audio.removeAttribute("src"); this.audioRef = null; this.audioUrl = null; }
     Bin.add(jf, {from: "Score", label: sc.title || "score"});
     this.engineSet("library"); this.results = {}; this.set(sc);
     toast(`Score made: ${sc.bars} bars at ${sc.bpm} BPM, ${sc.shots.length} shots`);
@@ -298,7 +300,7 @@ export class ScoreView {
       : G.fx({clip: a.clip.ref, subject: this.rules.some(r => { const f = G.fxPreset(r.effect); return f && (f.needs.includes("subject") || f.params.at === "subject"); }) ? $("#s-a").value.trim() : "",
           source: "score", score, audio, layers: this.rules.map(r => G.fxLayer(r.effect, r.lane)).filter(Boolean),
           sound: $("#s-fxsound").checked, seconds: this.span(shot), start: shot.start_frame / 24, fit: true, prefix: `valis/score_${shot.id}_${tag}`,
-          retime: await api.hasNode("ValisFrameRate")});
+          retime: await api.hasNode("ValisFrameRate"), own: !audio && await api.hasInput("ValisSoundDesign", "own")});
     return new Promise((res) => this.run(g, `Score · ${shot.id}`, null, {onDone: (j) => {
       const v = j.outputs.find(f => /\.(mp4|webm|mov)$/i.test(f.filename));
       if (v) { this.results[shot.id] = v; Bin.add(v, {from: "Score", label: `${this.sc.title || "score"} ${shot.id}`}); }
@@ -319,7 +321,7 @@ export class ScoreView {
     const last = shots[shots.length - 1], end = last.start_frame / 24 + this.span(last), rest = sc.duration_seconds - end, text = $("#s-title").value.trim();
     await this.ensureAudio();
     let title = null;
-    if (text && this.audioRef && rest > 1) {
+    if (text && this.audioRef && rest > 1 && await api.hasNode("ValisTitleCard")) {
       const v = await new Promise((res) => { const e = document.createElement("video"); e.preload = "metadata"; e.onloadedmetadata = () => res(e); e.onerror = () => res(null); e.src = api.viewUrl(this.results[last.id]); });
       if (v?.videoWidth) title = {text, song: this.audioRef, start: end, seconds: Math.min(8, rest), width: v.videoWidth, height: v.videoHeight};
     }

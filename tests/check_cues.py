@@ -68,6 +68,22 @@ heard = Cues({"beat": [0.0, .6, 1.2], "kick": [0.0]}, duration=2)
 both = heard.merge(Cues({"beat": [.01, .61, 1.21], "bar": [0.0]}, duration=2), replace=("beat",))
 ok(list(both.times("beat")) == [.01, .61, 1.21] and list(both.times("kick")) == [0.0], "merge: the sheet's beat replaces the heard one", both.times("beat"))
 ok(len(heard.merge(Cues({"beat": [.3]}, duration=2)).times("beat")) == 4, "merge: other lanes still join")
+WALTZ = """X:1
+T:w
+M:3/4
+L:1/8
+Q:1/4=150
+K:Gm
+V:1 name=vocal
+G2 B2 d2 | c2 A2 F2 | G6 | D2 F2 A2 |
+V:2 name=bass
+G,6 | F,6 | G,6 | D,6 |
+"""
+song = Cues({"beat": np.arange(0, 6, .4), "downbeat": np.arange(0, 6, 1.6), "kick": [0.0]}, duration=6, bpm=150, meter=4, meta={"key": "D minor"})
+ws = song.with_sheet(cues_from_abc(WALTZ))
+sc = make_score(ws)
+ok(sc["meter"] == "3/4" and abs(sc["bar_seconds"] - 1.2) < 1e-6, "sheet over a heard song: a 3/4 sheet is scored in bars of three", (sc["meter"], sc["bar_seconds"]))
+ok(list(ws.times("downbeat")) == list(ws.times("bar")) and ws.meta["key"] == "Gm", "sheet over a heard song: its bars are the downbeats, its key stands", ws.meta.get("key"))
 
 # the key of a song: a minor progression's chroma, and nothing for noise
 rng = np.random.default_rng(1)

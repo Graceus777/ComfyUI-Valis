@@ -82,10 +82,7 @@ class ValisCues:
             y, sr = _audio_np(music)
             c = c.merge(Cues.from_audio(y, sr, bpm_hint=bpm_hint or None))
         if abc:
-            ab = Cues.from_abc(abc, y, sr)
-            # the sheet's beat grid, and its key and meter, over what the audio analysis heard
-            c = c.merge(ab, prefix="", replace=("beat",) if music is not None else ())
-            c.meta.update({k: v for k, v in ab.meta.items() if k in ("key", "meter_unit", "sections", "chords")})
+            c = c.with_sheet(Cues.from_abc(abc, y, sr), heard=music is not None)
         if voice is not None:
             from .nodes import speech_onsets
             vy, vsr = _audio_np(voice)
@@ -216,7 +213,7 @@ class ValisSoundDesign:
                              "duck": ("FLOAT", {"default": 0.0, "min": 0, "max": 1, "step": .05, "tooltip": "how much the music dips under the effects (off: the song leads)"})},
                 "optional": {"stack": ("VALIS_STACK", {"tooltip": "each effect brings its own sound on its own lanes"}), "music": ("AUDIO",),
                              "seed": ("INT", {"default": 1, "min": 0, "max": 2 ** 31}),
-                             "key": ("STRING", {"default": "", "tooltip": "the song's key for tuned sounds, e.g. 'Bb', 'Dm', 'D phrygian' (blank: from the cues' ABC, else D minor)"}),
+                             "key": ("STRING", {"default": "", "tooltip": "the song's key for tuned sounds, e.g. 'Bb', 'Dm', 'D phrygian' (blank: the cues' own: YuE2's sheet music, a score's, or the key heard in the music; else D minor)"}),
                              "space": (["hall", "room", "cathedral", "open", "water", "dry"], {"default": "hall", "tooltip": "the one room every sound sits in"}),
                              "own": ("BOOLEAN", {"default": False, "tooltip": "`music` is the clip's own sound: it keeps its level (no levelling, no loudness target), the effects go under it"})}}
 

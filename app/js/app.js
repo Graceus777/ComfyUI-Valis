@@ -1027,7 +1027,8 @@ async function setup() {
     h("summary", {}, h("i", {class: "dot up"}), bad.length ? `${good.length} more ready` : `All ${good.length} workflows ready`), ...good.map(row)) : "");
   pill.className = "pill link " + (bad.length ? "bad" : "ok");
   pill.textContent = bad.length ? `setup: ${bad.length} to fix` : "setup ready";
-  pill.dataset.tip = bad.length ? `${bad.join(", ")}: missing pieces on this ComfyUI. Click for details.` : `All ${names.length} workflows the studio sends check out against this ComfyUI. Click for details.`;
+  pill.dataset.tip = bad.length ? `${bad.join(", ")}: missing pieces on this ComfyUI. Click for details.`
+    : opt.length ? `Ready. Optional, not installed: ${opt.join(", ")}. Click for details.` : `All ${names.length} workflows check out against this ComfyUI. Click for details.`;
   if (bad.length) toast(`${bad.join(", ")}: missing pieces on this ComfyUI. See Renders, Setup.`, true);
 }
 $("#setupPill").addEventListener("click", () => { show("renders"); $("#r-setup").scrollIntoView({block: "start", behavior: "smooth"}); });
