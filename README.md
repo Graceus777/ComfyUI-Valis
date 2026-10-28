@@ -227,6 +227,9 @@ Every command and flag is in [docs/cli.md](docs/cli.md).
   overwrite pictures elsewhere), and the plate still paints a stage's own layers (no ComfyUI, no GPU).
 - `node tests/ui/run.mjs`: the studio clicked through in a headless browser against a stand-in ComfyUI
   (`tests/ui/mock_server.mjs`), with a screenshot of every screen.
+- `node tests/ui/film_save.test.mjs`: the Film tab's saves: a reopened film keeps its shot length, your own song survives a
+  reload, and a save waiting when you switch films lands in its own film.
+- `node tests/ui/score_open.test.mjs`: a Valis score you open is shown as text, whatever its title, bars or names hold.
 - **Renders → End-to-end test** (or `(await import("/valis/app/js/selftest.js")).run()` in the browser console): short,
   low-resolution renders on the GPU through the studio's own code. 15 Create combinations (IMAX 65mm + fisheye + 1950s
   + noir, Super 8, VHS, trained moves, Wan, custom palettes, an end frame, a loop, relight, a cast character), then the

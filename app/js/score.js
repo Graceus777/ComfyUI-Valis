@@ -216,7 +216,9 @@ export class ScoreView {
       .sort((a, b) => (ORDER.indexOf(a) + 1 || 99) - (ORDER.indexOf(b) + 1 || 99));
     this.rules = sc.valis_rules || this.defaultRules();
     const nEv = this.lanes.reduce((a, k) => a + sc.events[k].length, 0);
-    $("#s-info").innerHTML = `<b>${esc(sc.title || "score")}</b> · ${esc(sc.meter || "")} at ${(+sc.bpm).toFixed(1)} BPM · ${sc.bars} bars · ${sc.duration_seconds.toFixed(1)} s<br>${this.lanes.length} lanes, ${nEv} hits, ${(sc.shots || []).length} shots`;
+    // text nodes, not HTML: an opened score is someone else's file (its title, meter, bars and the rest are theirs to write)
+    $("#s-info").replaceChildren(h("b", {}, String(sc.title || "score")), ` · ${sc.meter || ""} at ${(+sc.bpm).toFixed(1)} BPM · ${sc.bars} bars · ${(+sc.duration_seconds).toFixed(1)} s`, h("br"),
+      `${this.lanes.length} lanes, ${nEv} hits, ${(sc.shots || []).length} shots`);
     $("#s-tempo").textContent = `${sc.meter || ""} · ${(+sc.bpm).toFixed(1)} BPM${sc.key ? " · " + sc.key : ""}`;
     this.renderRules(); this.renderShots(); this.live.mount(); this.draw(); this.preview(); this.estimates();
   }
