@@ -206,5 +206,25 @@ try:
 except ValueError as e:
     ok(False, "loop: lightning from a negative event time", e)
 
+# sheet music: a bar is as long as its meter and its Q: tempo say (the tempo counts the Q: note, not the meter's own):
+# 6/8 at Q:1/4=100 is six eighths, 1.8 s, not six beats of .6 s (3.6 s), so the shots, two bars each, start in the right place
+def _abc(m, unit, q, bars):
+    return f"X:1\nT:t\nM:{m}\nL:{unit}\nQ:{q}\nK:C\n" + " | ".join(bars) + " |\n"
+for name, text, want in (("6/8 at Q:1/4=100", _abc("6/8", "1/8", "1/4=100", ["C2E G2c"] * 12), 1.8),
+                         ("6/8 at Q:3/8=60", _abc("6/8", "1/8", "3/8=60", ["C2E G2c"] * 12), 2.0),
+                         ("4/4 at Q:1/4=120", _abc("4/4", "1/4", "1/4=120", ["C E G c"] * 12), 2.0),
+                         ("4/4 at Q:1/8=240", _abc("4/4", "1/8", "1/8=240", ["C E G c C E G c"] * 12), 2.0),
+                         ("3/4 at Q:1/4=90", _abc("3/4", "1/4", "1/4=90", ["C E G"] * 12), 2.0)):
+    cb = cues_from_abc(text)
+    sb = make_score(cb, shot_seconds=4)
+    gaps = np.diff(sb["events"]["bar"])
+    ok(abs(sb["bar_seconds"] - want) < 1e-6 and bool(np.allclose(gaps, want, atol=.01)), f"score: {name} has {want} s bars", (sb["bar_seconds"], gaps[:3]))
+    st = [s_["start_frame"] / sb["fps"] for s_ in sb["shots"][1:4]]
+    ok(all(abs(t_ - bar_start(sb, s_["start_bar"])) < 1e-9 for t_, s_ in zip(st, sb["shots"][1:4])) and len(st) == 3,
+       f"score: {name}: a shot starts on its bar", st)
+# a tempo or meter you pick still wins over the sheet's
+cb = cues_from_abc(_abc("6/8", "1/8", "1/4=100", ["C2E G2c"] * 12))
+ok(abs(make_score(cb, bpm=120)["bar_seconds"] - 3.0) < 1e-6, "score: a tempo picked in the Score tab sets the bar", make_score(cb, bpm=120)["bar_seconds"])
+
 print(f"{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)

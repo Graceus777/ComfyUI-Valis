@@ -225,7 +225,7 @@ def cues_from_abc(abc, y=None, sr=None, fps=24.0):
         lo, hi = p.min(), p.max()
         vals[k] = list(.6 + .4 * (p - lo) / (hi - lo)) if hi > lo else [1.0] * len(p)
     meta = {"source": "YuE2 ABC", "sections": [(round(T(t), 3), n) for t, n in P["sections"]], "chords": names_c,
-            "key": P["key"], "bpm": P["bpm"], "meter_unit": P["meter"][1]}
+            "key": P["key"], "bpm": P["bpm"], "meter_unit": P["meter"][1], "beat_unit": P["beat_unit"]}
     c = Cues(lanes, vals, None, end, fps, P["bpm"], P["meter"][0], 0.0, meta)
     if y is not None:
         off, scale = align(c, y, sr)

@@ -49,6 +49,11 @@ def make_score(c, title="untitled", shot_seconds=SHOT_SECONDS, section_bars=8, s
     regrid = (meter_in and meter_in != int(c.meter or 4)) or (bpm_in and c.bpm and abs(bpm_in - float(c.bpm)) > .5)
     beat_s = 60.0 / bpm
     bar_s = beat_s * meter
+    # sheet music's tempo counts the note of its Q: field (Q:1/4=100: quarters; Q:3/8=60: dotted quarters), not the
+    # meter's own: a bar of 6/8 is six eighths, 1.8 s at Q:1/4=100, not six beats of .6 s (3.6 s)
+    bu = float((c.meta or {}).get("beat_unit") or 0)
+    if bu and not regrid:
+        bar_s = beat_s * meter / (unit * bu)
     # bar lines: the downbeats if the source has them (music analysis, sheet music), else a grid from the first beat
     db = lanes.get("downbeat", lanes.get("bar", np.zeros(0)))
     if regrid:                                           # your tempo or meter: a grid from the first downbeat (or beat)
