@@ -26,7 +26,7 @@ export function palettePicker(el, opts) {
     const edited = !!cur.hex, base = cur.id;
     const cols = cur.hex || (base === "auto" || base === "natural" ? null : swOf(base));
     const sw = cols ? h("span", {class: "sw edit"}, ...cols.map((c, i) => {
-      const inp = h("input", {type: "color", value: c, tip: "Change this colour. Darkest on the left, lightest on the right: the shot's shadows to its highlights take these colours."});
+      const inp = h("input", {type: "color", value: c, tip: "Change this colour. Left to right: the shot's shadows to its highlights."});
       inp.addEventListener("input", () => { const hex = [...(cur.hex || cols)]; hex[i] = inp.value; set({id: base, hex}, {keepMenu: true}); });
       return h("label", {style: `background:${c}`}, inp);
     })) : h("span", {class: "pp-none"}, base === "auto" ? "the genre's colours" : "no grade");

@@ -719,14 +719,14 @@ export function valisShot({clip, score, startBar, mode = "auto", section = "", l
 // "Effect:preset" ("Effect" alone is the first). A preset may say what it needs on top of the effect (one that
 // falls onto another clip).
 export const FX_GROUPS = [
-  {id: "light", name: "Light", tip: "They relight the shot itself, so they read as the scene's own light rather than a layer on top"},
-  {id: "lens", name: "Camera & lens", tip: "The camera reacts: a kick, a ripple, a dolly zoom, a lens bending space, a film projector"},
-  {id: "time", name: "Time", tip: "The picture's time comes apart: afterimages, slit-scan, another era, frames that never arrive"},
-  {id: "break", name: "Break & blend", tip: "Strong, graphic moments: one or two in a film. Glass, ice, a tear, another scene"},
+  {id: "light", name: "Light", tip: "They relight the scene itself"},
+  {id: "lens", name: "Camera & lens", tip: "The camera reacts"},
+  {id: "time", name: "Time", tip: "The picture's time comes apart"},
+  {id: "break", name: "Break & blend", tip: "Strong moments: one or two a film"},
 ];
 export const LIBRARY = [
   // light
-  {id: "Flicker", group: "light", name: "Flicker", blurb: "The scene's own light breathes like a practical: a candle, a fire, a strip light, a failing bulb.", needs: [], on: "beat", params: {style: "candle"},
+  {id: "Flicker", group: "light", name: "Flicker", blurb: "The scene's own light breathes like a practical.", needs: [], on: "beat", params: {style: "candle"},
    presets: [{id: "candle", name: "Candle", params: {style: "candle"}, tip: "Warm and irregular; a hit makes it gutter and flare back"},
              {id: "fire", name: "Fireplace", params: {style: "fire"}, tip: "Warmer and faster, flaring on the hits"},
              {id: "tube", name: "Strip light", params: {style: "tube"}, on: "downbeat", tip: "A fluorescent tube that stutters off and on, once a bar"},
@@ -737,7 +737,7 @@ export const LIBRARY = [
   {id: "Lightning", group: "light", name: "Lightning", blurb: "A strike off-screen lights the room from one side: stuttering flashes, an afterglow, thunder. No bolt.", needs: [], on: "downbeat", params: {at: "left"},
    presets: [{id: "strike", name: "Strike", params: {at: "left"}}, {id: "above", name: "From above", params: {at: "top"}},
              {id: "distant", name: "Distant", params: {at: "right", strength: .45, strikes: 2, fill: .6}, tip: "Far off: a softer flicker of light"},
-             {id: "storm", name: "Storm", params: {every: 4}, tip: "Every fourth hit, counted over the whole song: a storm that keeps its pace across a film's cuts"}]},
+             {id: "storm", name: "Storm", params: {every: 4}, tip: "Every fourth hit, counted over the whole song"}]},
   {id: "Sweep", group: "light", name: "Light sweep", blurb: "A beam crosses the scene on each hit: headlights through a window, a lighthouse.", needs: [], on: "downbeat", params: {},
    presets: [{id: "headlights", name: "Headlights", params: {}}, {id: "lighthouse", name: "Lighthouse", params: {width: .18, dur: 1.0, strength: 1.2, tint: [.86, .93, 1.0]}}]},
   {id: "Glow", group: "light", name: "Glow", blurb: "Bright things bloom and halate like film around a light, breathing with the music.", needs: [], on: "beat", params: {},

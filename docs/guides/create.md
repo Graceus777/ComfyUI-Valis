@@ -80,7 +80,7 @@ Words in the keyframe prompt.
 44 moves in five groups (Basic, Dolly, Crane, Orbit, Dynamic). Push in is the default. A move is words in the motion
 prompt, phrased the way H3 follows them best, unless it is a trained move.
 
-**trained moves (✦): use a camera LoRA when one is installed for this move** is on by default. A move marked ✦ has a
+**trained moves (✦)** is on by default. A move marked ✦ has a
 LoRA trained on that one move, which does it properly: a full 360, a real push-in, a crash zoom. The ✦ is dimmed when
 the LoRA isn't installed, and the move's tooltip says so; H3 then does the move from words. Turn the box off and H3
 does every move from words.
@@ -139,7 +139,7 @@ If either Valis node isn't loaded yet, Create shoots the plain move and tells yo
 
 #### Ending on the subject
 
-**end on the subject: pin the last frame so the move finishes on them** is for moves done from words that would leave
+**end on the subject** is for moves done from words that would leave
 the subject behind. It pins the shot's last frame:
 
 - 360 orbit, whip pan and turntable end on their own first frame.
@@ -149,7 +149,7 @@ the subject behind. It pins the shot's last frame:
 Other moves have no pinned end. A trained move ignores this box, and so does the whip pan while **trained moves** is
 on, since the whip already lands back on the subject.
 
-**trim the hold: cut the frozen end a pinned last frame leaves** is on by default. H3 tends to reach a pinned frame
+**trim the hold** is on by default. H3 tends to reach a pinned frame
 early and hold it still, for up to 1.4 s. Valis Trim Hold keeps a quarter second of the hold (6 frames) and cuts the
 rest, and never cuts the shot below 49 frames.
 
@@ -249,7 +249,7 @@ Firelight, Moonlight, Neon, Noir blinds, Lightning) and press **Relight**. The r
 …** and the bin. Then either:
 
 - pick the relit still and **Shoot it** in the new light, or
-- keep the original picked, tick **light change: the shot starts in the keyframe's light and ends in the relit one**,
+- keep the original picked, tick **light change**,
   and **Shoot it**. H3 runs from the keyframe to its relit version, so the light shifts during the shot.
 
 A light change pins the last frame to the relit still, which replaces any **end on the subject** pin. It uses the most

@@ -18,7 +18,7 @@ export async function uploadImage(file) {
 
 // a card's picture: click to look at it big; drop a still from the bin or a picture from disk to use it instead
 function thumb(f, empty, {view, onPick}) {
-  const el = f ? h("div", {class: "fm", tip: "Click to look at it. Drop a still from the bin, or a picture from disk, to use that instead", onclick: () => view(f)}, media(f, {controls: false, autoplay: false}))
+  const el = f ? h("div", {class: "fm", tip: "Click to look at it. Drop a still or a picture on it to use that instead", onclick: () => view(f)}, media(f, {controls: false, autoplay: false}))
     : h("div", {class: "fm empty", tip: "Make it, or drop a still from the bin or a picture from disk"}, h("span", {}, empty));
   el.addEventListener("dragover", (e) => { e.preventDefault(); el.classList.add("over"); });
   el.addEventListener("dragleave", () => el.classList.remove("over"));
@@ -99,7 +99,7 @@ export function drawBuild(el, p, ctx) {
     return h("div", {class: "fshot bcard"},
       head(su, p.setups, "setup", {id: "sets", file: "plate", seed: 8601}, i),
       h("div", {class: "bmedia"}, thumb(su.plate, "no plate yet", {view, onPick: (f) => { su.plate = f; save(); redraw(); }})),
-      h("select", {tip: "A setup is painted, or another setup's empty plate turned (turn the empty plate, never a frame with people in it)", onchange: (e) => {
+      h("select", {tip: "Painted, or another setup's empty plate seen from a new angle", onchange: (e) => {
         const v = e.target.value; delete su.from; su.plate = null; if (v !== "@paint") su.from = v; save(); redraw(); }},
         h("option", {value: "@paint", selected: !su.from}, "painted: the film's look, the view, the place"),
         ...others.map(n => h("option", {value: n, selected: su.from === n}, `the ${n}, turned`))),
@@ -115,13 +115,13 @@ export function drawBuild(el, p, ctx) {
     return h("div", {class: "fshot bcard"},
       head(f, p.frames, "frame", {id: "frames", file: "still", seed: 8401}, i),
       h("div", {class: "bmedia"}, thumb(f.still, "not made yet", {view, onPick: (x) => { f.still = x; save(); redraw(); }})),
-      h("select", {tip: "A frame seats people into a setup's empty plate, or changes the frame before it (so nothing changes that you don't change)", onchange: (e) => {
+      h("select", {tip: "Seat people into a setup's empty plate, or change another frame (an edit of its seated frame)", onchange: (e) => {
         const [k, v] = e.target.value.split(":"); delete f.from; delete f.setup; f[k] = v; f.still = null; save(); redraw(); }},
         ...p.setups.map(su => h("option", {value: `setup:${su.name}`, selected: !f.from && f.setup === su.name}, `seated in the ${su.name}`)),
         ...others.map(n => h("option", {value: `from:${n}`, selected: f.from === n}, `a change of ${n}`))),
       whoChips(people(p), f.with || [], (w) => { f.with = w; f.still = null; save(); redraw(); }, f.from ? "Who arrives at this moment (their sheets join everyone already there)" : "Who is in this frame: their sheets are seated into the plate"),
       f.from ? h("div", {class: "bgone"}, h("span", {class: "hint"}, "gone:"), whoChips(people(p), f.gone || [], (w) => { f.gone = w; f.still = null; save(); redraw(); }, "Who has left by this moment")) : null,
-      f.from ? text(f, "edit", 3, "What has changed by now, e.g. the seat of the empty chair is soaking wet, water dripping onto the floor", "Painted fresh from the setup's plate: the blocking, then every change so far, in order")
+      f.from ? text(f, "edit", 3, "What has changed by now, e.g. the seat of the empty chair is soaking wet, water dripping onto the floor", "An edit of the seated frame, with every change so far, in order")
         : text(f, "seat", 4, "Who sits where, facing where, doing what, e.g. the medium sits on the far chair behind the lamp, facing us…", "The blocking: say where each person is in the picture; anything you don't seat isn't there"));
   });
   const addFrame = h("button", {class: "ibtn", type: "button", disabled: busy || !p.setups.length, tip: p.setups.length ? "" : "Add a setup first", onclick: () => {
@@ -130,9 +130,9 @@ export function drawBuild(el, p, ctx) {
     save(); redraw(); }}, "+ frame");
 
   el.replaceChildren(
-    sec("References", "a sheet for every character, every state of one, every prop: every shot they're in is built from it", [addRef("person"), addRef("prop")], refCards),
-    sec("Sets", "the set, empty, from every camera setup", [addSet], setCards),
-    sec("Frames", "who is where in a setup at one moment; a change is an edit of the frame before", [addFrame], frameCards));
+    sec("References", "a sheet per character, state and prop", [addRef("person"), addRef("prop")], refCards),
+    sec("Sets", "the empty set from every camera setup", [addSet], setCards),
+    sec("Frames", "who is where in a setup at one moment", [addFrame], frameCards));
 }
 
 // A shot's close-up: a box on its frame (the frame and the shot have the same shape, so the box is a square in fractions

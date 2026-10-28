@@ -81,8 +81,8 @@ export async function estimate(graph) {
     return {seconds: Math.max(5, a + b * work), measured: true, basis: `from ${n} ${kind} job${n > 1 ? "s" : ""} on this machine`};
   }
   return {seconds: (p.a + p.b * work) / SPEED, measured: false,
-          basis: GUESSED_SPEED ? "a first guess: nothing like it has run on this machine yet, and this GPU isn't in the speed table"
-                               : `a first guess for this GPU (scaled from measured runs on another); it learns from your first ${kind} job`};
+          basis: GUESSED_SPEED ? "a first guess: nothing like it has run on this machine yet"
+                               : `a first guess for this GPU; it learns from your first ${kind} job`};
 }
 export function fmt(e) {
   if (!e) return "";

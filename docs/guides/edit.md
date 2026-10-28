@@ -105,7 +105,7 @@ The **Controls** section holds two sliders.
 
 Transform re-renders only inside the person's own outline, so antlers, wings or a bigger body get cut off. For a whole
 new creature or character, use **Swap**, which replaces the whole person and keeps the take's motion and voice. While
-there is a picture in the box, **Make the whole person this character instead (Swap) →** appears under it. It moves
+there is a picture in the box, **Swap the whole person instead →** appears under it. It moves
 the picture to Swap's character and your words to its description (when that is empty), and switches to Swap.
 
 ## Remove

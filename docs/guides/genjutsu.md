@@ -77,10 +77,10 @@ Only the thing you name is replaced; everything else stays.
 - Say what replaces it. Drop a picture of it as a reference, give it the **object** or **outfit** role, and the prompt
   says the object is replaced by `<Picture 1>`, keeping its shape, folds and motion and matching the scene's light.
   With no picture, open **Prompt** and write the replacement in: the built prompt says "something new" until you do.
-- **keep everything else exactly: paste the new object back onto the original frames** (on by default). H3 re-renders
+- **keep everything else** (on by default). H3 re-renders
   the whole frame even outside the mask, so faces and sky drift. This lays only the new object back onto the source
   through the mask, with Valis Swap Match: a feathered edge, matched grain and a light wrap, and no recolouring.
-- **follow the object's own shape (edges); off = follow the body (pose)** (on by default). On, the new object follows
+- **follow the object's edges** (on by default). On, the new object follows
   the old one's edges (Canny), which suits clothes and things. Off, it follows the body's pose (SDPose).
 
 Object swap works best with the Fun ControlNet Union 2.0, which inpaints with mid-grey holes. With only version 1
@@ -135,7 +135,7 @@ another clip.
 - **9:16**, **16:9** or **1:1**: the shape of the result. The source is scaled and cropped from its centre to fit.
 - **keep the source's sound** (on by default): the source clip's own sound on the result. Off, the result carries the
   sound H3 makes.
-- **turbo (8 steps, faster, a little rougher)**: 8 steps with the turbo LoRA in place of 20.
+- **turbo (8 steps)**: 8 steps with the turbo LoRA in place of 20.
 
 With **FastH3 OmniRef** chosen under **Renders → Engine**, every Genjutsu render runs in 8 steps on FastH3 and the turbo
 LoRA is skipped, so the **turbo** box changes nothing.

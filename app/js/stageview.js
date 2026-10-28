@@ -208,8 +208,8 @@ export class StageView {
       this.S.domeEngine = id;
       [...el.children].forEach(b => b.classList.toggle("on", b.dataset.id === id));
       const sub = $("#st-domesub");
-      if (sub) sub.textContent = id === "krea" ? "the world past the frame · Krea 2 + AnyPaint, 30% more on each side"
-        : "the world past the frame and behind the people and things in it · Qwen Image 2.1";
+      if (sub) sub.textContent = id === "krea" ? "past the frame · Krea 2 AnyPaint"
+        : "past the frame · Qwen Image 2.1";
     };
     el.replaceChildren(...opts.map(([id, n]) => h("button", {class: id === this.S.domeEngine ? "on" : "", "data-id": id,
       disabled: id === "krea" && !caps.kreaDome, title: id === "krea" && !caps.kreaDome ? "needs the Krea 2 AnyPaint nodes and LoRA, and a ComfyUI restart" : "",
@@ -260,7 +260,7 @@ export class StageView {
       const caps = await this.caps(), erase = caps.erase;
       const job = await this.api.submit(this.G.stage({prompt, names, name, far: +this.$("#sg-far").value, sharpen, seed, erase, caps}),
         `Stage from words: ${names.join(", ")} (seed ${seed})`, "stage");
-      this.toast(`Seed ${seed}: Krea 2 paints the still${sharpen ? ", SeedVR2 sharpens it" : ""}, then SAM 3 finds ${names.length} things in it${erase ? " and Krea 2 erases the ones standing in it, so a move uncovers real paint" : ""} (about ${sharpen ? 2 : 1}${erase ? " + 1–2" : ""} min)`);
+      this.toast(`Seed ${seed}: Krea 2 paints the still${sharpen ? ", SeedVR2 sharpens it" : ""}, then SAM 3 finds ${names.length} things in it${erase ? " and Krea 2 erases the ones standing in it, so a move uncovers real paint" : ""}`);
       await this.until(job);
       const sub = `valis/stage/${name}`;
       await this.listStages(sub);
@@ -533,7 +533,7 @@ export class StageView {
       v.replaceChildren(this.h("video", {src: `/view?filename=${encodeURIComponent(r.filename)}&subfolder=${encodeURIComponent(r.subfolder)}&type=output`, controls: true, loop: true, style: "width:100%;border-radius:8px"}));
       this.S.lastExport = {...r, seconds: +secs};
     } finally {
-      cv.width = prev[0]; cv.height = prev[1]; btn.disabled = false; btn.innerHTML = `Export MP4<span class="sub">same frames as the preview · no GPU job</span>`;
+      cv.width = prev[0]; cv.height = prev[1]; btn.disabled = false; btn.innerHTML = `Export MP4<span class="sub">the preview's frames</span>`;
       this.draw();
     }
   }

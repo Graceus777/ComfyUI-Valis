@@ -49,7 +49,7 @@ For a still you don't want, press **⟳ still** on its card for a new seed, or e
 
 ## 5. The shots (about 7 minutes each)
 
-Press **▶ shoot** on shot 1 and watch it before you shoot the rest. It tells you whether the motion lines work. Then run **Shots** for the others, about 35 minutes for five. Look at every shot. For one whose motion came apart, press **▶ shoot** again for a new take, or tick **full quality (int8, 30 steps)** and shoot it again (about 20 minutes).
+Press **▶ shoot** on shot 1 and watch it before you shoot the rest. It tells you whether the motion lines work. Then run **Shots** for the others, about 35 minutes for five. Look at every shot. For one whose motion came apart, press **▶ shoot** again for a new take, or tick **full quality (30 steps)** and shoot it again (about 20 minutes).
 
 ## 6. The effects (about a minute a shot)
 

@@ -130,7 +130,7 @@ export async function planShot(C0, env) {
   }
   const tm = o.trained !== false ? P.CAMERA_LORAS[C.move?.id] : null;
   const trained = tm && (!tm.lora || await env.hasLora(tm.lora)) ? tm : null;      // lora null = H3 words + a post step
-  if (tm && !trained) notes.push(`${C.move.name}: its camera LoRA isn't installed (${tm.lora}), so H3 does the move from words`);
+  if (tm && !trained) notes.push(`${C.move.name}: its camera LoRA isn't installed, so H3 does the move from words`);
   const who = (C.who || "").trim() || "the subject";
   const scene = [(C.subject || "").trim(), (C.action || "").trim()].filter(Boolean).join(" ");
   const mot = motionPrompt(C);

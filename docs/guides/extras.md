@@ -127,7 +127,7 @@ continuous motion throughout, and a steady ambience with nothing that happens on
 | **One pass** | 4.25 s, 6.4 s, 8.5 s or 10.6 s (H3 renders 107, 158, 209 or 260 frames; the loop is 5 frames shorter) |
 | **Size** | 320 to 768 px on the short side, portrait 9:16. The marks are draft (384, 384×672) and native (768, 768×1344). |
 | **Engine** | **Draft · FastH3** (8 steps) or **Final · H3 25 steps**, which takes about 3 times as long |
-| **clean sound across the join (1.8x time)** | on by default. H3 also samples the loop turned half round and takes the sound near the join from that pass, because the sound next to the wrap comes out garbled otherwise. |
+| **clean sound across the join** | on by default. H3 also samples the loop turned half round and takes the sound near the join from that pass, because the sound next to the wrap comes out garbled otherwise. |
 
 **Grade**
 

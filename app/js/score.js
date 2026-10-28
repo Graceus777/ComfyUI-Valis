@@ -36,11 +36,11 @@ const RULE_SETS = [
 ];
 const NEAREST = ["beat", "downbeat", "kick", "bar", "melody", "onset", "snare", "hat"];
 const SOURCES = [
-  {id: "song", name: "From a song", tip: "Drop any song: Valis hears its beats, bars, kick, snare and hats, how loud and bright it is, and lays out sections and shots on its bars."},
-  {id: "yue", name: "YuE2 writes it", tip: "YuE2 writes the sheet music and plays it; the score has every note it wrote (melody, bass, chords) as well as the beats."},
-  {id: "cues", name: "Cue sheet", tip: "No music: write the hits yourself, in seconds or bar:beat. The score is made from your cues."},
-  {id: "open", name: "Open .json", tip: "A score saved from here (Save .json), or any Valis score, with its song."},
-  {id: "demo", name: "Example", tip: "DANSE MACABRE: the score the first Valis film was cut to, with its own effects engine."},
+  {id: "song", name: "From a song", tip: "Any song: Valis finds its beats, hits, sections and shots."},
+  {id: "yue", name: "YuE2 writes it", tip: "YuE2 writes and plays a song; the score has every note it wrote."},
+  {id: "cues", name: "Cue sheet", tip: "No music: write the hits yourself."},
+  {id: "open", name: "Open .json", tip: "A saved Valis score, with its song."},
+  {id: "demo", name: "Example", tip: "DANSE MACABRE's score, with its own effects engine."},
 ];
 
 export class ScoreView {
@@ -55,17 +55,17 @@ export class ScoreView {
   }
   build() {
     seg($("#s-source"), SOURCES, (x) => this.setSource(x.id), "song");
-    this.secRules = section("Effects on the music", {id: "s-sec-rules", open: true, tip: "Each rule: a lane of the score fires an effect. Library effects work on any score; the classic engine's are made for the example."},
+    this.secRules = section("Effects on the music", {id: "s-sec-rules", open: true, tip: "Each rule: a lane of the score fires an effect."},
       h("div", {class: "seg", id: "s-engine"}), h("div", {class: "chips rulesets", id: "s-sets"}), h("div", {class: "map", id: "s-map"}), h("button", {class: "btn small", id: "s-add", type: "button", style: "margin-top:8px"}, "+ Add a rule"),
-      h("label", {class: "bkind", style: "display:block;margin-top:8px", tip: "Each effect plays a sound of its own on its hits, mixed under the music. Untick it to keep the song alone, as it is (a score you composed)"},
+      h("label", {class: "bkind", style: "display:block;margin-top:8px", tip: "Each effect plays its own sound on its hits, under the music. Off: the song alone"},
         h("input", {type: "checkbox", id: "s-fxsound", checked: true}), " the effects make sounds"),
-      h("h3", {class: "lab", tip: "SAM 3 follows this in every shot: Echo, Lens, Vertigo, Double exposure and the classic reveals use it"}, "Subject"),
+      h("h3", {class: "lab", tip: "SAM 3 follows it in every shot, for effects about someone"}, "Subject"),
       h("div", {class: "row"}, h("input", {type: "text", id: "s-a", value: "the woman", tip: "subject A (the classic engine takes two)"}), h("input", {type: "text", id: "s-b", value: "the man", tip: "subject B"})));
-    this.secShots = section("Shots", {id: "s-sec-shots", open: true, tip: "The score's shots, cut on whole bars. Give each a clip (drag one from the bin, or pick it), then render."},
+    this.secShots = section("Shots", {id: "s-sec-shots", open: true, tip: "The score's shots, cut on whole bars. Give each a clip, then render."},
       h("div", {class: "row", style: "margin-bottom:8px"}, h("button", {class: "btn small", type: "button", id: "s-fill", tip: "Lay the newest clips from the bin on the shots that have none, in order"}, "Fill from the bin")),
       h("div", {class: "map", id: "s-shots"}));
     $("#s-sections").replaceChildren(this.secRules, this.secShots);
-    this.engineSeg = seg($("#s-engine"), [{id: "library", name: "Library", tip: "The Valis library (the FX tab's effects): any lane, any score"}, {id: "classic", name: "Classic", tip: "ValisFX, the engine the first Valis film (DANSE MACABRE) was made with: candles, ghost crowd, reveals. Made for the example's lanes"}],
+    this.engineSeg = seg($("#s-engine"), [{id: "library", name: "Library", tip: "The FX tab's effects: any lane, any score"}, {id: "classic", name: "Classic", tip: "The example's own effects: candles, ghost crowd, reveals. Made for its lanes"}],
       (x) => { this.engine = x.id; if (this.sc) { this.rules = this.defaultRules(); this.renderRules(); this.draw(); } }, "library");
     $("#s-sets").replaceChildren(h("span", {class: "lab"}, "Start from"), ...RULE_SETS.map(rs => h("button", {class: "chip", type: "button", tip: rs.tip, onclick: () => this.useSet(rs)}, rs.name)));
     $("#s-add").addEventListener("click", () => { this.rules.push({lane: this.lanes?.[0] || "kick", effect: this.engine === "classic" ? "flare" : "Rays"}); this.renderRules(); this.draw(); });
@@ -97,7 +97,7 @@ export class ScoreView {
       const bpm = h("input", {type: "number", id: "s-bpm", min: 0, max: 300, step: .1, placeholder: "BPM (auto)", tip: "Your own tempo, if the analysis gets it wrong (0 = what it hears)"});
       const meter = h("select", {id: "s-meter", tip: "Beats per bar. Music analysis assumes 4/4: a waltz needs 3/4"}, ...[["0", "meter: auto (4/4)"], ["3", "3/4"], ["4", "4/4"], ["6", "6/8"], ["5", "5/4"], ["7", "7/8"]].map(([v, n]) => h("option", {value: v}, n)));
       box.replaceChildren(drop, h("div", {class: "row", style: "margin-top:8px"}, bpm, meter),
-        btn("Make the score", "Valis · CPU", () => this.makeFromSong(), "Valis Cues hears the song; Valis Score (make) lays out the bars, sections and shots"));
+        btn("Make the score", "Valis · CPU", () => this.makeFromSong(), "Finds the song's tempo, bars, hits, sections and shots"));
       dropzone(drop, "audio/*,video/*", async (f) => {
         const u = await api.upload(f); this.pendingSong = {ref: api.inputRef(u), url: URL.createObjectURL(f), name: f.name};
         fillDrop(drop, h("audio", {src: this.pendingSong.url, controls: true, style: "width:100%"}), h("span", {}, f.name));
@@ -114,7 +114,7 @@ export class ScoreView {
       return;
     }
     if (id === "cues") {
-      box.replaceChildren(h("textarea", {id: "s-cues", rows: 8, class: "mono", spellcheck: "false", tip: "One cue per line: seconds or bar:beat, a lane name, an optional strength. 'every' makes grids, 'ramp' makes held curves, 'bpm 96 3/4' sets the grid."}, G.CUE_SHEET_EXAMPLE),
+      box.replaceChildren(h("textarea", {id: "s-cues", rows: 8, class: "mono", spellcheck: "false", tip: "One cue per line: a time (seconds or bar:beat), a lane, an optional strength. Also every, ramp and bpm lines."}, G.CUE_SHEET_EXAMPLE),
         btn("Make the score", "Valis · CPU", () => this.makeFromCues(), "Your cues become a score"));
       return;
     }

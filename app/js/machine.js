@@ -28,11 +28,11 @@ export function advise(x) {
   const notes = [], v = x.vramGB || 0;
   let short = 768, why = "";
   if (!v) { short = 512; why = "no GPU memory reported"; }
-  else if (v >= 20) { short = 768; why = `${v} GB: H3's native size with room to spare (1024 works too, untested above 768)`; }
-  else if (v >= 11.5) { short = 768; why = `${v} GB: H3's native size (768 px) fits; the studio's films were made at this size on 12 GB`; }
-  else if (v >= 9.5) { short = 640; why = `${v} GB: 640 px keeps H3 inside memory; use Upscale for delivery`; }
-  else if (v >= 7.5) { short = 512; why = `${v} GB: 512 px; larger shots will spill into system memory and crawl`; }
-  else { short = 384; why = `${v} GB is below what H3 needs comfortably: 384 px drafts only`; notes.push({level: "warn", text: "Under 8 GB of GPU memory: video models will offload to system RAM and run very slowly."}); }
+  else if (v >= 20) { short = 768; why = "H3's native size, with room to spare"; }
+  else if (v >= 11.5) { short = 768; why = "H3's native size fits"; }
+  else if (v >= 9.5) { short = 640; why = "keeps H3 inside GPU memory; use Upscale for delivery"; }
+  else if (v >= 7.5) { short = 512; why = "larger shots spill into system memory and slow right down"; }
+  else { short = 384; why = "drafts only: too little GPU memory for H3"; notes.push({level: "warn", text: "Video models will offload to system RAM and run very slowly."}); }
   if (x.fp8 === false) notes.push({level: "warn", text: `Compute capability ${x.capability}: no fp8 on this GPU, so the fp8 and w4a8 checkpoints run slower (upcast).`});
   if (x.fp8) notes.push({level: "ok", text: `fp8 supported (compute ${x.capability})`});
   if (x.kernels) {
@@ -43,7 +43,7 @@ export function advise(x) {
   }
   if (x.driverCuda && x.torchCuda && vnum(x.driverCuda) < vnum(x.torchCuda)) notes.push({level: "warn", text: `The NVIDIA driver supports CUDA ${x.driverCuda} but PyTorch is built for ${x.torchCuda}: update the driver.`});
   else if (x.driver) notes.push({level: "ok", text: `Driver ${x.driver}${x.driverCuda ? ` (CUDA ${x.driverCuda})` : ""} runs PyTorch ${x.torch}${x.torchCuda ? ` (CUDA ${x.torchCuda})` : ""}`});
-  if (x.ramGB && x.ramGB < 24) notes.push({level: "warn", text: `${x.ramGB} GB of RAM: switching between models (Krea, H3, Qwen) reloads them from disk; expect slow first steps.`});
+  if (x.ramGB && x.ramGB < 24) notes.push({level: "warn", text: "Little system RAM: switching between models reloads them from disk, so first steps are slow."});
   if (x.vramState && /LOW|NO/.test(x.vramState)) notes.push({level: "tip", text: `ComfyUI is in ${x.vramState} mode: models are kept off the GPU between steps (slower, saves memory).`});
   if (x.temp && x.temp > 85) notes.push({level: "warn", text: `The GPU is at ${x.temp} °C.`});
   if (!x.full) notes.push({level: "tip", text: "Driver, CUDA, cuDNN and attention details need the Valis machine route: restart ComfyUI once to load it."});

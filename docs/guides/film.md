@@ -150,7 +150,7 @@ Under the header are three pictures: the keyframe, the shot and the shot with ef
 |---|---|
 | the still's words | The keyframe sentence for Krea 2. The look, the cast's looks and the place are added. Edit it, then press **⟳ still**. |
 | **what moves** | What happens during the shot, for H3. |
-| **full quality (int8, 30 steps)** | Shoots on the int8 weights with the full 30-step recipe instead of the 8-step one. About three times as long (~20 min), for a shot whose motion came apart. It loads `minimax_h3_fl2va_pruned_int8_convrot.safetensors` from `diffusion_models`. |
+| **full quality (30 steps)** | Shoots on the int8 weights with the full 30-step recipe instead of the 8-step one. About three times as long (~20 min), for a shot whose motion came apart. It loads `minimax_h3_fl2va_pruned_int8_convrot.safetensors` from `diffusion_models`. |
 | **keep the keyframe's colours** | On by default. The effects pass matches every frame's colours to the keyframe, because H3 drifts the light over a shot (SÉANCE's red lamp went warm white by the last second). Untick it for a shot whose light is meant to change, like a lamp going out, or THE IRON SAINT's shot 2, where fire races up the blade and lights her face. |
 | **subject** | What SAM 3 tracks. Only effects that follow someone use it: Rim light, Shockwave (it starts from the subject), Echo, Gravity lens, Vertigo, Double exposure. |
 | effect | **no effect**, or any effect and preset in the library, in the FX tab's four groups. |

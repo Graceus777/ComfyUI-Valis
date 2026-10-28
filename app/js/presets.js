@@ -451,11 +451,11 @@ export const CAMERA_LORAS = {
   dolly_zoom_in: {...jojo("slow steady push-in dolly toward {subject} from a full shot to a medium shot, {subject} stays centered"), dolly: {maxZoom: 1.6}},
   // the Jojocodex LoRA can't pull back (it pushes in, then cuts to the empty background, twice); H3 from words does a
   // gentle, continuous pull-back, which is all the lock needs
-  dolly_zoom_out: {engine: "h3", lora: null, dolly: {maxZoom: 1.6}, source: "H3 from words + Valis Dolly Zoom",
+  dolly_zoom_out: {engine: "h3", lora: null, dolly: {maxZoom: 1.6}, source: "H3 pulls back from words, then Valis locks the subject's size",
     words: "The camera slowly dollies straight back away from {subject}, a small, gentle move: they stay centered and remain the clear subject the whole time."},
   // whip pan: H3 whips by dissolving between two views. A steady pan is easy for it, so the shot is a real pan and
   // Valis Whip Pan speed-ramps it (linger, swing at ~20x with the camera's own motion blur, land back on the subject)
-  whip_pan: {engine: "h3", lora: null, whip: {mode: "return"}, source: "H3 pan from words + Valis Whip Pan",
+  whip_pan: {engine: "h3", lora: null, whip: {mode: "return"}, source: "H3 pans from words, then Valis speed-ramps it into a whip",
     words: "The camera pans steadily to the right on a fixed tripod, leaving {subject} and sweeping across the scene. A smooth, continuous move at an even speed."},
   crane_up: jojo("slow crane up rising high above {subject} with smooth downward tilt keeping them in the center of frame"),  // works
   fpv_drone: jojo("fast aerial drone fly-through swooping low toward {subject} and gliding past"),             // one clean fly-past; ends past them

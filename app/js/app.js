@@ -142,27 +142,27 @@ function buildCreate() {
   const sec = (key, title, tip, ...kids) => (cs[key] = section(title, {id: `c-sec-${key}`, tip}, ...kids));
   const moveTip = (m) => {
     const t = P.CAMERA_LORAS[m.id];
-    return t ? (t.lora ? `A trained move: a camera LoRA learned it (${t.source}). Used when "trained moves" is on and the LoRA is installed.` : `Shot as ${t.source}.`) : "";
+    return t ? (t.lora ? `A trained move: a camera LoRA does it. Needs "trained moves" on and the LoRA installed.` : `${t.source}.`) : "";
   };
   $("#c-sections").replaceChildren(
     sec("genre", "Genre", "A starting look. Its words fill every slot below that you leave on <b>From genre</b>.", box("c-genre", "cards")),
     sec("camera", "Camera", "Framing, focal length, camera body and lens: words in the keyframe prompt.",
       lab("Framing"), box("c-framing"), lab("Focal length"), box("c-focal"), lab("Camera body", "What the picture was shot on: grain, sharpness, colour, the era of the image itself."),
       box("c-body"), lab("Lens kit"), box("c-kit")),
-    sec("move", "Camera move", "How the camera moves during the shot (the motion prompt). ✦ = a trained move: a camera LoRA does it for real instead of from words.",
+    sec("move", "Camera move", "How the camera moves during the shot. ✦ marks a trained move: a camera LoRA does it.",
       box("c-move"),
-      check("c-trained", "trained moves (✦): use a camera LoRA when one is installed for this move", "A LoRA trained on one move does it properly: a full 360, a real push-in, a crash zoom. Off: H3 does every move from words.", true),
-      check("c-anchor", "end on the subject: pin the last frame so the move finishes on them", "For moves that leave the subject behind (crane up, FPV, arcs): the shot's last frame is made first (a Qwen Image edit of the keyframe, seen from where the camera ends) and H3 is pinned to it."),
-      check("c-trim", "trim the hold: cut the frozen end a pinned last frame leaves", "A pinned last frame makes H3 arrive early and hold still. This keeps a quarter second of the hold and cuts the rest.", true)),
+      check("c-trained", "trained moves (✦)", "Uses a move's camera LoRA when it is installed. Off: H3 does every move from words.", true),
+      check("c-anchor", "end on the subject", "Pins the shot's last frame on the subject, for moves that would leave them behind."),
+      check("c-trim", "trim the hold", "Cuts the frozen end a pinned last frame leaves, down to a quarter second.", true)),
     sec("light", "Light", "Light source and lighting setup go in the keyframe prompt. Relight changes the light of a finished keyframe.",
       lab("Light source"), box("c-light"), lab("Lighting setup"), box("c-setup"),
       lab("Relight a keyframe", "Qwen Image 2.1 edit: the same picture, the same people, new light."), h("div", {class: "row"}, h("select", {id: "c-relight"}),
         h("button", {class: "btn", id: "c-relight-go", disabled: true, type: "button"}, "Relight", h("span", {class: "sub", id: "c-relight-sub"}, "Qwen edit"))),
-      check("c-lightchange", "light change: the shot starts in the keyframe's light and ends in the relit one", "H3 runs from the keyframe to its relit version: the light shifts during the shot.")),
-    sec("look", "Era & colour", "When it's set, and its colours. The palette's words go in the keyframe; with 'grade the shot' the finished shot is graded in it too (Valis Color Palette).",
+      check("c-lightchange", "light change", "The shot starts in the keyframe's light and ends in the relit one. Relight the keyframe first.")),
+    sec("look", "Era & colour", "When it's set, and its colours: words in the keyframe, and a grade on the shot.",
       lab("Era"), box("c-era"), h("p", {class: "hint", id: "c-era-hint"}),
       lab("Colour palette", "Hover a look to see it on your keyframe. Click a colour of the chosen look to change it."), h("div", {class: "pp", id: "c-palette"}),
-      check("c-grade-shot", "grade the shot in this palette too", "The finished shot is colour-graded in the chosen look (Valis Color Palette, on the CPU, seconds). Off: only the keyframe's prompt carries the look.", true)),
+      check("c-grade-shot", "grade the shot in this palette too", "Grades the finished shot in the chosen look. Off: only the keyframe's words carry it.", true)),
     sec("perf", "Performance", "How they feel and how fast things move: words in the motion prompt.", lab("Emotion"), box("c-emotion"), lab("Tempo"), box("c-tempo")),
     sec("format", "Format", "Shape, size and length of the shot, and the seeds.",
       lab("Aspect"), h("div", {class: "seg", id: "c-aspect"}), h("div", {id: "c-res", class: "ctl"}), h("div", {id: "c-len", class: "ctl"}),
@@ -172,7 +172,7 @@ function buildCreate() {
         h("button", {class: "dice", type: "button", tip: "Roll a new keyframe seed", onclick: () => { $("#c-seed").value = Math.floor(Math.random() * 1e6); $("#c-seed").dispatchEvent(new Event("input")); }}, "⚄"),
         h("label", {class: "mini", tip: "Shot seed"}, "shot", h("input", {type: "number", id: "c-shot-seed", min: 0, value: C.shotSeed})),
         h("button", {class: "dice", type: "button", tip: "Roll a new shot seed", onclick: () => { $("#c-shot-seed").value = Math.floor(Math.random() * 1e6); $("#c-shot-seed").dispatchEvent(new Event("input")); }}, "⚄"))),
-    sec("char", "Character", "Optional. A face or character sheet, pulled into both keyframes with the Krea 2 identity edit (it replaces 'who the camera is about').",
+    sec("char", "Character", "Optional: a face or sheet, cast into both keyframes in place of who the camera is about.",
       h("div", {class: "drop", id: "c-char"}, "Drop a character sheet or face", h("br"), h("span", {class: "hint"}, "it replaces the person named in 'who the camera is about'"))),
   );
   cards($("#c-genre"), P.GENRES, (g) => { C.genre = g; cchanged(); }, "gothic");
@@ -191,16 +191,16 @@ function buildCreate() {
     source: () => $("#c-viewer > img") || PREF, renderWidth: () => CR.shotSize(C.aspect, C.short).w});
   seg($("#c-aspect"), Object.keys(CR.KEY_SIZES).map(id => ({id, name: id, tip: `Keyframes at ${CR.KEY_SIZES[id].w}×${CR.KEY_SIZES[id].h}`})), (a) => { C.aspect = a.id; resCtl?.set(C.short); cchanged(); });
   resCtl = slider($("#c-res"), {label: "Resolution (shot)", min: 320, max: 1024, step: 32, value: C.short,
-    tip: "The shot's size; keyframes are always made at full size. Lower renders much faster (time grows faster than the pixel count). H3 was trained around 768 on the short side; above that it's untested and needs more memory. For 1080p, render at 768 and use Upscale.",
+    tip: "The shot's size; keyframes are always full size. Smaller is faster. For 1080p, render at 768 and Upscale.",
     fmt: (v) => { const s = CR.shotSize(C.aspect, v); return `${s.w}×${s.h}${v === CR.NATIVE_SHORT ? " · native" : v < 512 ? " · draft" : v > CR.NATIVE_SHORT ? " · above training" : ""}`; },
     marks: [{name: "draft", value: 384, tip: "384 px: fast tests"}, {name: "512", value: 512}, {name: "640", value: 640}, {name: "native", value: 768, tip: "768 px: what H3 was trained on"}]},
     (v) => { C.short = v; cchanged(); });
   lenCtl = slider($("#c-len"), {label: "Length", min: 2, max: 15, step: 0.1, value: C.seconds,
-    tip: "Seconds of shot. H3 renders in steps of 17 frames (plus 5) at 24 fps, so the length snaps to the nearest one it can make. Time grows with length.",
+    tip: "The shot's length. It snaps to the nearest length H3 can make.",
     fmt: (v) => { const f = CR.frames(v); return `${(f / 24).toFixed(2)} s · ${f} frames`; },
     marks: [{name: "3 s", value: 3}, {name: "4.5 s", value: 107 / 24, tip: "107 frames: one standard H3 clip"}, {name: "5 s", value: 5.2}, {name: "10 s", value: 10}, {name: "15 s", value: 15}]},
     (v) => { C.seconds = v; const f = CR.frames(v);
-      $("#c-len-hint").textContent = f < CR.TRAINED_FRAMES[0] ? `Shorter than H3's training (5.2–15 s): fine for tests and quick beats; fast moves can feel rushed.` : f > CR.TRAINED_FRAMES[1] ? "Longer than H3 was trained on: untested." : "";
+      $("#c-len-hint").textContent = f < CR.TRAINED_FRAMES[0] ? `Shorter than H3's training (5.2–15 s): fast moves can feel rushed.` : f > CR.TRAINED_FRAMES[1] ? "Longer than H3 was trained on: untested." : "";
       cchanged(); });
   ["c-trained", "c-anchor", "c-trim", "c-lightchange", "c-grade-shot"].forEach(id => $(`#${id}`).addEventListener("change", () => {
     C.opts = {trained: $("#c-trained").checked, anchor: $("#c-anchor").checked, trim: $("#c-trim").checked, lightChange: $("#c-lightchange").checked};
@@ -343,8 +343,8 @@ $("#c-shoot").addEventListener("click", async () => {
 // ------------------------------------------------------------------ GENJUTSU
 const GJ = {clip: null, clipUrl: null, mode: "motion", refs: [], style: null, seconds: 5, mp: 0.4, aspect: "9:16 (Portrait Widescreen)",
             window: null};   // window: {start, duration} picked from the source check
-seg($("#g-mode"), [{id: "motion", name: "Motion transfer", tip: "New people (your reference images) doing exactly what the people in the clip do: the motion is read as SDPose skeletons"},
-  {id: "restyle", name: "Restyle", tip: "The whole clip in a new look (clay, anime, watercolour...): the motion is read as Canny edges"},
+seg($("#g-mode"), [{id: "motion", name: "Motion transfer", tip: "The people in your references, doing exactly what the people in the clip do"},
+  {id: "restyle", name: "Restyle", tip: "The whole clip in a new look: clay, anime, watercolour"},
   {id: "swap", name: "Object swap", tip: "Only the thing you name is replaced (SAM 3 finds it); everything else stays"}], (m) => {
   GJ.mode = m.id;
   $("#g-styles-wrap").style.display = m.id === "restyle" ? "" : "none";
@@ -353,7 +353,7 @@ seg($("#g-mode"), [{id: "motion", name: "Motion transfer", tip: "New people (you
 });
 chips($("#g-styles"), P.GENJUTSU_STYLES, (x) => { GJ.style = x; gjPrompt(); }, "clay", {where: "video"});
 slider($("#g-len"), {label: "Length", min: 2, max: 15, step: 0.5, value: GJ.seconds, fmt: (v) => `${v.toFixed(1)} s of the source`,
-  tip: "How much of the source to use: from its start, or from the best window the source check finds. H3 was trained on 5 to 15 s",
+  tip: "How much of the source to use, from its start or the source check's best window",
   marks: [{name: "3 s", value: 3}, {name: "5 s", value: 5}, {name: "10 s", value: 10}, {name: "15 s", value: 15}]}, (v) => { GJ.seconds = v; gjEst(); });
 seg($("#g-size"), [{id: "480", name: "480p", mp: 0.4, tip: "0.4 megapixels: the size motion transfer holds together best"}, {id: "576", name: "576p", mp: 0.5625, tip: "0.56 megapixels: sharper; a body that's hard to read warps more"}], (x) => { GJ.mp = x.mp; gjEst(); });
 seg($("#g-aspect"), [{id: "9:16 (Portrait Widescreen)", name: "9:16"}, {id: "16:9 (Widescreen)", name: "16:9"}, {id: "1:1 (Square)", name: "1:1"}], (x) => { GJ.aspect = x.id; gjEst(); });
@@ -444,10 +444,10 @@ $("#g-run").addEventListener("click", async () => {
 const E = {clip: null, clipUrl: null, mode: "transform", look: null, preset: null, lookRef: null, lookRefUrl: null, character: null, matte: null, bg: null, clipB: null, clipBUrl: null, swapAt: -1, wave: null};
 const EXAMPLES = ["the man", "his head", "her dress", "the woman", "man in the mirror", "the sky", "the car"];
 $("#e-target-ex").replaceChildren(...EXAMPLES.map(t => h("button", {class: "chip", onclick: () => { $("#e-target").value = t; refreshPrompt(); }}, t)));
-seg($("#e-mode"), [{id: "transform", name: "Transform", tip: "The thing you named becomes something else (a look below): Krea 2 makes the first and last frames, H3 re-renders only the masked region"},
-  {id: "remove", name: "Remove", tip: "The person you named is taken out: SAM 3 finds them, the H3 Person Remover LoRA paints in what was behind them, and outside the mask every pixel stays the source's. Made for people; a shadow or reflection outside the mask stays, and a person close to the camera in a crowd, or carrying something, can be painted back (H3's own pass is saved next to it to compare)"},
-  {id: "swap", name: "Swap", tip: "The whole person replaced by your character (H3 character swap), keeping the take's voice and motion"},
-  {id: "turn", name: "Turn", tip: "One take turns into another on a spoken word: the man into the vampire on 'morning'"}], (m) => {
+seg($("#e-mode"), [{id: "transform", name: "Transform", tip: "The thing you named takes on a new look; only its region is re-rendered"},
+  {id: "remove", name: "Remove", tip: "Takes the named person out and paints in what was behind them. Made for people; their shadow and reflection stay."},
+  {id: "swap", name: "Swap", tip: "The whole person becomes your character, keeping the take's voice and motion"},
+  {id: "turn", name: "Turn", tip: "One take turns into another on a spoken word"}], (m) => {
   E.mode = m.id;
   $("#e-looks-wrap").style.display = m.id === "transform" ? "" : "none";
   $("#e-swap-wrap").style.display = m.id === "swap" ? "" : "none";
@@ -750,7 +750,7 @@ $("#f-source").addEventListener("click", async () => { if (Fx.F.source === "scor
 
 
 // ------------------------------------------------------------------ EXTRAS: stereograms, loops, Stage (experimental)
-const XMODES = [{id: "stereo", name: "Stereogram", tip: "Hide a moving thing in a field of dots: a magic-eye stereogram and a motion-only kinetogram"},
+const XMODES = [{id: "stereo", name: "Stereogram", tip: "Hide a moving thing in a field of dots"},
   {id: "loop", name: "Loop", tip: "A shot that plays forever (MiniMax H3 Loop)"}, {id: "stage", name: "Stage · experimental", tip: "One still split into depth layers, played by a live 2.5D camera"}];
 let XMODE = "stereo";
 try { XMODE = localStorage.getItem("valis.extras") || "stereo"; } catch { /* */ }
@@ -779,13 +779,13 @@ const XS = {viewing: "parallel", shape: "none", look: "squares", cell: 4, noise:
   const sec = (key, title, tip, ...kids) => (xs[key] = section(title, {id: `x-sec-${key}`, tip}, ...kids));
   $("#x-sections").replaceChildren(
     sec("view", "Viewing", "How the stereogram is free-viewed, and an optional spinning solid that joins the hidden thing.",
-      lab("Free-view"), h("div", {class: "seg", id: "x-viewing"}), lab("A spinning shape too", "A solid turning in the field next to the hidden thing (Valis Depth Shape)"), h("div", {class: "chips", id: "x-shape"})),
-    sec("static", "The dots", "What the field of dots is made of (Valis Static): squares, halftone or letters; the grain of the noise; its colours.",
+      lab("Free-view"), h("div", {class: "seg", id: "x-viewing"}), lab("A spinning shape too", "A solid turning in the field next to the hidden thing"), h("div", {class: "chips", id: "x-shape"})),
+    sec("static", "The dots", "The dots' shape, grain and colours.",
       lab("Drawn as"), h("div", {class: "seg", id: "x-look"}), h("div", {id: "x-cell", class: "ctl"}),
       lab("Noise", "white = TV snow; pink and brown = soft clumps; blue and violet = fine even grain"), h("div", {class: "chips", id: "x-noise"}),
       lab("Colour"), h("div", {class: "chips", id: "x-color"}), h("select", {id: "x-palette", style: "margin-top:6px"}), h("select", {id: "x-charset", style: "margin-top:6px"}),
       h("div", {id: "x-refresh", class: "ctl"})),
-    sec("check", "Upload check", "Valis Stereo Decode reads the depth back out of the stereogram after an H.264 round trip at this bitrate: if the decoded picture is clean, it survives an upload.",
+    sec("check", "Upload check", "Reads the depth back after compression at this bitrate: a clean result survives upload.",
       h("div", {id: "x-mbps", class: "ctl"})),
   );
   const upd = () => { xs.view.setValue(`${XS.viewing}${XS.shape !== "none" ? " · " + XS.shape : ""}`); xs.static.setValue(`${XS.look} · ${XS.cell}px · ${XS.noise} · ${XS.color}`); xs.check.setValue(`${XS.mbps} Mbps`); xest(); };
@@ -796,7 +796,7 @@ const XS = {viewing: "parallel", shape: "none", look: "squares", cell: 4, noise:
   chips($("#x-noise"), ["white", "pink", "brown", "blue", "violet"].map(id => ({id, name: id})), (x) => { XS.noise = x.id; upd(); }, "white");
   chips($("#x-color"), ["black & white", "grey", "rgb", "rgb 8", "tv", "palette"].map(id => ({id, name: id})), (x) => { XS.color = x.id; $("#x-palette").style.display = x.id === "palette" ? "" : "none"; upd(); }, "black & white");
   slider($("#x-refresh"), {label: "New dots every", min: 0, max: 8, step: 1, value: 1, fmt: (v) => v === 0 ? "never (one field)" : v === 1 ? "frame (TV snow)" : `${v} frames`,
-    tip: "1 = live TV snow; more = fewer bits to upload; never = the same dots throughout (cheapest, but a moving thing shows as copies)"}, (v) => { XS.refresh = v; upd(); });
+    tip: "1: TV snow. More: smaller uploads. Never: one field, but motion shows as copies"}, (v) => { XS.refresh = v; upd(); });
   slider($("#x-mbps"), {label: "Upload bitrate", min: 1, max: 20, step: 1, value: 4, fmt: (v) => `${v} Mbps`}, (v) => { XS.mbps = v; upd(); });
   api.objectInfo("ValisStatic").then(oi => {
     const ins = oi?.ValisStatic?.input?.required || {}, opts = (k) => ins[k]?.[1]?.options || ins[k]?.[0] || [];
@@ -839,10 +839,10 @@ Bin.action({id: "stereo", label: "Extras · hide it in noise", kinds: ["clip"], 
   $("#l-sections").replaceChildren(
     sec("shape", "Length, size and engine", "How long one pass is, how big, and which H3.",
       lab("One pass"), h("div", {class: "seg", id: "l-len"}), h("div", {id: "l-res", class: "ctl"}),
-      lab("Engine", "FastH3 (8 steps) for drafts; H3 ref2va (25 steps) for the final, about 3x longer"), h("div", {class: "seg", id: "l-engine"}),
-      h("label", {class: "check", tip: "Also samples the loop turned half round and takes the sound near the join from it: H3 garbles the sound next to the wrap otherwise. About 1.8x the time."},
-        h("input", {type: "checkbox", id: "l-views", checked: true}), h("span", {}, "clean sound across the join (1.8x time)"))),
-    sec("look", "Grade", "Optional: grade the loop in a colour palette (Valis Color Palette).", h("select", {id: "l-look"})),
+      lab("Engine", "FastH3 (8 steps) for drafts; H3 ref2va (25 steps) for the final, slower"), h("div", {class: "seg", id: "l-engine"}),
+      h("label", {class: "check", tip: "A second pass takes the sound at the join, where it would otherwise garble. Slower."},
+        h("input", {type: "checkbox", id: "l-views", checked: true}), h("span", {}, "clean sound across the join"))),
+    sec("look", "Grade", "Optional: grade the loop in a colour palette.", h("select", {id: "l-look"})),
   );
   const upd = () => { const s = CR.shotSize("9:16", LP.short); ls.shape.setValue(`${((LP.length - 5) / 24).toFixed(2)} s · ${s.w}×${s.h} · ${LP.engine === "full" ? "H3 25 steps" : "FastH3"}`); ls.look.setValue(LP.look === "natural" ? "none" : PALETTES.find(p => p.id === LP.look)?.name || LP.look); lest(); };
   seg($("#l-len"), G.LOOP_LENGTHS.map(x => ({id: String(x.frames), name: `${x.s} s`, tip: `${x.frames} frames: a ${x.frames - 5}-frame loop`})), (x) => { LP.length = Number(x.id); upd(); }, "107");
@@ -1011,7 +1011,7 @@ async function setup() {
     const issues = res[n], ok = !issues.length;
     // a missing model the studio knows the home of gets a Download button (size and sha256 checked)
     const get = (i) => { const f = i.kind === "model" ? i.msg.replace(/^model file not found:\s*/, "") : null, src = f && R.MODEL_SOURCES[f];
-      return src ? h("button", {class: "btn small", type: "button", tip: `From huggingface.co/${src.repo} into models/${src.folder} (${SZ(src.size)}), checked against its sha256${src.license ? ". Read its license first" : ""}`,
+      return src ? h("button", {class: "btn small", type: "button", tip: `From huggingface.co/${src.repo} into models/${src.folder} (${SZ(src.size)}), checked against its sha256${src.license ? ". Read its licence first" : ""}`,
         onclick: (e) => fetchModel(f, src, e.currentTarget)}, `Download (${SZ(src.size)})`) : null; };
     return h("div", {class: "setrow" + (ok ? " ok" : " bad")},
       h("div", {class: "t"}, h("i", {class: "dot" + (ok ? " up" : "")}), n),
@@ -1060,7 +1060,7 @@ async function engineUI() {
   sel.value = R.refEngine();
   get.hidden = have;
   note.textContent = R.refEngine() === "fast"
-    ? "FastH3: 8 steps on the trained PDD grid, guidance 1, shift 12/3; the turbo LoRA is skipped. A preview release: compare against H3 ref2va if a render looks off."
+    ? "FastH3 is a preview release: compare with H3 ref2va if a render looks off."
     : have ? "" : "FastH3 isn't on this machine yet.";
 }
 $("#r-engine").addEventListener("change", (e) => {
@@ -1118,19 +1118,19 @@ function buildFilm() {
       lab("Shots", "Each shot is one MiniMax H3 clip, cut to whole bars of the song."), h("div", {class: "seg", id: "m-shots-n"}),
       h("div", {id: "m-len", class: "ctl"}), h("p", {class: "hint", id: "m-len-hint"}),
       h("div", {id: "m-res", class: "ctl"})),
-    sec("song", "Song", "Qwen3's song brief goes to YuE2, which writes the sheet music and plays it. Or use your own song: Valis hears its tempo and bars.",
+    sec("song", "Song", "YuE2 writes and plays a song from the brief, or use your own.",
       h("div", {class: "seg", id: "m-song-src"}),
       h("div", {class: "drop", id: "m-song-drop", style: "margin-top:8px; display:none"}, "Drop your song (wav, flac, mp3)", h("br"), h("span", {class: "hint"}, "the shots are cut on its bars, the effects fire on its beats"))),
   );
   cards($("#m-genre"), P.GENRES, (g) => { M.genre = g; fsec.genre.setValue(g.name); if (M.plan && M.plan.look == null) fdraw(); }, "gothic");
   seg($("#m-shots-n"), [4, 6, 8, 10, 12].map(n => ({id: String(n), name: String(n)})), (x) => { M.shots = Number(x.id); fshape(); }, "6");
   M.lenCtl = slider($("#m-len"), {label: "Shot length", min: 2, max: 15, step: 0.5, value: Math.round(M.len * 2) / 2,
-    tip: "How long H3 shoots each shot. The cut plays as many whole bars of the song as fit in it, so the film is a little shorter than shots × length.",
+    tip: "How long H3 shoots each shot. The cut keeps the whole bars that fit.",
     fmt: (v) => `${v.toFixed(1)} s${Math.abs(v - SHOT_SECONDS) < .3 ? " · one clip" : ""}`,
     marks: [{name: "3 s", value: 3}, {name: "one clip", value: 4.5}, {name: "8 s", value: 8}, {name: "15 s", value: 15}]},
     (v) => { M.len = Math.abs(v - 4.5) < .01 ? SHOT_SECONDS : v; fshape(); });
   M.res = slider($("#m-res"), {label: "Shot size", min: 320, max: 1024, step: 32, value: M.short,
-    tip: "The size H3 shoots every shot at (keyframes too). Smaller is much faster: try a draft at 384, then the film at native.",
+    tip: "The size H3 shoots every shot at; keyframes are always full size. Draft at 384, then shoot at native.",
     fmt: (v) => { const s = CR.shotSize("9:16", v); return `${s.w}×${s.h}${v === CR.NATIVE_SHORT ? " · native" : v < 512 ? " · draft" : ""}`; },
     marks: [{name: "draft", value: 384}, {name: "512", value: 512}, {name: "native", value: 768}]}, (v) => { M.short = v; fshape(); });
   seg($("#m-song-src"), [{id: "yue", name: "YuE2 writes it"}, {id: "own", name: "My song"}], (x) => {
@@ -1197,13 +1197,13 @@ async function fopen(path) {
 }
 // ---- the steps panel: what each step makes, how much is done, a button to run it alone
 const STEPS = [
-  {id: "refs", name: "References", tip: "A sheet for every character, every state of one and every prop: Krea 2 paints them, Qwen Image 2.1 makes a state or a prop from other sheets."},
-  {id: "sets", name: "Sets", tip: "The set, empty, from every camera setup: Krea 2 paints the first, Qwen Image 2.1 turns the empty plate for the others."},
-  {id: "frames", name: "Frames", tip: "Who is where in a setup at one moment: their sheets seated into its plate, then each change an edit of the frame before (Qwen Image 2.1)."},
-  {id: "song", name: "Song", tip: "YuE2 writes and plays the song (or Valis reads yours). Its bar sets every shot's length."},
-  {id: "keys", name: "Keyframes", tip: "Every shot's still: its frame, or a close-up box cut from it and enlarged by SeedVR2. A shot with no frame: Krea 2 paints it from its words. Look at them before anything is shot."},
+  {id: "refs", name: "References", tip: "A sheet per character, state and prop: painted by Krea 2, or a Krea 2 edit of other sheets."},
+  {id: "sets", name: "Sets", tip: "The empty set from every camera setup: painted by Krea 2, or another setup's plate turned by a Krea 2 edit."},
+  {id: "frames", name: "Frames", tip: "Who is where at one moment. Qwen Image 2.1 seats the sheets; later moments edit that seated frame."},
+  {id: "song", name: "Song", tip: "YuE2 writes and plays the song, or Valis reads yours. Its bars decide where each shot is cut."},
+  {id: "keys", name: "Keyframes", tip: "Every shot's still: its frame, a close-up cut from it, or Krea 2 from its words."},
   {id: "shots", name: "Shots", tip: "MiniMax H3 shoots each keyframe."},
-  {id: "fx", name: "Effects", tip: "SAM 3 finds each shot's subject; its effect fires on the song's lane, with its sound, in the song's key."},
+  {id: "fx", name: "Effects", tip: "Each shot's effect fires on its lane of the song, with its own sound."},
   {id: "cut", name: "Cut", tip: "Every shot trimmed to its bars and joined on the song, with a title card at the end."},
 ];
 async function fsteps() {
@@ -1268,15 +1268,15 @@ function fdraw() {
       h("span", {class: "hint"}, `${p.shots.length} shots · ${sizeOfPlan(p).w}×${sizeOfPlan(p).h}`)),
     h("input", {class: "logline", type: "text", value: p.logline || "", oninput: (e) => { p.logline = e.target.value; fsave(); }}),
     h("textarea", {class: "script", rows: p.script ? 8 : 2, placeholder: "The script: scenes and beats, in order. What the audience must see, and why each shot is there.",
-      tip: "Your script. The references, the sets, the frames and the shots below are built from it, by you", oninput: (e) => { p.script = e.target.value; fsave(); }}, p.script || ""),
-    field("look", () => lookOf(p, M.genre), (v) => { p.look = v.trim() ? v : null; }, "The film's look: every keyframe starts with these words. The genre's words until you change them; clear it to go back to them"),
-    ...(built(p) ? [] : p.cast.map((c, i) => field(c.name || `cast ${i + 1}`, () => c.look, (v) => { c.look = v; }, "How this character looks: goes into every keyframe they're in, so they stay the same from shot to shot"))),
+      tip: "Your script. You build the references, sets, frames and shots below from it", oninput: (e) => { p.script = e.target.value; fsave(); }}, p.script || ""),
+    field("look", () => lookOf(p, M.genre), (v) => { p.look = v.trim() ? v : null; }, "Every keyframe starts with these words. Clear it to go back to the genre's"),
+    ...(built(p) ? [] : p.cast.map((c, i) => field(c.name || `cast ${i + 1}`, () => c.look, (v) => { c.look = v; }, "How they look, in every keyframe they're in"))),
     field("place", () => p.place, (v) => { p.place = v; }, "The setting: goes into every keyframe"),
     p.song.file ? h("div", {class: "maprow"}, h("label", {}, "song"), h("span", {class: "hint"}, p.song.fileName || "your song"))
       : field("song", () => p.song.style, (v) => { p.song.style = v; p.music = null; }, "YuE2's brief: genre, instruments, mood, tempo"),
     p.music?.audio ? h("audio", {src: api.viewUrl(p.music.audio), controls: true, class: "songbar"}) : null].filter(Boolean));
   if (built(p)) drawBuild($("#m-build"), p, {busy: M.busy, save: fsave, redraw: fdraw, run: (id, only) => fstep(id, only), view: (f) => $("#m-viewer").replaceChildren(media(f))});
-  else $("#m-build").replaceChildren(h("div", {class: "bstart"}, h("button", {class: "btn small", type: "button", disabled: M.busy, tip: "Give this film references: a sheet per character, the set from each camera setup, and frames every shot is cut from, so the same people stay in the same places",
+  else $("#m-build").replaceChildren(h("div", {class: "bstart"}, h("button", {class: "btn small", type: "button", disabled: M.busy, tip: "So the same people stay in the same places, shot after shot",
     onclick: () => { toBuilt(p); fsave(); fdraw(); }}, "Build it from references"), h("span", {class: "hint"}, "a sheet per character, the set from every camera setup, frames each shot is cut from")));
   const thumb = (f, label, empty) => f ? h("div", {class: "fm", tip: label, onclick: () => $("#m-viewer").replaceChildren(media(f))}, media(f, {controls: false, autoplay: false}), h("span", {}, label))
     : h("div", {class: "fm empty"}, h("span", {}, empty));
@@ -1285,9 +1285,9 @@ function fdraw() {
       h("div", {class: "fh"}, h("b", {}, String(k + 1)), h("span", {class: "who"}, ((sh.frame ? sh.with : sh.who) || []).join(", ") || (sh.frame ? `frame ${sh.frame}` : "no one")),
         h("span", {class: "fbtns"},
           h("button", {class: "ibtn", type: "button", disabled: M.busy, tip: "A new keyframe for this shot (a new seed)", onclick: () => { sh.keySeed = (sh.keySeed ?? 7101 + k) + 101; fstep("keys", [k]); }}, "⟳ still"),
-          k ? h("button", {class: "ibtn", type: "button", disabled: M.busy || !p.shots[k - 1].clip, tip: "Start this shot on the last frame of the shot before it, so the scene carries straight on (the same place, the same people where they stood). Then shoot it", onclick: () => fstep("chain", [k])}, "⇠ chain") : null,
+          k ? h("button", {class: "ibtn", type: "button", disabled: M.busy || !p.shots[k - 1].clip, tip: "Start this shot on the last frame of the shot before, so the scene carries straight on", onclick: () => fstep("chain", [k])}, "⇠ chain") : null,
           h("button", {class: "ibtn", type: "button", disabled: M.busy || !sh.key, tip: "Shoot (or re-shoot) this shot with H3", onclick: () => { if (sh.clip) sh.shotSeed = (sh.shotSeed ?? 51101 + k) + 1; fstep("shots", [k]); }}, "▶ shoot"),
-          h("button", {class: "ibtn", type: "button", tip: "Work on this shot in Create (camera, light, palette, trained moves), then send the still or the shot back here", onclick: () => toCreate(k)}, "Create ↗"),
+          h("button", {class: "ibtn", type: "button", tip: "Work on this shot in Create, then send the still or the shot back", onclick: () => toCreate(k)}, "Create ↗"),
           h("button", {class: "ibtn", type: "button", disabled: M.busy || p.shots.length < 2, tip: "Remove this shot (click twice: there is no undo)", onclick: (e) => {
             const b = e.currentTarget;                    // a stray click must not take a shot out of the film: the first click only asks
             if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "remove?"; b.classList.add("warn"); setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = "×"; b.classList.remove("warn"); } }, 3000); return; }
@@ -1295,9 +1295,9 @@ function fdraw() {
       h("div", {class: "fmedia"}, thumb(sh.key, "keyframe", "no still yet"), thumb(sh.clip, sh.clipSeconds && Math.abs(sh.clipSeconds - shotLen(M.plan)) > .01 ? `shot at ${sh.clipSeconds.toFixed(1)} s: shoot again` : "shot", "not shot"), thumb(sh.fx, "with effects", "no effects")),
       ...shotStill(p, sh),
       h("input", {type: "text", value: sh.motion, placeholder: "what moves", tip: "What moves in the shot (H3)", oninput: (e) => { sh.motion = e.target.value; fsave(); }}),
-      h("label", {class: "bkind", tip: "Shoot this shot on the int8 weights with the full 30-step recipe instead of the 8-step one: about three times as long (~20 min), for a shot whose motion came apart"},
-        h("input", {type: "checkbox", checked: !!sh.full, onchange: (e) => { sh.full = e.target.checked || undefined; fsave(); }}), " full quality (int8, 30 steps)"),
-      h("label", {class: "bkind", tip: "The effects pass matches every frame's colours to the keyframe (H3 drifts the light over a shot). Untick it for a shot whose light is meant to change, like a lamp going out"},
+      h("label", {class: "bkind", tip: "The full 30-step recipe instead of 8 steps: slower, for a shot whose motion came apart"},
+        h("input", {type: "checkbox", checked: !!sh.full, onchange: (e) => { sh.full = e.target.checked || undefined; fsave(); }}), " full quality (30 steps)"),
+      h("label", {class: "bkind", tip: "Matches every frame's colours to the keyframe. Untick it for light that should change"},
         h("input", {type: "checkbox", checked: sh.holdColour !== false, onchange: (e) => { sh.holdColour = e.target.checked ? undefined : false; sh.fx = null; fsave(); fsteps(); }}), " keep the keyframe's colours"),
       h("div", {class: "frow"},
         h("input", {type: "text", value: sh.subject, placeholder: "subject", tip: "What SAM 3 tracks for the effect", oninput: (e) => { sh.subject = e.target.value; fsave(); }}),
@@ -1429,43 +1429,39 @@ function filmActions() {
 const TIPS = {
   "#queuePill": "Jobs waiting in ComfyUI's queue (from any client)", "#conn": "Whether the studio can reach this ComfyUI",
   // genjutsu
-  "#g-clip": "The performance: its motion, camera, timing and sound are kept. 4 to 15 seconds; a body that stays in frame works best",
-  "#g-refs": "Up to 8 pictures. Each is &lt;Picture N&gt; in the prompt, with the role you give it: who, where, what style, what outfit",
-  "#g-target": "Name what to replace: SAM 3 finds it in every frame", "#g-keep": "H3 re-renders the whole frame; this pastes only the new object back onto the original frames, so faces and sky don't drift",
-  "#g-edges": "On: the new object follows the old one's edges (Canny), for clothes and things. Off: it follows the body's pose (SDPose)",
+  "#g-clip": "The performance to keep. A body that stays in frame works best",
+  "#g-refs": "Who, where or what style: up to 8 pictures",
+  "#g-target": "Name what to replace: SAM 3 finds it in every frame",
   "#g-prompt": "What H3 is told. Built from your choices; edit it freely", "#g-audio": "Keep the source clip's own sound on the result",
-  "#g-turbo": "8 steps instead of 20 with the turbo LoRA (or FastH3, under Renders, Engine): faster, a little rougher",
-  "#g-check": "Reads the body in every frame (SDPose) and says where motion transfer will hold and where it will warp, before the long render",
+  "#g-check": "Reads the body in every frame and shows where motion transfer will hold or warp",
   // edit
-  "#e-clip": "The clip to change: a video you drop, or one from the bin", "#e-target": "Name what to change, as you'd say it: the man, his head, her dress, the car. SAM 3 follows it through every frame",
-  "#e-looks": "What it becomes. The look's words go to Krea 2 (the new first and last frames) and to H3",
-  "#e-ref": "A picture of what it becomes: Krea 2 makes the new first and last frames from it, and H3 sees it as a reference. Works alone or with a preset",
-  "#e-ref-words": "What it becomes, in your words. With no picture they are the look; with one, they help H3 keep it",
-  "#e-ref-paint": "Paints a clean reference picture of your words with Krea 2 (a few seconds) and uses it as the picture",
-  "#e-char-paint": "Paints a costume-test sheet of the character from your words with Krea 2 and uses it for the swap",
+  "#e-clip": "The clip to change: a video you drop, or one from the bin", "#e-target": "Name it as you'd say it. SAM 3 follows it through every frame",
+  "#e-looks": "What it becomes",
+  "#e-ref": "A picture of what it becomes. Works alone or with a preset",
+  "#e-ref-words": "The look in your words. With a picture, they help H3 keep it",
+  "#e-ref-paint": "Paints a picture of your words with Krea 2 and uses it",
+  "#e-char-paint": "Paints a character sheet from your words with Krea 2",
   "#e-look-groups": "Show one group of presets",
-  "#e-ref-swap": "Swap replaces the whole person with the character in your picture (H3 character swap) and keeps the take's motion and voice. Transform only re-renders inside the person's own outline, so antlers, wings or a bigger body get cut off",
+  "#e-ref-swap": "Swap replaces the whole person. Transform stays inside their outline, so antlers or wings get cut off",
   "#e-char": "The character who replaces the person: an upper-body or full-body sheet works best", "#e-look": "Their hair, face and clothes in words: helps H3 keep them",
-  "#e-bg": "Optional: a new place. The take is keyed onto it first, so the new scene and the new character are lit together",
-  "#e-match": "After the swap, match its tone, colour and grain to the plate (no AI)", "#e-clipb": "The second take: the one it turns into",
-  "#e-wave": "The first take's sound. Click the word where it turns; double-click for the automatic pick (after the longest pause)",
-  "#e-voice": "The voice turns on the same word: deeper, a bigger throat, a growl", "#e-prompt": "What Krea 2 is told for the new first and last frames. Built from the look; edit freely",
+  "#e-bg": "Optional: a new place. The take is keyed onto it before the swap",
+  "#e-clipb": "The second take: the one it turns into",
+  "#e-wave": "Click the word where it turns; double-click for auto",
+  "#e-prompt": "The edit's prompt, built from your choices. Edit it freely",
   "#e-rb": "Low: the look takes over (a whole new face). High: the shape is kept and only the material changes",
-  "#e-grow": "How far past the thing's edge the re-render reaches: more covers hair and loose clothes, less keeps the background untouched",
-  "#e-audio": "Keep the clip's own sound", "#e-find": "Shows what SAM 3 finds for that name, as an overlay, before the long render",
+  "#e-grow": "How far past its edge the re-render reaches: more for hair and loose clothes",
+  "#e-audio": "Keep the clip's own sound", "#e-find": "Shows what SAM 3 finds for that name, as an overlay",
   // fx
-  "#f-clip": "The clip the effects go on", "#f-clip-sel": "Or one from the studio's renders", "#f-other-sel": "A second clip, for effects that show another scene (tear, time slip, double exposure, split, era cut)",
-  "#f-subject": "SAM 3 follows this for effects that are about someone (echo, lens, vertigo, double exposure)",
-  "#f-song": "Valis hears its beats, kick, snare and hats, and how loud and bright it is: those are the lanes effects listen to",
+  "#f-clip": "The clip the effects go on", "#f-clip-sel": "Or one from the bin", "#f-other-sel": "The other scene, for effects that need one",
+  "#f-subject": "SAM 3 follows it in every frame",
+  "#f-song": "Its beats, kick, snare, hats, loudness and brightness become lanes",
   "#f-style": "YuE2's brief: genre, instruments, mood, tempo", "#f-lyrics": "Lyrics with [verse] and [chorus], or [Instrumental]", "#f-secs": "How long the song is",
-  "#f-cues": "No music: write the hits yourself. Seconds or bar:beat, a lane name, an optional strength; 'every' for grids, 'ramp' for held curves",
-  "#f-loop": "For a loop from Extras: the effects repeat with it, played once round first so trails and frost carry across the join",
-  "#f-sound": "Each effect makes its own sound on the same frame it fires, synthesised in the song's key, held under the music",
+  "#f-cues": "One cue per line: a time, a lane, an optional strength",
   "#f-beds": "Background sound under everything",
   // renders
   "#r-free": "Unload every model and free GPU and system memory", "#r-stop": "Stop the job that is running now",
-  "#r-engine": "Which model renders Edit, Genjutsu and video relight. FastH3 is the same model distilled to 8 steps", "#r-check": "Check every workflow against this ComfyUI again (after installing something)",
-  "#r-test-run": "Renders every Create combination at 384 px, about 3 s each, then the chains built on them (Edit, Genjutsu, FX, Extras, Score, Film), and checks each result: size, length, motion, colour, sound",
+  "#r-engine": "Which model renders Edit's Transform and Swap, and Genjutsu", "#r-check": "Check every workflow against this ComfyUI again (after installing something)",
+  "#r-test-run": "Renders every Create combination and the chains built on them, and checks each result",
 };
 for (const [sel, tip] of Object.entries(TIPS)) { const el = $(sel); if (el && !el.dataset.tip) el.dataset.tip = tip; }
 
