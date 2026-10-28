@@ -36,14 +36,15 @@ const flows = {
   "08_turn_on_a_word": [G.turn({a: "valis/take.mp4", b: "valis/take_swapped.mp4"}),
     "Edit · Turn: Valis scores the voice track (syllable onsets) and ignites the swapped take from the eyes on the chosen word."],
   "09_valis_score_pass": [G.valisShot({clip: "valis/shot.mp4", score: "valis/danse_v3_score.json", startBar: 52, section: "finale", layer: "valis/shot_transformed.mp4",
-    rules: [{event: "impact", effect: "halo"}, {event: "kick", effect: "ignite"}, {event: "stroke", effect: "shockwave"}], targetA: "the man"}),
-    "Score · Render with Valis: the score's event map drives the reveal, shockwaves, halo and light on one 4-bar shot."],
+    rules: [{event: "impact", effect: "halo"}, {event: "kick", effect: "ignite"}, {event: "stroke", effect: "shockwave"}], targetA: "the man",
+    music: {audio: "valis/danse_v3.mp3", start: 52 * 3 * 60 / 161.5, seconds: 4 * 3 * 60 / 161.5}}),
+    "Score · Render with Valis (the classic engine): the score's event map drives the reveal, shockwaves, halo and light on one 4-bar shot, with the song's slice under it."],
   "10_fx_library_cue_sheet": [G.fx({clip: "valis/clip.mp4", other: "valis/other_clip.mp4", subject: "the woman", source: "sheet", cueSheet: G.CUE_SHEET_EXAMPLE,
     layers: [{effect: "DoubleExposure", on: "beat"}, {effect: "TimeSlip", on: "downbeat", params: {mode: "burn", era: "daguerreotype"}}, {effect: "Projector", on: "beat"}],
-    beds: ["room"], sound: true, seconds: 4.46, prefix: "valis/fx"}),
+    beds: ["room"], sound: true, seconds: 4.46, prefix: "valis/fx", retime: true, own: true}),
     "FX · the library on a soundless cue sheet: a SAM silhouette as a window onto another clip, a time-slip burn, projector flicker, each with its own sound."],
   "11_fx_new_song_yue2": [G.fx({clip: "valis/clip.mp4", source: "write", songSpec: {style: "dark cabaret waltz, accordion, upright bass, female vocal", lyrics: "[Instrumental]", seconds: 20},
-    layers: [{effect: "Punch", on: "kick"}, {effect: "Echo", on: "melody"}], subject: "the dancer", beds: [], sound: true, seconds: 4.46, prefix: "valis/fx_song"}),
+    layers: [{effect: "Punch", on: "kick"}, {effect: "Echo", on: "melody"}], subject: "the dancer", beds: [], sound: true, seconds: 4.46, prefix: "valis/fx_song", retime: true}),
     "FX · New song: YuE2 writes the sheet music and performs it; Valis aligns the sheet to the audio and fires effects on its notes."],
   "12_swap_matched_to_plate": [G.swapFull({video: "valis/take.mp4", character: "valis/character_sheet.png", prompt: G.swapPrompt({target: "the man"}), turbo: true, match: true}),
     "Edit · Swap with the plate match: the take is checked against the sheet (report saved as text), the sheet is pre-graded, and the swapped person is matched back to the plate, no AI."],
@@ -91,10 +92,10 @@ const flows = {
     "Film · cut: each shot trimmed to whole bars of the song and joined, carrying its own slice of the song and its sounds."],
   "30_loop_h3": [G.loopShot({image: "valis/keyframe.png", prompt: G.loopPrompt({subject: "a lighthouse keeper stands at the lamp room window at night",
     action: "The great lamp turns behind him in a slow, steady circle, its beam sweeping across the sea; rain streaks the glass evenly."})}),
-    "Create · Loop: a shot that plays forever. MiniMax H3 Loop (pxl-pshr's pack) has H3 join the clip's end to its start while it samples and decodes; the keyframe is the reference. MP4 with sound, and a GIF (Valis Loop · Save)."],
+    "Extras · Loop: a shot that plays forever. MiniMax H3 Loop (pxl-pshr's pack) has H3 join the clip's end to its start while it samples and decodes; the keyframe is the reference. MP4 with sound, and a GIF (Valis Loop · Save)."],
   "31_fx_on_a_loop": [G.fx({clip: "valis/loop.mp4", source: "sheet", sound: false, loop: true,
     cueSheet: "bpm 112.94 4/4\nevery 1 beat from 0 to 20 kick\nevery 1/2 beat from 0 to 20 hat\nevery 1 bar from 0 to 20 downbeat",
-    layers: [{effect: "Shockwave", on: "downbeat"}, {effect: "Punch", on: "kick"}, {effect: "Glitch", on: "hat"}, {effect: "Projector", on: "kick"}], prefix: "valis/fx_loop"}),
+    layers: [{effect: "Shockwave", on: "downbeat"}, {effect: "Punch", on: "kick"}, {effect: "Glitch", on: "hat"}, {effect: "Projector", on: "kick"}], prefix: "valis/fx_loop", retime: true}),
     "FX · on a loop: Valis Loop · Render plays the stack once round before the loop so every effect arrives at frame 0 as it would the second time, with the cues repeating every loop (2 bars at 112.94 BPM = one 4.25 s loop). MP4 and GIF."],
   "00_stage_split_a_still": [G.stage({image: "valis/still.png", names: ["the sky", "the moon", "the temple", "the rocks", "the path", "the lamps"], name: "stage"}),
     "Stage (Extras, experimental): SAM 3 finds every named thing (\"the lamps:20\" = all of them), Depth Anything 3 orders them, Valis Stage completes each layer behind the ones in front and writes output/valis/stage/<name>/ for the studio's live 2.5D camera."],
@@ -103,7 +104,7 @@ const flows = {
   "34_score_written_by_yue2": [G.songScore({style: "southern gothic, slow slide guitar, brushed drums, 84 BPM", lyrics: "[Instrumental]", seconds: 30, title: "slide guitar", prefix: "valis/scores/yue2"}),
     "Score · YuE2 writes a song and plays it, and the score is made from its own sheet music (every note of melody, bass and chords as lanes) and its audio, in one job."],
   "35_score_shot_with_the_library": [G.fx({clip: "valis/shot.mp4", source: "score", score: "valis/my_song_score.json", audio: "valis/song.flac",
-      layers: [{effect: "Punch", on: "kick", params: {}}, {effect: "Shockwave", on: "downbeat", params: {at: "center"}}], sound: true, seconds: 4.46, start: 8.9, prefix: "valis/score_s03"}),
+      layers: [{effect: "Punch", on: "kick", params: {}}, {effect: "Shockwave", on: "downbeat", params: {at: "center"}}], sound: true, seconds: 4.46, start: 8.9, fit: true, prefix: "valis/score_s03", retime: true}),
     "Score · one shot of a score rendered with the library: the score's lanes from 8.9 s on fire Punch on the kick and Shockwave on the downbeat; the effects' sounds are mixed with the song's own slice."],
   "32_stereo_hidden_in_noise": [G.stereo({video: "valis/clip.mp4", target: "the dancers", maxObjects: 2}),
     "Stereo · hidden in noise (the Black Is Good magic-eye video, from any clip): SAM 3 + Depth Anything 3 give the dancers a rounded depth, a spinning torus joins them, Valis Stereogram hides both in TV snow you free-view (parallel); Valis Kinetogram makes the version only motion shows, in live static; Valis Static sets what the static is for both (squares, halftone or ASCII; white, pink, brown, blue or violet grain; RGB, colour-TV or a palette); Valis Stereo Decode reads the depth back after H.264 capped at 4 Mb/s and scores it."],
@@ -112,12 +113,12 @@ const flows = {
         refBoost: L.rb, lookRef: "valis/look.png", prefix: "valis/edit_own"}); })(),
     "Edit · Transform into your own look: a picture of the look (dropped, or painted from words with Krea 2) is the second subject of the Krea 2 identity edit that makes the new first and last frames, and <Picture 3> for H3, which re-renders only the tracked region between the two frames."],
   "37_fx_light": [G.fx({clip: "valis/clip.mp4", source: "sheet", cueSheet: "bpm 96 4/4\nevery 1 beat from 1:1 to 3:1 beat\nevery 1 bar from 1:1 to 3:1 downbeat",
-      layers: [G.fxLayer("Lightning", "downbeat"), G.fxLayer("Flicker:candle", "beat")], prefix: "valis/fx_light"}),
+      layers: [G.fxLayer("Lightning", "downbeat"), G.fxLayer("Flicker:candle", "beat")], prefix: "valis/fx_light", retime: true, own: true}),
     "FX · light: a strike off-screen lights the room from the left on every downbeat (flashes, afterglow, thunder) while the candlelight breathes and gutters on the beat. Both relight the picture rather than lie on it."],
 };
 
 const index = [];
-for (const [name, [graph, what]] of Object.entries(flows)) {
+for (const [name, [graph, what]] of Object.entries(flows).sort(([a], [b]) => a.localeCompare(b))) {
   fs.writeFileSync(path.join(out, `${name}.json`), JSON.stringify(graph, null, 2) + "\n");
   const loads = Object.values(graph).filter(n => /^Load(Image|Video|Audio)$|^ValisScoreLoad$/.test(n.class_type))
     .map(n => n.inputs.image || n.inputs.file || n.inputs.audio || n.inputs.score);

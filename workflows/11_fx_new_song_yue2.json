@@ -34,7 +34,7 @@
     "class_type": "SAM3_VideoTrack",
     "inputs": {
       "images": [
-        "17",
+        "17r",
         0
       ],
       "model": [
@@ -117,7 +117,7 @@
     "class_type": "ValisRender",
     "inputs": {
       "images": [
-        "17",
+        "17r",
         0
       ],
       "cues": [
@@ -339,6 +339,20 @@
         "501",
         0
       ]
+    }
+  },
+  "17r": {
+    "class_type": "ValisFrameRate",
+    "inputs": {
+      "images": [
+        "17",
+        0
+      ],
+      "source_fps": [
+        "17",
+        2
+      ],
+      "fps": 24
     }
   }
 }

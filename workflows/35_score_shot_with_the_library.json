@@ -14,6 +14,17 @@
       ]
     }
   },
+  "18": {
+    "class_type": "ImageFromBatch",
+    "inputs": {
+      "image": [
+        "18c",
+        0
+      ],
+      "batch_index": 0,
+      "length": 107
+    }
+  },
   "45": {
     "class_type": "LoadAudio",
     "inputs": {
@@ -76,7 +87,7 @@
     "class_type": "ValisRender",
     "inputs": {
       "images": [
-        "17",
+        "18",
         0
       ],
       "cues": [
@@ -136,6 +147,54 @@
       ],
       "music": [
         "46",
+        0
+      ]
+    }
+  },
+  "17r": {
+    "class_type": "ValisFrameRate",
+    "inputs": {
+      "images": [
+        "17",
+        0
+      ],
+      "source_fps": [
+        "17",
+        2
+      ],
+      "fps": 24
+    }
+  },
+  "18a": {
+    "class_type": "ImageFromBatch",
+    "inputs": {
+      "image": [
+        "17r",
+        0
+      ],
+      "batch_index": -1,
+      "length": 1
+    }
+  },
+  "18b": {
+    "class_type": "RepeatImageBatch",
+    "inputs": {
+      "image": [
+        "18a",
+        0
+      ],
+      "amount": 107
+    }
+  },
+  "18c": {
+    "class_type": "ImageBatch",
+    "inputs": {
+      "image1": [
+        "17r",
+        0
+      ],
+      "image2": [
+        "18b",
         0
       ]
     }

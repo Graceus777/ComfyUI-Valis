@@ -89,6 +89,23 @@
       ]
     }
   },
+  "45": {
+    "class_type": "LoadAudio",
+    "inputs": {
+      "audio": "valis/danse_v3.mp3"
+    }
+  },
+  "46": {
+    "class_type": "TrimAudioDuration",
+    "inputs": {
+      "audio": [
+        "45",
+        0
+      ],
+      "start_index": 57.95665634674923,
+      "duration": 4.458204334365325
+    }
+  },
   "70": {
     "class_type": "ValisScoreLoad",
     "inputs": {
@@ -136,8 +153,8 @@
       ],
       "fps": 24,
       "audio": [
-        "17",
-        1
+        "46",
+        0
       ]
     }
   },

@@ -34,7 +34,7 @@
     "class_type": "SAM3_VideoTrack",
     "inputs": {
       "images": [
-        "17",
+        "17r",
         0
       ],
       "model": [
@@ -92,7 +92,7 @@
   "50": {
     "class_type": "ValisCues",
     "inputs": {
-      "cue_sheet": "# a soundless cue sheet: seconds or bar:beat, one cue per line\nbpm 108 4/4\n1:1   beat\nevery 1 beat from 1:1 to 3:1 beat\n2:1   downbeat\n3:1   kick 1.2\nramp loud 0 0 4.4 1",
+      "cue_sheet": "# a soundless cue sheet: seconds or bar:beat, one cue per line\nbpm 108 4/4\nevery 1 beat from 1:1 to 3:1 beat\nevery 1/2 beat from 1:1 to 3:1 hat\n2:1   downbeat\n1:3   kick\n2:1   kick 1.2\n2:3   kick\nramp loud 0 0 4.4 1",
       "duration": 0,
       "offset": 0,
       "bpm_hint": 0
@@ -137,7 +137,7 @@
     "class_type": "ValisRender",
     "inputs": {
       "images": [
-        "17",
+        "17r",
         0
       ],
       "cues": [
@@ -151,7 +151,7 @@
       "fps": 24,
       "start": 0,
       "other": [
-        "41",
+        "41r",
         0
       ],
       "subject": [
@@ -197,12 +197,45 @@
       "beds": "room:.45",
       "hits": "",
       "music_gain": 0.9,
-      "duck": 0.3,
+      "duck": 0.15,
       "seed": 1,
       "stack": [
         "62",
         0
-      ]
+      ],
+      "music": [
+        "17",
+        1
+      ],
+      "own": true
+    }
+  },
+  "17r": {
+    "class_type": "ValisFrameRate",
+    "inputs": {
+      "images": [
+        "17",
+        0
+      ],
+      "source_fps": [
+        "17",
+        2
+      ],
+      "fps": 24
+    }
+  },
+  "41r": {
+    "class_type": "ValisFrameRate",
+    "inputs": {
+      "images": [
+        "41",
+        0
+      ],
+      "source_fps": [
+        "41",
+        2
+      ],
+      "fps": 24
     }
   }
 }
