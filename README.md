@@ -8,7 +8,7 @@ weights, a name-it-and-change-it editor, and the cue engine that drives all of i
 
 ![Five shots of DANSE MACABRE, made with Valis on one laptop: every reveal, shockwave and halo fired by the score](docs/hero.jpg)
 
-**[Demo video](#)** · [Install](docs/install.md) · [Your first film](docs/first-film.md) · [Guides](docs/README.md) ·
+**[Demo video](https://www.youtube.com/watch?v=k_tLc6L6Psk)** · [Install](docs/install.md) · [Your first film](docs/first-film.md) · [Guides](docs/README.md) ·
 [Workflows](workflows/) · [CLI](docs/cli.md) · built for #OpenSourceHiggsfield · open weights only · MiniMax H3 is the video model
 
 ## One line, one film
