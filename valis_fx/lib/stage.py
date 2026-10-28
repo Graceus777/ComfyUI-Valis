@@ -278,8 +278,10 @@ def _part_depths(zl, own, support, li, owner, z, zmed, is_bd, lum, core=None, re
 
 
 def build(image, nearness, masks, names, far=6.0, threshold=0.5, edge=1.5, min_area=0.0003, band=0.025, backdrop_area=0.35, paint_band=0.09, grow=0.003,
-          z_override=None, exact=True, checks=True):
+          z_override=None, exact=True, checks=True, never_backdrop=()):
     """image HxWx3 float [0,1]; nearness HxW float [0,1] (bright = near); masks: list of HxW float (one per name).
+    never_backdrop: names that are objects whatever their depth or size (the things of an erase-first set: the farthest of
+    them is the farthest layer, which would have made it a backdrop, and a backdrop there is thrown away).
 
     Returns (layers, info). layers: list far -> near of dicts {name, rgba HxWx4, z HxW, z_med, area, bbox}.
     The last plate, "the rest", is everything no name claimed."""
@@ -393,8 +395,8 @@ def build(image, nearness, masks, names, far=6.0, threshold=0.5, edge=1.5, min_a
     # reveal: we don't know its hidden shape, and a lamp must not grow into a blob behind the ground.
     band_px = band * w
     # a backdrop: the farthest layer, the rest, a sky, or something filling much of the frame (not a big person)
-    is_bd = {li: r == 0 or li == plate_i or allnames[li] == PLATE_FAR or bool(SKY.search(allnames[li]))
-             or (owner == li).mean() >= backdrop_area for r, li in enumerate(seq)}
+    is_bd = {li: allnames[li] not in never_backdrop and (r == 0 or li == plate_i or allnames[li] == PLATE_FAR or bool(SKY.search(allnames[li]))
+                                                         or (owner == li).mean() >= backdrop_area) for r, li in enumerate(seq)}
     # the depth each pixel's owner is drawn at (objects are flattened toward their median, as the studio draws them)
     zmed_a = np.array(zmed, np.float32)[owner]
     relief_a = np.array([1.0 if is_bd[i] else 0.35 for i in range(len(allnames))], np.float32)[owner]
@@ -1364,7 +1366,7 @@ def build_erased(still, near_still, masks, names, erased_img, near_erased, masks
     q = ((a * ns + b) - nb.min()) / max(1e-6, nb.max() - nb.min())
     z_things = nearness_to_z(q, far).astype(np.float32)
     lo, _ = build(still, None, [cores[n].astype(np.float32) for n in erased], erased, far=far, band=band, z_override=z_things,
-                  exact=False, checks=False, **kw)
+                  exact=False, checks=False, never_backdrop=erased, **kw)
     objs = [L for L in lo if L["name"] in erased and not L.get("backdrop")]
     # a thing keeps its own pixels, its soft edge, and its completion only behind another thing in front of it
     # (a lander behind an astronaut); behind the scenery it is erased from, the scenery is real paint

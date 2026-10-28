@@ -94,5 +94,41 @@ ok(raises(S.apply_plate, folder, json.loads(json.dumps(meta)), [x.copy() for x i
 names = S.apply_plate(folder, meta, [x.copy() for x in rgba], plate, ["front"])
 ok(names == ["front"] and os.path.exists(os.path.join(folder, "plate.png")) and meta["plate"]["painted"] == ["sky"], "stage: apply_plate still paints a stage's own layers", (names, meta.get("plate")))
 
+# erase first: a thing that was erased keeps its layer wherever it stands in the depth order and however big it is. The
+# farthest of the things came out as the farthest layer, which is a backdrop, and a backdrop there was thrown away (no layer,
+# so no parallax, and the checks still passed)
+def _erased_set(kind):
+    Hh, Ww = 144, 192
+    yy, xx = np.mgrid[0:Hh, 0:Ww]
+    still = np.zeros((Hh, Ww, 3), np.float32)
+    still[:] = [.45, .6, .85]
+    ground = yy > Hh * 0.4
+    still[ground] = [.35, .25, .15]
+    if kind == "far":                                   # a thin tower, farther than the sky
+        thing = (np.abs(xx - Ww * .5) < 6) & (yy > Hh * .12) & (yy < Hh * .38)
+        depth = 0.0
+    else:                                               # a wall filling nearly half the frame, near
+        thing = xx > Ww * .55
+        depth = .95
+    still[thing] = [.8, .8, .75]
+    gone = still.copy()
+    gone[thing] = [.45, .6, .85]
+    gone[thing & ground] = [.35, .25, .15]
+
+    def near(with_thing):
+        n = np.full((Hh, Ww), .05, np.float32)
+        n[ground] = .5 + .4 * (yy[ground] - Hh * .4) / (Hh * .6)
+        if with_thing:
+            n[thing] = depth
+        return n
+    return S.build_erased(still, near(True), [thing.astype(np.float32)], ["thing"], gone, near(False), [np.zeros((Hh, Ww), np.float32)], ["thing"], far=8.0)
+
+
+for kind in ("far", "big"):
+    lay, info = _erased_set(kind)
+    got = [L for L in lay if L["name"] == "thing"]
+    ok(len(got) == 1 and not got[0].get("backdrop") and info.get("erased") == ["thing"], f"erase first: the {kind} erased thing keeps its layer, as an object", [(L["name"], L.get("backdrop")) for L in lay])
+    ok(len(got) == 1 and float(got[0]["rgba"][..., 3].sum()) > 50, f"erase first: and it has its pixels ({kind})")
+
 print(f"{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)
