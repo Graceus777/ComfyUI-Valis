@@ -25,7 +25,8 @@ def ok(cond, name, detail=""):
         passed += 1
     else:
         failed += 1
-        print(f"FAIL {name}{': ' + str(detail) if detail else ''}")
+        d = "" if detail is None or (isinstance(detail, str) and not detail) else str(detail)   # (a numpy array has no truth value)
+        print(f"FAIL {name}{': ' + d if d else ''}")
 
 
 # a cue sheet that counts in beats without a tempo says what's missing (it was a TypeError)
@@ -225,6 +226,22 @@ for name, text, want in (("6/8 at Q:1/4=100", _abc("6/8", "1/8", "1/4=100", ["C2
 # a tempo or meter you pick still wins over the sheet's
 cb = cues_from_abc(_abc("6/8", "1/8", "1/4=100", ["C2E G2c"] * 12))
 ok(abs(make_score(cb, bpm=120)["bar_seconds"] - 3.0) < 1e-6, "score: a tempo picked in the Score tab sets the bar", make_score(cb, bpm=120)["bar_seconds"])
+
+# a score read back keeps each hit's strength (make_score writes them as "velocities"; every hit came back at 1)
+sv = Cues({"kick": [0.5, 1.0, 1.5, 2.0], "snare": [0.75, 1.75], "beat": np.arange(0.0, 4.0, .5)}, {"kick": [1.0, .4, .8, .25], "snare": [.9, .3]},
+          {}, 4.0, 24, 120)
+score = make_score(sv)
+back = Cues.from_json(score)
+ok(np.allclose(back.vel("kick"), [1.0, .4, .8, .25]) and np.allclose(back.vel("snare"), [.9, .3]), "score: hit strengths survive reading a score back",
+   (back.vel("kick"), back.vel("snare")))
+ok(len(back.vel("bar")) == len(back.times("bar")) and bool((back.vel("bar") == 1).all()), "score: a lane with no strengths (the bar lines) has hits of 1")
+ok(list(back.times("kick")) == [0.5, 1.0, 1.5, 2.0], "score: and the hit times are the same", back.times("kick"))
+shuffled = {**score, "events": {**score["events"], "kick": [1.5, 0.5, 2.0, 1.0]}, "velocities": {**score["velocities"], "kick": [.8, 1.0, .25, .4]}}
+sb2 = Cues.from_score(shuffled)
+ok(list(sb2.times("kick")) == [0.5, 1.0, 1.5, 2.0] and np.allclose(sb2.vel("kick"), [1.0, .4, .8, .25]), "score: a hand-edited score's hits stay with their strengths", sb2.vel("kick"))
+odd = Cues.from_score({**score, "velocities": {**score["velocities"], "kick": [.5]}})
+ok(len(odd.vel("kick")) == 4 and bool((odd.vel("kick") == 1).all()), "score: strengths that don't match the hits are ignored")
+ok(abs(back.env("kick", 1.0 + .02) - sv.env("kick", 1.0 + .02)) < .01 and back.env("kick", 1.02) < 1, "score: a soft hit drives an effect softly after the round trip", back.env("kick", 1.02))
 
 print(f"{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)

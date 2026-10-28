@@ -165,7 +165,15 @@ class Cues:
         meter = int(str(s.get("meter", "4/4")).split("/")[0])
         curves = {k: v for k, v in (s.get("envelopes") or {}).items()}
         lanes = {k: v for k, v in s["events"].items() if isinstance(v, list) and (not v or isinstance(v[0], (int, float)))}
-        return cls(lanes, None, curves, s.get("duration_seconds", 0), s.get("fps", 24), s.get("bpm"), meter, 0.0,
+        # each hit's strength (make_score writes them beside the events, one per hit); a lane without them, or with a
+        # different count (a hand-edited score), has hits of 1. The hits are sorted by time, and carry their strength along.
+        vals = {}
+        for k, v in list(lanes.items()):
+            w = (s.get("velocities") or {}).get(k)
+            if isinstance(w, list) and len(w) == len(v) and all(isinstance(x, (int, float)) for x in w):
+                pairs = sorted(zip(v, w), key=lambda p: p[0])
+                lanes[k], vals[k] = [p[0] for p in pairs], [p[1] for p in pairs]
+        return cls(lanes, vals, curves, s.get("duration_seconds", 0), s.get("fps", 24), s.get("bpm"), meter, 0.0,
                    {"title": s.get("title"), "source": "valis score", **({"key": s["key"]} if s.get("key") else {})})
 
     @classmethod
