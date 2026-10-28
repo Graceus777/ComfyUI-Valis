@@ -22,6 +22,13 @@ def _mono(y, sr):
     return y / (np.abs(y).max() + 1e-9)
 
 
+def frame_time(k):
+    """Seconds at the centre of analysis frame k. The STFT adds no padding at the edges (boundary=None), so frame k covers
+    samples [k * HOP, k * HOP + NFFT): its start is half a window (46 ms) before the sound it describes. A peak timed at
+    k * HOP / SR put every kick, snare, onset and beat about 1.5 frames early."""
+    return (np.asarray(k, np.float64) * HOP + NFFT / 2) / SR
+
+
 def _stft_mag(y):
     f, t, Z = ss.stft(y, SR, nperseg=NFFT, noverlap=NFFT - HOP, boundary=None, padded=True)
     return f, np.abs(Z).astype(np.float32)
@@ -116,20 +123,20 @@ def analyse(y, sr, fps=24.0, bpm_hint=None, meter=4):
         x = _flux(band); x = x / (x.max() + 1e-9)
         x = ss.lfilter([1], [1, -.3], x)
         pk = _peaks(x, fr, min_gap={"kick": .11, "snare": .09, "hat": .05}[name])
-        lanes[name] = pk * HOP / SR; vals[name] = np.clip(x[pk] / (np.percentile(x[pk], 90) + 1e-9), 0, 1.5) if len(pk) else np.zeros(0)
+        lanes[name] = frame_time(pk); vals[name] = np.clip(x[pk] / (np.percentile(x[pk], 90) + 1e-9), 0, 1.5) if len(pk) else np.zeros(0)
     pk = _peaks(env_all, fr, .06)
-    lanes["onset"] = pk * HOP / SR; vals["onset"] = env_all[pk]
+    lanes["onset"] = frame_time(pk); vals["onset"] = env_all[pk]
     bpm = _tempo(ss.lfilter([1], [1, -.5], env_all), fr, bpm_hint)
     if bpm_hint and abs(np.log2(bpm / bpm_hint)) > .4:      # octave error vs the hint: fold toward it
         bpm *= 2 ** round(np.log2(bpm_hint / bpm))
     bi = _beats(env_all, fr, bpm)
-    lanes["beat"] = bi * HOP / SR; vals["beat"] = env_all[bi]
+    lanes["beat"] = frame_time(bi); vals["beat"] = env_all[bi]
     lowx = _flux(M[(f >= 30) & (f < 160)])
     ph = int(np.argmax([lowx[bi[k::meter]].sum() for k in range(meter)])) if len(bi) >= meter else 0
-    lanes["downbeat"] = bi[ph::meter] * HOP / SR
+    lanes["downbeat"] = frame_time(bi[ph::meter])
     # curves at the video frame rate
     nfr = int(np.ceil(dur * fps)) + 1
-    tt = np.arange(M.shape[1]) * HOP / SR
+    tt = frame_time(np.arange(M.shape[1]))
     tf = np.arange(nfr) / fps
     rms = np.sqrt((M ** 2).mean(0)); db = 20 * np.log10(rms + 1e-9)
     lo_, hi_ = np.percentile(db, 5), np.percentile(db, 99)

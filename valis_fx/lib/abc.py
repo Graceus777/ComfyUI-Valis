@@ -241,7 +241,7 @@ def align(c, y, sr):
     """Find the offset and tempo scale that best line the sheet's note onsets up with the audio's onset envelope.
     YuE2 renders the plan from t = 0, but not always at the written tempo (a slow sheet can come back ~15% faster),
     so the scale is searched from 0.75 to 1.25, coarse then fine, with a gentle preference for the plan as written."""
-    from .audio import _mono, _stft_mag, _flux, SR, HOP
+    from .audio import _mono, _stft_mag, _flux, SR, HOP, frame_time
     x = _mono(y, sr)
     f, M = _stft_mag(x)
     env = _flux(M); env = env / (env.max() + 1e-9)
@@ -252,7 +252,7 @@ def align(c, y, sr):
         return 0.0, 1.0
 
     def score(scale, off):
-        idx = np.round((on * scale + off) * fr).astype(int)
+        idx = np.round((on * scale + off - float(frame_time(0))) * fr).astype(int)      # (the envelope's frame k is the sound at frame_time(k))
         idx = idx[(idx >= 0) & (idx < len(env))]
         if len(idx) < max(4, len(on) // 3):
             return -1.0

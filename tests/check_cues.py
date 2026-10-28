@@ -149,6 +149,30 @@ if late:
         ok(good, f"{name}: a hit a hair after the frame gives a finite picture")
     cv2.remap = _remap
 
+# analysis cues land on the sound, not half a window (46 ms) before it: kicks, snares, hats, onsets and beats of synthetic
+# hits at known times are within a frame (42 ms; they were 54 to 63 ms early, about 1.5 frames)
+rg = np.random.default_rng(5)
+seconds = 12.0
+yh = np.zeros(int(SR * seconds), np.float32)
+when = {"kick": np.arange(0.5, seconds - .5, .5), "snare": np.arange(0.75, seconds - .5, 1.0), "hat": np.arange(0.625, seconds - .5, .25)}
+tq = np.arange(int(.25 * SR)) / SR
+sound = {"kick": np.sin(2 * np.pi * np.cumsum(120 * np.exp(-tq * 18) + 45) / SR) * np.exp(-tq * 14),
+         "snare": rg.standard_normal(len(tq)) * np.exp(-tq * 22) * .8,
+         "hat": np.diff(rg.standard_normal(int(.06 * SR) + 1)) * np.exp(-tq[:int(.06 * SR)] * 90) * .5}
+for lane, ts in when.items():
+    for tt_ in ts:
+        i0 = int(round(tt_ * SR)); yh[i0:i0 + len(sound[lane])] += sound[lane].astype(np.float32)[:len(yh) - i0]
+ch = analyse(yh, SR)
+alltrue = np.concatenate(list(when.values()))
+for lane in ("kick", "snare", "hat", "onset", "beat"):
+    got = np.asarray(ch.lanes[lane], float)
+    truth = when.get(lane, alltrue)
+    if lane in when:
+        med = float(np.median([got[np.argmin(np.abs(got - t_))] - t_ for t_ in truth]))
+    else:                                                       # onsets and beats: against the nearest real hit
+        med = float(np.median([t_ - truth[np.argmin(np.abs(truth - t_))] for t_ in got]))
+    ok(abs(med) < .025, f"audio: {lane} cues land on the sound (median {med * 1000:.0f} ms)", med)
+
 # the classic Score engine (Valis FX) and Valis Loop Cues start a shot at its score bar's own time: bar 0 is the first
 # downbeat (0.42 s in this song), not t = 0, and the song under the shot starts at the shot's start_frame
 from valis_fx.lib.score_make import bar_start  # noqa: E402
