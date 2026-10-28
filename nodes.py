@@ -114,8 +114,8 @@ class ValisFX:
         except Exception:
             remap = {}
         engine.configure(score, remap)
-        bar = float(score["bar_seconds"])
-        t0 = start_bar * bar
+        from .valis_fx.lib.score_make import bar_start
+        t0 = bar_start(score, start_bar)             # the score's own bar line: bar 0 is the first downbeat, not t = 0
         if mode == "auto":
             sec = next((s for s in score.get("sections", []) if s["start"] <= t0 + 1e-6 < s["end"]), None)
             name = (sec or {}).get("name", "waltz").lower()

@@ -17,6 +17,20 @@ def _r(xs, n=4):
     return [round(float(x), n) for x in xs]
 
 
+def bar_start(score, k):
+    """Song time (s) at which bar k (0-based) of a score starts. Bar 0 is the song's first downbeat, which is not always
+    t = 0, and detected bars drift from a perfect grid, so this is the score's own bar line (events.bar), on the frame grid
+    the Score tab cuts the song at (a shot's start_frame). A score without bar lines counts bar_seconds from 0."""
+    k = int(k)
+    bars = (score.get("events") or {}).get("bar") or []
+    per = float(score.get("bar_seconds") or 1.5)
+    fps = float(score.get("fps") or FPS)
+    if not len(bars):
+        return k * per
+    t = float(bars[k]) if 0 <= k < len(bars) else float(bars[-1]) + (k - len(bars) + 1) * per
+    return max(0.0, round(t * fps) / fps)
+
+
 def make_score(c, title="untitled", shot_seconds=SHOT_SECONDS, section_bars=8, source="", bpm=0.0, meter=0):
     """bpm / meter: your own (0 = as the source says or the analysis hears). Music analysis assumes 4/4; a waltz needs
     meter 3."""

@@ -150,7 +150,7 @@ class Flicker:
             a, _ = ctx.since(self.on) if self.on else (9.0, 0)
             if a > .45:
                 return 0.0
-            r = np.random.default_rng(self.seed + int(ctx.t * 1000) // 40)
+            r = np.random.default_rng((self.seed + int(ctx.t * 1000) // 40) % 2 ** 32)      # (t is negative during a loop's warm-up)
             if self.style == "tube":                # off-on-off-on in the first 0.3 s, a random stutter
                 off = (a < .05) or (.09 < a < .13) or (.2 < a < .23 and r.random() < .7)
                 return st["hit"] if off else st["hit"] * .15 * r.random()

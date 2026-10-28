@@ -340,7 +340,7 @@ class Datamosh:
         self._m = warp_pull(self._m, ctx.flow, self.push)
         strength = math.exp(-a_ / self.tau)
         H, W = ctx.H, ctx.W
-        r = np.random.default_rng(self.seed + j * 31 + ctx.i)
+        r = np.random.default_rng((self.seed + j * 31 + ctx.i) % 2 ** 32)
         gb = r.random((H // self.block + 1, W // self.block + 1)).astype(np.float32)
         keep = cv2.resize((gb < strength * .95).astype(np.float32), (W, H), interpolation=cv2.INTER_NEAREST)[:H, :W]
         out = img * (1 - keep[..., None]) + self._m * keep[..., None]

@@ -198,7 +198,7 @@ def draw_lightning(t, strikes, rr):
         if age < 0 or age > .32:
             continue
         flick = [1.0, .3, .9, .15, .6, .1, .35, .05][min(int(age * FPS), 7)]
-        r = np.random.default_rng(int(te * 1000) + int(age * FPS) // 3)
+        r = np.random.default_rng((int(te * 1000) + int(age * FPS) // 3) % 2 ** 32)       # (te is negative for a loop's warm-up)
         for tg in targets:
             pts = bolt(p0, tg, .28, 7, r)
             cv2.polylines(canvas, [pts.astype(np.int32)], False, flick, 3, cv2.LINE_AA)

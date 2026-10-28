@@ -208,7 +208,8 @@ class ValisLoopCues:
             cu = cues.shifted(-start) if start else cues
             c = L.LoopCues(cu, period, fps, at=at, reach=(-30.0, at + period + 30.0))
         if score is not None:
-            t0 = start_bar * float(score.get("bar_seconds", 1.5))
+            from .valis_fx.lib.score_make import bar_start
+            t0 = bar_start(score, start_bar)          # the score's own bar line (bar 0 is the first downbeat, not t = 0)
             s = L.loop_score(score, t0, period, at=at)
         return (c, s)
 

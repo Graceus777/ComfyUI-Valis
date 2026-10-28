@@ -54,7 +54,7 @@ def warp_pull(img, flow, s=1.0):
 
 def value_noise(h, w, scale, seed=0, octaves=4):
     """Smooth fractal noise in 0..1 (cheap: random grids upsampled with cubic interpolation)."""
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng(int(seed) % 2 ** 32)       # (a loop's warm-up runs at negative times: a seed made from one can be negative)
     out = np.zeros((h, w), np.float32); amp, tot = 1.0, 0.0
     for o in range(octaves):
         s = max(2, int(scale / (2 ** o)))

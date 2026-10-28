@@ -149,5 +149,38 @@ if late:
         ok(good, f"{name}: a hit a hair after the frame gives a finite picture")
     cv2.remap = _remap
 
+# the classic Score engine (Valis FX) and Valis Loop Cues start a shot at its score bar's own time: bar 0 is the first
+# downbeat (0.42 s in this song), not t = 0, and the song under the shot starts at the shot's start_frame
+from valis_fx.lib.score_make import bar_start  # noqa: E402
+down = np.arange(0.42, 20.0, 2.0)                                # 120 BPM, 4/4, the first downbeat 0.42 s in
+offbeat = Cues({"beat": np.arange(0.42, 20.0, .5), "downbeat": down}, None, {}, 20.0, 24, 120)
+sc = make_score(offbeat)
+ok(sc["events"]["bar"][0] > .4 and bar_start(sc, 0) > .4, "score: bar 0 is the first downbeat", (sc["events"]["bar"][:2], bar_start(sc, 0)))
+ok(all(abs(bar_start(sc, s["start_bar"]) - s["start_frame"] / sc["fps"]) < 1e-9 for s in sc["shots"]),
+   "score: a shot starts where its bar does (Valis FX and Valis Loop Cues use that, not bar * bar_seconds)",
+   [(s["start_bar"], bar_start(sc, s["start_bar"]), s["start_frame"] / sc["fps"]) for s in sc["shots"][:3]])
+ok(abs(bar_start(sc, 3) - 3 * sc["bar_seconds"]) > .4, "score: counting bar_seconds from 0 is what was wrong")
+ok(bar_start({"bar_seconds": 1.5}, 4) == 6.0, "score: a score without bar lines counts bar_seconds from 0")
+
+# a loop's warm-up runs at negative times (Valis Loop Render's default is one whole loop): effects that seed from the
+# time, or a hit's, must not hand numpy a negative seed ("expected non-negative integer")
+from valis_fx.lib.loop import render_loop  # noqa: E402
+from valis_fx.forge import draw_lightning  # noqa: E402
+n_loop = 64                                                  # (a warm-up of 64 frames reaches -2.7 s: int(t * 6) + seed is negative)
+lp = np.random.default_rng(3).random((n_loop, 24, 24, 3)).astype(np.float32)
+lcues = Cues({"beat": np.arange(0.0, 8.0, 1 / 3), "kick": np.arange(0.0, 8.0, 1 / 3)}, None, {}, 8.0, 24, 180)
+for stack, name in (([("Flicker", {"on": "kick", "style": "tube"})], "Flicker tube"), ([("Flicker", {"on": "kick", "style": "bulb"})], "Flicker bulb"),
+                    ([("TimeSlip", {"on": "kick", "mode": "bleed"})], "TimeSlip bleed"), ([("Datamosh", {"on": "kick"})], "Datamosh")):
+    try:
+        out, _ = render_loop(lp, lcues, stack, fps=24.0, other=lp[::-1].copy(), seal=0)
+        ok(out.shape == lp.shape and bool(np.isfinite(out).all()), f"loop: {name} runs through the default warm-up")
+    except ValueError as e:
+        ok(False, f"loop: {name} runs through the default warm-up", e)
+try:
+    draw_lightning(0.1, [(-0.5, (10, 10), [(20, 20)]), (-0.083, (10, 10), [(20, 20)])], None)
+    ok(True, "loop: lightning from a negative event time")
+except ValueError as e:
+    ok(False, "loop: lightning from a negative event time", e)
+
 print(f"{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)
