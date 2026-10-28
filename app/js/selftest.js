@@ -215,8 +215,15 @@ async function sources(ctx) {
   }
   for (const [k, v] of Object.entries(ctx.shots)) src[k] = api.fileRef(v);
   for (const [k, v] of Object.entries(ctx.keys)) src[`k:${k}`] = api.fileRef(v);
-  src.song = "danse_score.wav";             // a song in ComfyUI/input (the DANSE MACABRE score's audio)
   return (ctx.src = src);
+}
+// the song x14 and x18 play on: the DANSE MACABRE score's audio (3/4 at 161.5 BPM), which the pack ships for Score's
+// Example. It goes up to ComfyUI's input folder when a test first needs it, so the test runs on a fresh install.
+export const SONG = "/valis/app/assets/demo/danse_v3.mp3";
+export async function songRef() {
+  const r = await fetch(SONG).catch(() => null);
+  if (!r?.ok) throw new Error(`the test song is missing from the pack (${SONG})`);
+  return api.upload(new File([await r.blob()], "valis_danse_v3.mp3", {type: "audio/mpeg"}));
 }
 async function checkOut(outs, exp, log) {
   const vids = outs.filter(isVid), imgs = outs.filter(isImg);
@@ -240,8 +247,9 @@ async function checkOut(outs, exp, log) {
 }
 async function runChain(t, ctx, log) {
   const src = await sources(ctx), pre = `valis/selftest/${ctx.run}_${t.id}`;
-  const miss = t.needs.filter(n => !src[n]);
+  const miss = t.needs.filter(n => n !== "song" && !src[n]);
   if (miss.length) throw new Error(`needs ${miss.join(", ")} first (run the Create combinations once)`);
+  if (t.needs.includes("song") && !src.song) src.song = await songRef();
   if (t.fn === "score") {
     const sc = await render(G.scoreMake({audio: src.song, title: "selftest", meter: 3, bpm: 161.5, prefix: `${pre}_score`}), `${t.id} make the score`);
     const jf = sc.outputs.find(o => /\.json$/i.test(o.filename));

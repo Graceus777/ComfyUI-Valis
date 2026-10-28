@@ -8,7 +8,7 @@ import {lookParams, gradeImageData} from "./grade.js";
 import {palettePicker} from "./palettepick.js";
 import {ScoreView} from "./score.js";
 import {FxView} from "./fx.js";
-import {checkSetup} from "./check.js";
+import {checkSetup, OPTIONAL} from "./check.js";
 import {planFilm, makeFilm, makeSong, frameShots, shootShots, chainShot, effectShots, cutFilm, SHOT_SECONDS, shotLen, songSeconds, songShort, cutOf, lookOf,
         makeRefs, makeSetups, makeFrames, byName, keyStale, sheetPrompt} from "./film.js";
 import {drawBuild, cropEditor} from "./filmbuild.js";
@@ -1006,20 +1006,21 @@ async function setup() {
   pill.className = "pill link"; pill.textContent = "checking setup";
   let res;
   try { res = await checkSetup(); } catch (e) { pill.textContent = "setup ?"; return; }
-  const names = Object.keys(res).sort((a, b) => !res[a].length - !res[b].length), bad = names.filter(n => res[n].length), good = names.filter(n => !res[n].length);
+  const names = Object.keys(res).sort((a, b) => !res[a].length - !res[b].length), good = names.filter(n => !res[n].length);
+  const bad = names.filter(n => res[n].length && !OPTIONAL.has(n)), opt = names.filter(n => res[n].length && OPTIONAL.has(n));
   const row = (n) => {
     const issues = res[n], ok = !issues.length;
     // a missing model the studio knows the home of gets a Download button (size and sha256 checked)
     const get = (i) => { const f = i.kind === "model" ? i.msg.replace(/^model file not found:\s*/, "") : null, src = f && R.MODEL_SOURCES[f];
       return src ? h("button", {class: "btn small", type: "button", tip: `From huggingface.co/${src.repo} into models/${src.folder} (${SZ(src.size)}), checked against its sha256${src.license ? ". Read its licence first" : ""}`,
         onclick: (e) => fetchModel(f, src, e.currentTarget)}, `Download (${SZ(src.size)})`) : null; };
-    return h("div", {class: "setrow" + (ok ? " ok" : " bad")},
-      h("div", {class: "t"}, h("i", {class: "dot" + (ok ? " up" : "")}), n),
+    return h("div", {class: "setrow" + (ok ? " ok" : OPTIONAL.has(n) ? " opt" : " bad")},
+      h("div", {class: "t"}, h("i", {class: "dot" + (ok ? " up" : "")}), n, !ok && OPTIONAL.has(n) ? h("span", {class: "hint"}, " · optional") : null),
       ...issues.slice(0, 5).map(i => h("div", {class: "s"}, `${i.node}: ${i.msg}`, get(i))),
       issues.length > 5 ? h("div", {class: "s"}, `and ${issues.length - 5} more`) : null);
   };
   // what needs work stays open; what is ready folds into one line
-  $("#r-setup").replaceChildren(...bad.map(row), good.length ? h("details", {class: "setok"},
+  $("#r-setup").replaceChildren(...bad.map(row), ...opt.map(row), good.length ? h("details", {class: "setok"},
     h("summary", {}, h("i", {class: "dot up"}), bad.length ? `${good.length} more ready` : `All ${good.length} workflows ready`), ...good.map(row)) : "");
   pill.className = "pill link " + (bad.length ? "bad" : "ok");
   pill.textContent = bad.length ? `setup: ${bad.length} to fix` : "setup ready";

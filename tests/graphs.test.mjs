@@ -354,5 +354,72 @@ ok(shotSeconds(bar.seconds).bars === 4, "film · whole bars in a clip (4 bars of
   { const c = shotSeconds(60 / 100 * 4); ok(c.bars === 1 && Math.abs(c.seconds - 2.4) < .01, "film · two bars at 100 BPM don't: one bar", JSON.stringify(c)); }
 }
 
+// ---- Setup covers every graph the studio sends (each is validated with the rest of features() at the top), and the
+// end-to-end test brings its own song
+{
+  const F = Object.entries(features()), nodes = (g) => Object.values(g);
+  const has = (name, test) => ok(F.some(([n, g]) => n.startsWith(name) && test(nodes(g))), `Setup · ${name}`);
+  const cls = (...c) => (ns) => c.every(x => ns.some(n => n.class_type === x));
+  const unet = (file) => (ns) => ns.some(n => n.class_type === "UNETLoader" && n.inputs.unet_name === file);
+  has("Extras · Stereogram", cls("ValisStereogram", "ValisKinetogram", "ValisStereoDecode", "DA3Inference", "SAM3_VideoTrack"));
+  has("Extras · Loop, draft", (ns) => cls("MiniMaxH3Loop", "MiniMaxH3LoopDecode", "ValisLoopSave")(ns) && unet(G.MODELS.h3refFast)(ns));
+  has("Extras · Loop, final", (ns) => cls("MiniMaxH3Loop", "MiniMaxH3LoopDecode")(ns) && unet(G.MODELS.h3ref)(ns));
+  has("Extras · Stage: split", cls("ValisStageErased", "ValisErase", "SAM3_Detect", "DA3Inference", "Krea2EditModelPatch"));
+  has("Extras · Stage from words", cls("ValisStageErased", "SeedVR2VideoUpscaler", "KSampler"));
+  has("Extras · Stage, paint past the frame (Krea", cls("Krea2AnyPaintEncode", "ValisStageSurround", "ValisStageDome"));
+  has("Extras · Stage, paint past the frame (Qwen", cls("TextEncodeQwenImage21", "ValisStageSurround", "ValisStageDome", "ValisStagePlate"));
+  has("Score · from a song", cls("LoadAudio", "ValisCues", "ValisScoreMake"));
+  has("Score · YuE2 writes it (instrumental)", cls("YuE2GenerateMusic", "PlenioScoreTools", "ValisScoreMake"));
+  has("Score · YuE2 writes it (with lyrics)", (ns) => cls("YuE2GenerateABC", "ValisScoreMake")(ns) && !cls("PlenioScoreTools")(ns));
+  has("Film · song", cls("YuE2GenerateMusic", "SaveAudio"));
+  has("Film · a character's sheet", (ns) => ns.some(n => n.class_type === "EmptySD3LatentImage" && n.inputs.width === 832));
+  has("Film · a sheet's state", cls("Krea2EditModelPatch", "ImageStitch"));
+  has("Film · a set from another side", (ns) => cls("Krea2EditModelPatch")(ns) && !ns.some(n => "source_image_b" in n.inputs));
+  has("Film · a frame", cls("UnetLoaderGGUF", "TextEncodeQwenImage21"));
+  has("Film · a close-up", cls("ImageCrop", "SeedVR2VideoUpscaler"));
+  has("Film · a shot at full quality", (ns) => unet(G.MODELS.h3i2vFull)(ns) && !cls("MiniMaxH3PDDAccApply")(ns));
+  // a row says which pack it misses, and only the rows that use it do
+  const without = (re) => Object.fromEntries(Object.entries(info || {}).filter(([k]) => !re.test(k)));
+  const missing = (re, pack) => F.filter(([, g]) => checkGraph(g, without(re)).some(i => i.kind === "node" && i.msg.includes(pack))).map(([n]) => n).sort().join(" | ");
+  if (info) {
+    ok(missing(/^MiniMaxH3Loop/, "ComfyUI-MiniMaxH3-Loop") === "Extras · Loop, draft (FastH3) | Extras · Loop, final (H3 25 steps)", "Setup · no Loop pack: the two Loop rows say so", missing(/^MiniMaxH3Loop/, "Loop"));
+    ok(missing(/^Krea2AnyPaint/, "krea2-anypaint") === "Extras · Stage, paint past the frame (Krea 2 AnyPaint)", "Setup · no AnyPaint: only its dome says so (the Qwen dome stays ready)");
+    ok(/Film · a close-up/.test(missing(/^SeedVR2/, "SeedVR2")) && /Film · a frame/.test(missing(/^UnetLoaderGGUF/, "ComfyUI-GGUF")) && /Score · YuE2 writes it \(instrumental\)/.test(missing(/^Plenio/, "Plenio")),
+       "Setup · Film and Score rows name the packs they miss");
+  }
+  // x14 and x18: the song is the pack's own (the Score tab's Example), uploaded by the test, not a file in ComfyUI/input
+  const repo = path.join(here, "..");
+  ok(!/danse_score\.wav/.test(fs.readFileSync(path.join(repo, "app", "js", "selftest.js"), "utf8")), "End-to-end test · no song that nothing installs");
+  const up = [], stub = async (url, init = {}) => {
+    const req = url instanceof Request ? url : null, u = new URL(req ? req.url : String(url), "http://127.0.0.1:8188"), method = (req ? req.method : init.method) || "GET";
+    if (u.pathname.startsWith("/valis/app/")) {           // __init__.py: /valis/app/<path> is app/<path>
+      const f = path.join(repo, "app", u.pathname.slice("/valis/app/".length));
+      return fs.existsSync(f) ? new Response(fs.readFileSync(f)) : new Response("not found", {status: 404});
+    }
+    if (/\/api\/v2\/assets\/by-hash\//.test(u.pathname)) return new Response(null, {status: 404});
+    if (method === "POST" && u.pathname === "/api/v2/assets") {
+      const form = req ? await req.formData() : init.body, f = form.get("file");
+      up.push({name: f?.name, size: f?.size, type: form.get("content_type")});
+      return new Response(JSON.stringify({id: "song", hash: "blake3:0", created_new: true}), {status: 201, headers: {"Content-Type": "application/json"}});
+    }
+    return new Response("not found", {status: 404});
+  };
+  const fetch0 = globalThis.fetch;
+  globalThis.location ??= {search: "", origin: "http://127.0.0.1:8188", protocol: "http:", host: "127.0.0.1:8188"};
+  globalThis.fetch = stub;
+  try {
+    const T = await import("../app/js/selftest.js");
+    const song = await T.songRef();
+    const mp3 = fs.statSync(path.join(repo, "app", T.SONG.replace(/^\/valis\/app\//, "")));
+    ok(up.length === 1 && up[0].size === mp3.size && up[0].type === "audio/mpeg" && song.filePath === up[0].name, "End-to-end test · the pack's DANSE song goes up as an input", JSON.stringify(up));
+    const x14 = T.TESTS.find(t => t.id === "x14"), x18 = T.TESTS.find(t => t.id === "x18");
+    const g = x14.fn({c03: "c.mp4", song, pre: "valis/selftest/x", run: "x"});
+    ok(x14.needs.includes("song") && x18.needs.includes("song") && Object.values(g).some(n => n.class_type === "LoadAudio" && n.inputs.audio === song), "End-to-end test · x14 plays the uploaded song");
+    let err = ""; globalThis.fetch = async () => new Response("", {status: 404});
+    try { await T.songRef(); } catch (e) { err = e.message; }
+    ok(/missing from the pack/.test(err), "End-to-end test · a pack without its song says so", err);
+  } catch (e) { ok(false, "End-to-end test · the song", e.message); } finally { globalThis.fetch = fetch0; }
+}
+
 console.log(`${pass} passed, ${fail} failed${info ? "" : " (no node list: tests/fixtures/object_info.json missing, so graphs weren't checked against ComfyUI)"}`);
 if (fail) { console.log(failures.slice(0, 60).join("\n")); if (failures.length > 60) console.log(`… and ${failures.length - 60} more`); process.exit(1); }

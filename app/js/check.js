@@ -22,12 +22,24 @@ const packFor = (c) => (PACKS.find(([re]) => re.test(c)) || [, "a custom node pa
 const USER_FILES = new Set(["LoadImage.image", "LoadVideo.file", "LoadAudio.audio", "ValisScoreLoad.score"]);
 const norm = (v) => String(v).replace(/\\/g, "/");
 
+// rows for things a film can do without: missing them doesn't count against "setup ready"
+export const OPTIONAL = new Set(["Film · a shot at full quality (H3 int8, 30 steps)"]);
+
 export function features() {
   const e = {video: "x.mp4", target: "x", anchorPrompt: "x", desc: "x"};
+  // as the callers send them: film.js SHEET_SIZE; stageview.js caps() on this pack and SHARP_TO
+  const sheet = {w: 832, h: 1216}, names = ["the sky", "the man"], caps = {retry: true, prompt: true}, sharpen = 1440;
   return {
     "Film · plan (Qwen3 text generation)": G.filmPlan({idea: "x", shots: 2}),
     "Film · keyframes": G.filmKeyframes({prompts: ["x", "y"]}),
     "Film · cut": G.filmCut({shots: [{file: "a.mp4", seconds: 4}, {file: "b.mp4", seconds: 4}]}),
+    "Film · song (YuE2)": G.song({style: "x", lyrics: "[Instrumental]", seconds: 31}).graph,
+    "Film · a character's sheet": G.keyframes({prompt: "x", width: sheet.w, height: sheet.h, seeds: [8301]}),
+    "Film · a sheet's state or a prop (Krea 2 identity edit)": G.filmFrame({refs: [{image: "a.png"}, {image: "b.png"}, {image: "c.png"}], prompt: "x", from: sheet, size: sheet}),
+    "Film · a set from another side (Krea 2 identity edit)": G.filmFrame({refs: [{image: "plate.png"}], prompt: "x"}),
+    "Film · a frame: the cast seated in the set (Qwen Image 2.1)": G.filmSeat({plate: "plate.png", people: [{image: "a.png"}, {image: "b.png"}], prompt: "x"}),
+    "Film · a close-up cut from a frame (SeedVR2)": G.filmCrop({frame: "frame.png", crop: {x: .1, y: .3, w: .5, h: .5}}),
+    "Film · a shot at full quality (H3 int8, 30 steps)": G.shot({image: "a.png", motion: "x", full: true}),
     "Create · Frame it": G.keyframes({prompt: "x"}),
     "Create · cast a character": G.castCharacter({keyframe: "a.png", character: "b.png", prompt: "x"}),
     "Create · Shoot it": G.shot({image: "a.png", motion: "x"}),
@@ -61,6 +73,16 @@ export function features() {
     "Finish · Upscale (SeedVR2)": G.upscale({video: "x.mp4"}),
     "Score · Render with Valis": G.valisShot({clip: "x.mp4", score: "s.json", startBar: 0, section: "waltz", layer: "l.mp4",
       rules: [{event: "pah", effect: "crowd"}], targetA: "a", targetB: "b"}),
+    "Score · from a song": G.scoreMake({audio: "song.flac", title: "x"}),
+    "Score · YuE2 writes it (instrumental)": G.songScore({style: "x", lyrics: "[Instrumental]"}),
+    "Score · YuE2 writes it (with lyrics)": G.songScore({style: "x", lyrics: "x"}),
+    "Extras · Stereogram": G.stereo({video: "x.mp4"}),
+    "Extras · Loop, draft (FastH3)": G.loopShot({image: "a.png", prompt: G.loopPrompt({subject: "x", action: "x"}), engine: "fast"}),
+    "Extras · Loop, final (H3 25 steps)": G.loopShot({image: "a.png", prompt: G.loopPrompt({subject: "x", action: "x"}), engine: "full"}),
+    "Extras · Stage: split a still": G.stage({image: "a.png", names, erase: true, caps}),
+    "Extras · Stage from words (Krea 2, SeedVR2)": G.stage({prompt: "x", names, sharpen, erase: true, caps}),
+    "Extras · Stage, paint past the frame (Krea 2 AnyPaint)": G.stagePaint({stage: "valis/stage/x", engine: "krea", plate: false, prompt: "x"}),
+    "Extras · Stage, paint past the frame (Qwen Image 2.1)": G.stagePaint({stage: "valis/stage/x", engine: "qwen"}),
   };
 }
 
