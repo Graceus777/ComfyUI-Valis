@@ -133,7 +133,7 @@ checks that Comfy API v2 answers on this server:
 | Finish | Upscale |
 
 **Film · a shot at full quality (H3 int8, 30 steps)** is optional. A film is shot without it, so when its model file
-is missing the row reads *optional*, is listed after the features to fix, and doesn't count against `setup ready`.
+is missing the row reads *optional* with a grey dot, is listed last, and doesn't count against `setup ready`.
 
 Each feature lists what's wrong with it:
 
@@ -144,8 +144,8 @@ Each feature lists what's wrong with it:
 | an input doesn't match | a required input not set, an input the node no longer has, a menu value that isn't an option, or a link to the wrong type |
 | the job API is missing | `comfy-api-proxy: not installed: run python -m pip install comfy-api-proxy in ComfyUI's Python, then restart ComfyUI` |
 
-Features with problems come first, with up to five issues each, then an optional one that misses something. The ready
-ones fold into one line (`N more ready`, or `All N workflows ready`). Press **Check again** after installing
+Features with problems come first, with up to five issues each. The ready ones fold into one line (`N more ready`, or
+`All N workflows ready`), and an optional one that misses something comes last. Press **Check again** after installing
 something. Install steps for every pack and model are in [install](../install.md).
 
 A few steps the studio adds on top of these graphs aren't checked on their own: FX on a looping clip, the retime to

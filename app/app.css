@@ -181,7 +181,7 @@ details.prompt pre { margin: 0; padding: 0 12px 12px; white-space: pre-wrap; col
 .fxcard .add { position: absolute; top: 7px; right: 7px; background: rgba(0,0,0,.6); border: 1px solid var(--line2); border-radius: 999px; padding: 2px 9px; font-size: 11px; }
 .fxcard:hover { border-color: var(--line2); }
 .fxcard.on { border-color: var(--accent2); box-shadow: 0 0 0 2px var(--accent2) inset; }
-.layer { display: grid; grid-template-columns: 1fr 86px 22px; gap: 6px; align-items: center; }
+.layer { display: grid; grid-template-columns: 1fr 104px 22px; gap: 6px; align-items: center; }
 .layer b { font-size: 12.5px; }
 .layer input { padding: 6px 8px; font-size: 12px; }
 .layer .x { background: none; border: 0; color: var(--dim); cursor: pointer; font-size: 15px; }
@@ -803,3 +803,5 @@ details.prompt summary { color: var(--dim); font-size: 10.5px; letter-spacing: .
 /* FX: beds while the clip loops (it keeps its own sound) */
 #f-beds.off { opacity: .4; pointer-events: none; }
 .setrow.opt .t .hint { margin: 0 0 0 4px; }
+.setrow.opt .dot { background: var(--dim); box-shadow: none; }   /* an optional piece not installed is not a fault */
+.setok + .setrow.opt { margin-top: 8px; }

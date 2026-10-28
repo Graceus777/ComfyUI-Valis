@@ -151,10 +151,14 @@ export class FxView {
       layers: F.layers.map(l => ({...G.fxLayer(l.key || l.effect, l.on), by: l.by})), beds: [...F.beds], sound: $("#f-sound").checked,
       seconds: F.seconds || 107 / 24, prefix: `valis/fx_${Date.now().toString(36)}`, loop: $("#f-loop").checked, retime: await api.hasNode("ValisFrameRate"),
       own: await api.hasInput("ValisSoundDesign", "own")});
+    // the viewer sits under the library: bring it up so the run and the render are seen
+    $("#f-viewer").scrollIntoView({behavior: "smooth", block: "center"});
     run(g, `FX · ${F.layers.map(l => l.name).join(" + ")}`, $("#f-viewer"), {onDone: (j) => {
       const v = j.outputs.find(f => VID.test(f.filename));
-      if (v) $("#f-viewer").replaceChildren(h("video", {src: api.viewUrl(v), controls: true, autoplay: true, loop: true, playsinline: true}));
-      if (v) $("#f-viewer").append(h("div", {class: "finishrow"}));
+      if (!v) return;
+      const vid = h("video", {src: api.viewUrl(v), controls: true, autoplay: true, loop: true, playsinline: true});
+      vid.addEventListener("loadedmetadata", () => $("#f-viewer").scrollIntoView({behavior: "smooth", block: "nearest"}), {once: true});   // the render is taller than the run
+      $("#f-viewer").replaceChildren(vid, h("div", {class: "finishrow"}));
     }});
   }
 }

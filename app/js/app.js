@@ -1018,13 +1018,13 @@ async function setup() {
       return src ? h("button", {class: "btn small", type: "button", tip: `From huggingface.co/${src.repo} into models/${src.folder} (${SZ(src.size)}), checked against its sha256${src.license ? ". Read its licence first" : ""}`,
         onclick: (e) => fetchModel(f, src, e.currentTarget)}, `Download (${SZ(src.size)})`) : null; };
     return h("div", {class: "setrow" + (ok ? " ok" : OPTIONAL.has(n) ? " opt" : " bad")},
-      h("div", {class: "t"}, h("i", {class: "dot" + (ok ? " up" : "")}), n, !ok && OPTIONAL.has(n) ? h("span", {class: "hint"}, " · optional") : null),
+      h("div", {class: "t"}, h("i", {class: "dot" + (ok ? " up" : "")}), n, !ok && OPTIONAL.has(n) ? h("span", {class: "hint"}, "optional") : null),
       ...issues.slice(0, 5).map(i => h("div", {class: "s"}, `${i.node}: ${i.msg}`, get(i))),
       issues.length > 5 ? h("div", {class: "s"}, `and ${issues.length - 5} more`) : null);
   };
   // what needs work stays open; what is ready folds into one line
-  $("#r-setup").replaceChildren(...bad.map(row), ...opt.map(row), good.length ? h("details", {class: "setok"},
-    h("summary", {}, h("i", {class: "dot up"}), bad.length ? `${good.length} more ready` : `All ${good.length} workflows ready`), ...good.map(row)) : "");
+  $("#r-setup").replaceChildren(...bad.map(row), good.length ? h("details", {class: "setok"},
+    h("summary", {}, h("i", {class: "dot up"}), bad.length ? `${good.length} more ready` : `All ${good.length} workflows ready`), ...good.map(row)) : "", ...opt.map(row));
   pill.className = "pill link " + (bad.length ? "bad" : "ok");
   pill.textContent = bad.length ? `setup: ${bad.length} to fix` : "setup ready";
   pill.dataset.tip = bad.length ? `${bad.join(", ")}: missing pieces on this ComfyUI. Click for details.`

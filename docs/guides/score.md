@@ -129,7 +129,7 @@ Give each shot a clip:
 
 - pick it from the shot's select, which lists the 60 newest clips in the bin
 - drag a clip from the bin onto the shot
-- or press **Fill from the bin**, which takes as many of the newest clips in the bin as there are shots with none, and lays them on those shots in the order they were made. When every one of them has a shot number in its label (Film · shot 1, Film · shot 2...), they go in shot-number order instead.
+- or press **Fill from the bin**, which fills the shots that have no clip. When the newest clip in the bin is a film's shot (Film · shot 3), that film's shots go first, in shot order, the newest take of each. The shots left over take the newest other clips, in the order they were made.
 
 **Render** renders that one shot; once rendered it reads **again**. The line at the top of the section counts the shots, the shots with clips and the shots rendered.
 
@@ -206,5 +206,5 @@ node cli/valis.mjs score --clip shot.mp4 --score score.json --bar 52 --layer fx.
 - The classic engine's reveals (Reveal (ignite), Vanish (burn away), Ghost crowd) bring in a second clip: the transformed shot, or the crowd's own plate. With **Classic** and a rule on one of them, each shot row gets a second select (**— no reveal —** until you pick) for the take the reveal burns in, such as an Edit render of the same shot. A shot left on **— no reveal —** renders without it.
 - Time slip, Era cut, Tear, Double exposure and Split time open onto a second clip, which only the FX tab takes, so the **Library** rules don't offer them. A saved score with a rule on one stops at **Render** with a message that names it. Use them in the FX tab.
 - The Example's song ships with the pack and is uploaded to ComfyUI the first time a job needs it, so its renders, its cut, the end card and **Make a film on it** all have the song.
-- **Fill from the bin** takes only the newest clips. To lay a film's shots when the bin has newer clips, pick each from its select by its label (Film · shot 1, Film · shot 2, ...).
+- **Fill from the bin** follows the film of the newest clip. To lay an older film's shots when the bin has newer clips, pick each from its select by its label (Film · shot 1, Film · shot 2, ...).
 - The live preview is a sketch. Render a shot or two before **Render all**.

@@ -6,6 +6,7 @@ import * as api from "./api.js";
 import * as G from "./graphs.js";
 import * as EST from "./estimate.js";
 import {Bin} from "./bin.js";
+import {fillOrder} from "./film.js";
 import {LivePreview, FX_COLOR} from "./livefx.js";
 import {h, $, $$, esc, toast, section, seg, dropzone, fillDrop, media} from "./ui.js";
 
@@ -62,7 +63,7 @@ export class ScoreView {
       h("h3", {class: "lab", tip: "SAM 3 follows it in every shot, for effects about someone"}, "Subject"),
       h("div", {class: "row"}, h("input", {type: "text", id: "s-a", value: "the woman", tip: "subject A (the classic engine takes two)"}), h("input", {type: "text", id: "s-b", value: "the man", tip: "subject B"})));
     this.secShots = section("Shots", {id: "s-sec-shots", open: true, tip: "The score's shots, cut on whole bars. Give each a clip, then render."},
-      h("div", {class: "row", style: "margin-bottom:8px"}, h("button", {class: "btn small", type: "button", id: "s-fill", tip: "Lays the newest clips from the bin on the empty shots, in the order they were made"}, "Fill from the bin")),
+      h("div", {class: "row", style: "margin-bottom:8px"}, h("button", {class: "btn small", type: "button", id: "s-fill", tip: "Lays the newest film's shots from the bin on the empty shots, in shot order"}, "Fill from the bin")),
       h("div", {class: "map", id: "s-shots"}));
     $("#s-sections").replaceChildren(this.secRules, this.secShots);
     this.engineSeg = seg($("#s-engine"), [{id: "library", name: "Library", tip: "The FX tab's effects: any lane, any score"}, {id: "classic", name: "Classic", tip: "The example's own effects: candles, ghost crowd, reveals. Made for its lanes"}],
@@ -259,10 +260,9 @@ export class ScoreView {
     }));
   }
   fill() {
-    // the newest clips, laid in the order they were made (a film's shot 1 first), or by shot number when each has one
+    // the newest film's shots in shot order, then the newest of the rest in the order they were made (film.js fillOrder)
     const need = (this.sc?.shots || []).filter(s => !this.assign[s.id]?.clip).length;
-    const clips = this.clipsInBin().slice(0, need).reverse(), num = (it) => Number((it.label || "").match(/\bshot (\d+)\b/i)?.[1]);
-    if (clips.every(num)) clips.sort((a, b) => num(a) - num(b));
+    const clips = fillOrder(this.clipsInBin(), need);
     let i = 0;
     for (const s of this.sc?.shots || []) { const a = this.assign[s.id] || (this.assign[s.id] = {}); if (!a.clip && clips[i]) { const it = clips[i++]; a.clip = {ref: Bin.ref(it), url: Bin.url(it), label: it.label || it.file.filename}; } }
     this.renderShots(); this.preview(true);

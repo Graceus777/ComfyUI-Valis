@@ -28,6 +28,19 @@ export const laneOf = (plan, on) => plan?.song?.file && OWN_LANE[on] ? OWN_LANE[
 // a song of your own on a plan: every shot moved onto a lane the song has
 export function useOwnSong(plan) { for (const s of plan.shots || []) s.on = laneOf(plan, s.on); return plan; }
 
+// Score's Fill from the bin: clips (newest first, {label}) for `need` empty shots. When the newest clip is a film's shot
+// ("Film · shot 3"), that film's shots go first in shot order, the newest take of each; then the newest of the other
+// clips, in the order they were made
+export function fillOrder(clips, need) {
+  const shot = (it) => /^(.*?)\s*(?:·\s*)?\bshot (\d+)\b/i.exec(it.label || "");
+  const top = clips[0] && shot(clips[0]), film = [];
+  if (top) for (const it of clips) { const m = shot(it); if (m && m[1] === top[1] && !film.some(f => shot(f)[2] === m[2])) film.push(it); }
+  film.sort((a, b) => shot(a)[2] - shot(b)[2]);
+  const mine = (it) => top && shot(it)?.[1] === top[1];          // an older take of one of the film's shots fills nothing else
+  const rest = clips.filter(it => !mine(it)).slice(0, Math.max(0, need - film.length)).reverse();
+  return [...film, ...rest].slice(0, need);
+}
+
 export function parsePlan(text, shots) {
   const a = text.indexOf("{"), b = text.lastIndexOf("}");
   if (a < 0 || b < a) throw new Error("the planner wrote no JSON");

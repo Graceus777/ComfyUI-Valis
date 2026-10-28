@@ -253,7 +253,8 @@ It refuses to start without a clip ("Pick a clip first"), without a layer ("Add 
 library"), on **Music** without a song, with a layer that needs **Another clip** or a subject that isn't given (the
 message names the layer), or on **Score** without a score.
 
-The job's progress shows in the viewer. **Renders** has the queue and **Stop**. When it finishes:
+The viewer, under the library, scrolls into view and shows the job's progress. **Renders** has the queue and **Stop**.
+When it finishes:
 
 - The clip plays in the viewer, with its sound.
 - It goes into the bin, labelled with the layers (for example *FX · Flicker · Candle + Lightning · Strike*).

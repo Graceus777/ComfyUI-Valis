@@ -394,6 +394,17 @@ ok(shotSeconds(bar.seconds).bars === 4, "film · whole bars in a clip (4 bars of
   await F.effectShots({tag: "t", song: {file: "mine.flac"}, music: {audio: {filename: "mine.flac"}, own: true, abc: "", bar: {seconds: 2}}, shots: [{clip: {filename: "a.mp4"}, effect: "Sweep", on: "bar"}]}, io);
   ok(io.g["60"].inputs.on === "downbeat", "Film · an old plan's bar lane fires on the downbeat of your own song", io.g["60"].inputs.on);
 }
+// ---- Score's Fill from the bin: the newest film's shots in shot order, then older clips (a song longer than the film)
+{
+  const L = (label) => ({label});
+  const bin = [L("Film · shot 1"), L("Film · shot 3"), L("Film · shot 2"), L("Film · shot 3"), L("Score · cut"), L("Edit · Transform"), L("Create · Orbit")];
+  const got = F.fillOrder(bin, 5).map(c => c.label);
+  ok(got.join() === "Film · shot 1,Film · shot 2,Film · shot 3,Edit · Transform,Score · cut", "Score · Fill lays the film's shots in order, the newest take of each, then older clips as made", got.join());
+  ok(F.fillOrder(bin, 5)[2] === bin[1], "Score · Fill takes a re-shot shot's newest take");
+  const loose = F.fillOrder([L("Create · Orbit"), L("Film · shot 2"), L("Edit · Transform")], 3).map(c => c.label);
+  ok(loose.join() === "Edit · Transform,Film · shot 2,Create · Orbit", "Score · Fill lays loose clips in the order they were made", loose.join());
+  ok(F.fillOrder(bin, 2).map(c => c.label).join() === "Film · shot 1,Film · shot 2", "Score · Fill stops at the shots it has to fill");
+}
 
 // ---- Setup covers every graph the studio sends (each is validated with the rest of features() at the top), and the
 // end-to-end test brings its own song
