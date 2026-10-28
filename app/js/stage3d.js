@@ -206,7 +206,7 @@ export class Stage {
     this.blank = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, this.blank);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
     this.blur = prog(gl, QVS, BLUR); this.add = prog(gl, QVS, ADD); this.pts = prog(gl, PVS, PFS); this.domeProg = prog(gl, QVS, DFS);
-    this.dome = null;
+    this.dome = null; this.layers = [];
     this.pbuf = gl.createBuffer(); this.pvao = gl.createVertexArray();
     gl.bindVertexArray(this.pvao); gl.bindBuffer(gl.ARRAY_BUFFER, this.pbuf);
     const ap = gl.getAttribLocation(this.pts, "a_p"), ac = gl.getAttribLocation(this.pts, "a_c");
@@ -286,15 +286,20 @@ export class Stage {
 
   async load(base, meta) {
     const gl = this.gl;
-    this.meta = meta;
     const W = meta.width, H = meta.height, far = meta.far;
-    this.f0 = (W / 2) / Math.tan(this.fov / 2 * Math.PI / 180);
+    const f0 = (W / 2) / Math.tan(this.fov / 2 * Math.PI / 180);
     const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
     const cx = cv.getContext("2d", { willReadFrequently: true });
     const url = typeof base === "function" ? base : (f => base + (base.endsWith("/") ? "" : "/") + f);
-    this._url = url;                                       // splat.js reads the layers again to write the 3D set
-    this.layers = [];
-    await this.loadDome(meta.dome);
+    // built aside and swapped in only if no newer load has started: two overlapping loads (a second stage opened while the
+    // first is still reading its pictures) shared one layer list and drew a mix of both; the stage on screen stays as it was
+    // until this one is whole
+    const tok = this._loadTok = (this._loadTok || 0) + 1;
+    const layers = [];
+    const free = (ls, dome) => { for (const l of ls) { gl.deleteTexture(l.ct); gl.deleteTexture(l.dt); if (l.ot) gl.deleteTexture(l.ot); } if (dome) gl.deleteTexture(dome.t); };
+    let dome = null;
+    try {
+    dome = await this._domeTexture(meta.dome, url);
     for (const L of meta.layers) {
       const [ci, di] = await Promise.all([loadImage(url(L.image)), loadImage(url(L.depth))]);
       const ct = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, ct);
@@ -328,25 +333,39 @@ export class Stage {
           for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
         }
       }
-      this.layers.push({ ...L, ct, dt, ot, margin, grid, backdrop, visible: true, relief: L.relief ?? (backdrop ? 1 : 0.35), zoff: 1, opacity: 1, tint: [1, 1, 1, 0], _img: ci });
+      layers.push({ ...L, ct, dt, ot, margin, grid, backdrop, visible: true, relief: L.relief ?? (backdrop ? 1 : 0.35), zoff: 1, opacity: 1, tint: [1, 1, 1, 0], _img: ci });
     }
+    } catch (e) { free(layers, dome); throw e; }
+    if (tok !== this._loadTok) { free(layers, dome); return; }          // a newer load took over: this one is dropped
+    const old = this.layers || [];
+    if (this.dome) gl.deleteTexture(this.dome.t);
+    this.meta = meta; this.f0 = f0; this._url = url;                      // (splat.js reads the layers again, from _url, to write the 3D set)
+    this.layers = layers; this.dome = dome;
+    free(old);
   }
 
   // the far dome (dome.png); called again after the world past the frame is repainted
   async loadDome(d) {
-    const gl = this.gl;
+    const gl = this.gl, tok = this._loadTok, meta = this.meta;
+    const dome = await this._domeTexture(d, this._url);
+    if (tok !== this._loadTok || meta !== this.meta) { if (dome) gl.deleteTexture(dome.t); return; }   // another stage was opened meanwhile
     if (this.dome) gl.deleteTexture(this.dome.t);
-    this.dome = null;
+    this.dome = dome;
     if (this.meta) this.meta.dome = d;
-    if (!d) return;
-    const du = this._url(d.image), dv = d.rev ? `${du}${du.includes("?") ? "&" : "?"}v=${d.rev}` : du;   // repainted: skip the cache
+  }
+
+  // the dome's texture (not yet the stage's): null with no dome, or none that loads
+  async _domeTexture(d, urlOf) {
+    const gl = this.gl;
+    if (!d) return null;
+    const du = urlOf(d.image), dv = d.rev ? `${du}${du.includes("?") ? "&" : "?"}v=${d.rev}` : du;   // repainted: skip the cache
     const im = await loadImage(dv).catch(() => null);
-    if (!im) return;
+    if (!im) return null;
     const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, im);
     for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
-    this.dome = {t, yaw: d.yaw * Math.PI / 180, pitch: d.pitch * Math.PI / 180, painted: !!d.painted};
+    return {t, yaw: d.yaw * Math.PI / 180, pitch: d.pitch * Math.PI / 180, painted: !!d.painted};
   }
 
   layer(name) { return this.layers.find(l => l.name === name); }

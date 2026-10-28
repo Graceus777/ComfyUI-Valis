@@ -233,7 +233,8 @@ Every command and flag is in [docs/cli.md](docs/cli.md).
 - `node tests/ui/film_save.test.mjs`: the Film tab's saves: a reopened film keeps its shot length, your own song survives a
   reload, and a save waiting when you switch films lands in its own film.
 - `node tests/ui/score_open.test.mjs`: a Valis score you open is shown as text, whatever its title, bars or names hold.
-- `node tests/ui/stage_export.test.mjs`: Stage's MP4 export on a stand-in server: a frame that fails to upload gets the export dropped.
+- `node tests/ui/stage_export.test.mjs`: Stage's MP4 export on a stand-in server: a frame that fails to upload gets the export
+  dropped, and two stages opened at once, or one opened during an export, never mix their layers.
 - **Renders → End-to-end test** (or `(await import("/valis/app/js/selftest.js")).run()` in the browser console): short,
   low-resolution renders on the GPU through the studio's own code. 15 Create combinations (IMAX 65mm + fisheye + 1950s
   + noir, Super 8, VHS, trained moves, Wan, custom palettes, an end frame, a loop, relight, a cast character), then the

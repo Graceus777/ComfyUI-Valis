@@ -315,13 +315,18 @@ export class StageView {
   file(sub, f) { return `/view?filename=${encodeURIComponent(f)}&subfolder=${encodeURIComponent(sub)}&type=output`; }
 
   async open(sub) {
+    // an export draws the layers on screen: a stage opened under it would be drawn into the video
+    if (this.exporting) await this.exporting;
+    const tok = this._open = (this._open || 0) + 1;                 // the newest open wins: an older one that finishes later does nothing
     const meta = await fetch(this.file(sub, "stage.json") + `&t=${Date.now()}`).then(r => { if (!r.ok) throw new Error("stage not found"); return r.json(); });
-    this.S.meta = meta; this.S.sub = sub;
+    if (tok !== this._open) return;
     const cv = this.$("#st-canvas");
+    this.stage = this.stage || new Stage(cv);
+    await this.stage.load(f => this.file(sub, f), meta);              // (the stage on screen stays until this one is whole)
+    if (tok !== this._open) return;
+    this.S.meta = meta; this.S.sub = sub;
     const H = 720, W = Math.round(H * meta.width / meta.height / 2) * 2;
     cv.width = W; cv.height = H;
-    this.stage = this.stage || new Stage(cv);
-    await this.stage.load(f => this.file(sub, f), meta);
     // the subject: the biggest thing that isn't a backdrop, else the nearest
     // the subject: a compact thing (the temple, not 26 scattered rocks), weighted by size
     const score = l => {
@@ -498,14 +503,21 @@ export class StageView {
     return cams;
   }
 
-  async export() {
+  export() {
+    if (this.exporting) return this.exporting.then(() => {});
+    const run = this.exportRun();
+    this.exporting = run.then(() => {}, () => {}).then(() => { this.exporting = null; });   // what open() waits for
+    return run;
+  }
+
+  async exportRun() {
     if (!this.stage) throw new Error("Open a stage first");
     this.S.playing = false; this.playBtn();
     const outH = SIZES.find(s => s.id === this.S.size).h, outW = Math.round(outH * this.S.meta.width / this.S.meta.height / 2) * 2;
     const cv = this.$("#st-canvas"), prev = [cv.width, cv.height];
     cv.width = outW; cv.height = outH;
     const fps = 24, n = Math.max(2, Math.round(this.S.sec * fps)), job = `x${Date.now()}`;
-    const btn = this.$("#st-export"); btn.disabled = true;
+    const btn = this.$("#st-export"); btn.disabled = true; this.$("#sg-open").disabled = true;
     let held = false;                                                 // the server is holding this export: dropped if it fails
     try {
       const name = [this.S.move, ...this.S.then.map(t => t.move)].join("_then_") + `_${this.S.focus.replace(/[^a-z0-9]+/gi, "_")}`;
@@ -538,7 +550,7 @@ export class StageView {
     } finally {
       // a frame that didn't upload, or a failed start of the encode: the open video and its half-written file are closed and deleted
       if (held) fetch("/valis/stage/abort", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({job})}).catch(() => {});
-      cv.width = prev[0]; cv.height = prev[1]; btn.disabled = false; btn.innerHTML = `Export MP4<span class="sub">the preview's frames</span>`;
+      cv.width = prev[0]; cv.height = prev[1]; btn.disabled = false; this.$("#sg-open").disabled = false; btn.innerHTML = `Export MP4<span class="sub">the preview's frames</span>`;
       this.draw();
     }
   }
