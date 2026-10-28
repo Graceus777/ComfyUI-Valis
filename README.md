@@ -223,6 +223,8 @@ Every command and flag is in [docs/cli.md](docs/cli.md).
 - `python tests/check_grade.py`: the browser's live colour grade against `palette.py`'s (within 0.2 levels on every look).
 - `python tests/check_cues.py`: cue-sheet errors, sheet-music strengths, one beat grid for a song with its sheet music,
   the key heard in a song, and the effects that should be heard (no ComfyUI, no GPU).
+- `python tests/check_stage.py`: a stage folder's files stay inside the folder (a crafted `stage.json` can't read or
+  overwrite pictures elsewhere), and the plate still paints a stage's own layers (no ComfyUI, no GPU).
 - `node tests/ui/run.mjs`: the studio clicked through in a headless browser against a stand-in ComfyUI
   (`tests/ui/mock_server.mjs`), with a screenshot of every screen.
 - **Renders → End-to-end test** (or `(await import("/valis/app/js/selftest.js")).run()` in the browser console): short,

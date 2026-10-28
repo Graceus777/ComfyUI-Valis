@@ -12,6 +12,11 @@ import os
 import cv2
 import numpy as np
 
+try:
+    from .stage import stage_file
+except ImportError:                                      # run as a script: python splat.py
+    from stage import stage_file
+
 C0 = 0.28209479177387814          # SH degree-0 constant
 
 
@@ -43,8 +48,8 @@ def _quat(R):
 
 
 def layer_points(folder, meta, L, stride, f0, orient=True, snap=True, feather=0.0):
-    rgba = cv2.cvtColor(cv2.imread(os.path.join(folder, L["image"]), cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2RGBA)
-    dp = cv2.cvtColor(cv2.imread(os.path.join(folder, L["depth"])), cv2.COLOR_BGR2RGB).astype(np.uint32)
+    rgba = cv2.cvtColor(cv2.imread(stage_file(folder, L["image"]), cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2RGBA)
+    dp = cv2.cvtColor(cv2.imread(stage_file(folder, L["depth"])), cv2.COLOR_BGR2RGB).astype(np.uint32)
     far = meta["far"]
     z = 1.0 + (dp[..., 0] * 256 + dp[..., 1]) / 65535.0 * (far - 1.0)
     relief = L.get("relief", 1.0 if L.get("backdrop") else 0.35)     # the same flattening the studio's camera uses
@@ -115,7 +120,7 @@ def outer_points(folder, meta, L, stride, f0, rgba, z):
     """a backdrop's painted margin past the frame (outer_XX.png) as splats, as splat.js writes them: at the layer's
     depth at the nearest frame-edge pixel, only where this layer (or one nearer) is what the camera sees there, fading
     out over the margin's last stretch into the dome"""
-    path = os.path.join(folder, L["outer"])
+    path = stage_file(folder, L["outer"])
     if not os.path.exists(path):
         return None
     op = cv2.cvtColor(cv2.imread(path, cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2RGBA)
@@ -149,14 +154,14 @@ def outer_points(folder, meta, L, stride, f0, rgba, z):
 def dome_texture(folder, meta):
     """the stage's dome map (dome.png, written when the still was split), or made now for an older stage"""
     d = meta.get("dome")
-    if d and os.path.exists(os.path.join(folder, d["image"])):
-        tex = cv2.cvtColor(cv2.imread(os.path.join(folder, d["image"])), cv2.COLOR_BGR2RGB).astype(np.float32) / 255
+    if d and os.path.exists(stage_file(folder, d["image"])):
+        tex = cv2.cvtColor(cv2.imread(stage_file(folder, d["image"])), cv2.COLOR_BGR2RGB).astype(np.float32) / 255
         return tex, d
     try:
         import stage as ST
     except ImportError:
         from . import stage as ST
-    rgba = [cv2.cvtColor(cv2.imread(os.path.join(folder, L["image"]), cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2RGBA).astype(np.float32) / 255 for L in meta["layers"]]
+    rgba = [cv2.cvtColor(cv2.imread(stage_file(folder, L["image"]), cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2RGBA).astype(np.float32) / 255 for L in meta["layers"]]
     d = dict(ST.DOME)
     return ST.dome_map(ST.composite([{"rgba": x} for x in rgba]), rgba[0], **{k: d[k] for k in ("fov", "step", "yaw", "pitch")}), d
 

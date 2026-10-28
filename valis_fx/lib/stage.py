@@ -685,9 +685,25 @@ def match_colour(painted, ref, rect, reach=0.12):
     return out.astype(np.float32)
 
 
+def stage_file(folder, name):
+    """the path of a file that stage.json names (a layer's image, depth, hole or outer painting, the dome, the plate): it
+    must be a file inside the stage's own folder. A stage folder can come from anywhere (one shared by someone else), and
+    a name like "../../x.png" or "C:/x.png" would read any image the server can reach, and the plate and Stage Fill would
+    write over it."""
+    base = os.path.realpath(folder)
+    path = os.path.realpath(os.path.join(base, name)) if isinstance(name, str) and name else ""
+    try:
+        inside = bool(path) and path != base and os.path.commonpath([os.path.normcase(base), os.path.normcase(path)]) == os.path.normcase(base)
+    except ValueError:                                   # another drive
+        inside = False
+    if not inside:
+        raise ValueError(f"stage.json names a file outside the stage's folder: {name!r}")
+    return path
+
+
 def load_layers(folder, meta):
     """a saved stage's layers as float RGBA, far to near"""
-    return [cv2.cvtColor(cv2.imread(os.path.join(folder, L["image"]), cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2RGBA).astype(np.float32) / 255
+    return [cv2.cvtColor(cv2.imread(stage_file(folder, L["image"]), cv2.IMREAD_UNCHANGED), cv2.COLOR_BGRA2RGBA).astype(np.float32) / 255
             for L in meta["layers"]]
 
 
@@ -855,6 +871,11 @@ def apply_plate(folder, meta, rgba, plate, names, reach=0.015, keep_prev=False, 
     guessed completion (Telea + mirrored texture) of every other layer where one of the removed things covered it.
     Only hidden pixels change, so at rest the picture is exactly the still; a move uncovers the plate. Writes the
     layer PNGs and plate.png, and notes the plate in meta (not saved)."""
+    for L in meta["layers"]:                             # every file it will read or write is in the stage's folder, before any is written
+        stage_file(folder, L["image"])
+        if L.get("hole"):
+            stage_file(folder, L["hole"])
+    stage_file(folder, image)
     H, W = rgba[0].shape[:2]
     still = composite([{"rgba": x} for x in rgba])
     p = cv2.resize(plate.astype(np.float32), (W, H), interpolation=cv2.INTER_CUBIC)
@@ -896,7 +917,7 @@ def apply_plate(folder, meta, rgba, plate, names, reach=0.015, keep_prev=False, 
         diff = cv2.resize(still.astype(np.float32) - p, small, interpolation=cv2.INTER_AREA)
         corr = np.stack([_pushpull(np.where(kp, diff[..., c], 0), kp, smooth=0.003) for c in range(3)], -1)
         p = np.clip(p + cv2.resize(corr, (W, H), interpolation=cv2.INTER_CUBIC), 0, 1)
-    cv2.imwrite(os.path.join(folder, image), cv2.cvtColor((p * 255 + .5).clip(0, 255).astype(np.uint8), cv2.COLOR_RGB2BGR))
+    cv2.imwrite(stage_file(folder, image), cv2.cvtColor((p * 255 + .5).clip(0, 255).astype(np.uint8), cv2.COLOR_RGB2BGR))
     # how much of each layer shows at rest (what the nearer layers let through): the plate only goes where a layer is
     # hidden, fading in as it gets hidden, so the still at rest stays the still (a moon's glow fringe keeps its glow)
     trans = [None] * len(rgba)
@@ -908,7 +929,7 @@ def apply_plate(folder, meta, rgba, plate, names, reach=0.015, keep_prev=False, 
     for i, L in enumerate(meta["layers"]):
         if L["name"] in names or not L.get("hole"):
             continue
-        hole = cv2.imread(os.path.join(folder, L["hole"]), 0) > 127
+        hole = cv2.imread(stage_file(folder, L["hole"]), 0) > 127
         # not where a kept, nearer layer stands: the plate shows that layer there (a house beside a removed
         # lighthouse), and it would come back as a ghost house in the sky
         kept = np.zeros((H, W), bool)
@@ -949,7 +970,7 @@ def apply_plate(folder, meta, rgba, plate, names, reach=0.015, keep_prev=False, 
             continue
         out = np.clip(rgba[i] * 255 + .5, 0, 255).astype(np.uint8)
         out[out[..., 3] == 0, :3] = 0
-        cv2.imwrite(os.path.join(folder, L["image"]), cv2.cvtColor(out, cv2.COLOR_RGBA2BGRA))
+        cv2.imwrite(stage_file(folder, L["image"]), cv2.cvtColor(out, cv2.COLOR_RGBA2BGRA))
     prev = meta.get("plate") if keep_prev else None
     meta["plate"] = {"image": (prev or {}).get("image", image), **({"image_main": image} if prev else {}), "removed": sorted(set(names) | set((prev or {}).get("removed", []))),
                      "not_removed": [n for n in failed if n not in (prev or {}).get("removed", [])],
