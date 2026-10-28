@@ -114,5 +114,40 @@ for fx, name in ((E.Projector(on="beat"), "Projector"), (E.Tear(on=None, by="lou
     ok(len(sd._placed) > 0, f"sound: {name} is heard", len(sd._placed))
 ok("_rise_loud" not in cues.lanes, "sound: the cues the render uses are left as they were")
 
+# a hit that lands a hair after a frame (every 1 beat at 144 BPM: hit 7 is 4e-16 s after frame 70) is taken by that frame
+# with a tiny negative age; a power of it was NaN, which also made cv2.remap crawl (37 s for an 8x8 map). Both effects
+# clamp it: the displacement is finite (remap is watched, so a regression fails fast instead of crawling) and so is the frame
+import cv2  # noqa: E402
+from valis_fx.lib.core import Ctx  # noqa: E402
+_remap = cv2.remap
+
+
+def _checked_remap(src, mx, my, *a, **k):
+    if not (np.isfinite(mx).all() and np.isfinite(my).all()):
+        raise AssertionError("non-finite remap coordinates")
+    return _remap(src, mx, my, *a, **k)
+
+
+beats = Cues.from_schedule("bpm 144 4/4\nevery 1 beat kick")
+late = [(i, float(h) - i / 24) for h in beats.times("kick") for i in [round(float(h) * 24)] if 0 < float(h) - i / 24 <= 1e-6]
+ok(bool(late), "a hit lands a hair after a frame at 144 BPM", late)
+if late:
+    sheet = np.random.default_rng(2).integers(0, 255, (24, 24, 3), dtype=np.uint8)
+    cv2.remap = _checked_remap
+    for fx, name in ((E.Shockwave(on="kick"), "Shockwave"), (E.TimeSlip(mode="burn", on="kick"), "TimeSlip burn")):
+        ctx = Ctx(beats, (24, 24), 80, 24.0).add_clip("a", frames=[sheet] * 80).add_clip("b", frames=[sheet] * 80)
+        i, good = late[0][0], True
+        try:
+            for j in (i - 1, i, i + 1):
+                ctx.begin(j)
+                out = fx(ctx, ctx.a.copy())
+                good = good and bool(np.isfinite(out).all())
+                ctx.end(np.clip(out, 0, 1).astype(np.float32))
+        except AssertionError as e:
+            good = False
+            print("   ", e)
+        ok(good, f"{name}: a hit a hair after the frame gives a finite picture")
+    cv2.remap = _remap
+
 print(f"{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)

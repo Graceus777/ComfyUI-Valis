@@ -231,7 +231,7 @@ class TimeSlip:
             xx, yy = grid(H, W)
             K = np.zeros((H, W), np.float32); rim = np.zeros((H, W), np.float32)
             for (th, cx, cy, R, sd) in self._holes:
-                age = (ctx.t - th) / self.life
+                age = max((ctx.t - th) / self.life, 0.0)                # (a hit just after this frame has a tiny negative age; a power of it is NaN)
                 rad = R * math.sin(math.pi * min(1, age) ** .7)         # opens fast, heals slower
                 n = value_noise(H // 4, W // 4, 10, sd, 3)
                 n = cv2.resize(n, (W, H))
@@ -669,7 +669,7 @@ class Shockwave:
         vel = ctx.cues.vel(self.on); ts = ctx.cues.times(self.on)
         for te in hits:
             v = float(vel[np.argmin(np.abs(ts - te))]) if len(ts) else 1.0
-            age = ctx.t - te
+            age = max(ctx.t - te, 0.0)                    # (a hit up to 1e-6 s after the frame is taken: its age can be -4e-16, and a power of that is NaN)
             r = 30 + self.speed * age ** .8 * (W / 768)
             wd = (self.width + 34 * age) * (W / 768)
             ddx, ddy = XX - c[0], YY - c[1]
