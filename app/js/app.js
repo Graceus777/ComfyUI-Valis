@@ -84,7 +84,7 @@ api.on((ev) => {
 });
 // the tab a job came from names it in the bin ("Edit", "Genjutsu"...)
 const TABNAME = {film: "Film", create: "Create", edit: "Edit", genjutsu: "Genjutsu", score: "Score", fx: "FX", extras: "Extras", renders: "Renders"};
-function run(graph, label, viewer, {onDone, onError, kind} = {}) {
+function run(graph, label, viewer, {onDone, onError, kind, quiet} = {}) {
   return api.submit(graph, label, kind || TABNAME[$(".tab.on")?.dataset.view] || "render").then((job) => {
     const upd = viewer ? progressFor(job, viewer) : () => {};
     waiters.set(job.id, (j) => {
@@ -92,7 +92,7 @@ function run(graph, label, viewer, {onDone, onError, kind} = {}) {
       if (j.status === "done") { waiters.delete(j.id); onDone?.(j); }
       if (j.status === "error") { waiters.delete(j.id); toast(`${label} failed: ${j.error}`, true); onError?.(j); }
     });
-    toast(`${label} queued`);
+    if (!quiet) toast(`${label} queued`);
     return job;
   }).catch((e) => toast(e.message, true));
 }

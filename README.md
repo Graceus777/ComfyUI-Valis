@@ -72,7 +72,7 @@ score-driven pass can be played without generating anything.
   that Qwen Image uses), so a film is written, scored, shot, effected and cut without a prompt typed by hand and
   without a request leaving the machine. Every shot is as long as you set it (one 4.5 s H3 clip unless you say, 2 to
   15 s) and cut to whole bars of the tempo YuE2 actually played, so the picture changes on the music's own grid.
-- **The score is the director.** `ValisCues` merges lanes from a Valis score, any music (a beat tracker, band onsets,
+- **Everything runs on cues.** `ValisCues` merges lanes from a Valis score, any music (a beat tracker, band onsets,
   loudness and brightness curves), a voice (syllable onsets), YuE2's ABC notation aligned to its own performance, or a
   plain-text cue sheet (`1.5 impact`, `every 1/2 beat from 3:1 to 7:1 pulse`, `ramp slip 0 0 4 1`). Every effect,
   every camera punch and every sound in Valis listens to a lane.

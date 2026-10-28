@@ -137,7 +137,7 @@ The effects fire on the lanes from the shot's own place in the song. With **Libr
 
 ## The live preview and the timeline
 
-Press **▶ Play**. The preview plays the clip of the shot under the playhead in step with the song, with every rule's effect sketched as it fires (a flash and a kick for Punch, a ring for Shockwave, slipping slices for Glitch), and a badge for each rule that fires ("beat → Rays"). A rendered shot plays as it was rendered. A shot with no clip shows the example's still, or asks for a clip. The sketches are quick stand-ins; **Render** makes the real effect.
+Press **▶ Play**. The preview plays the clip of the shot under the playhead in step with the song, with every rule's effect sketched as it fires (a flash and a kick for Punch, a ring for Shockwave, slipping slices for Glitch), and a badge for each rule that fires ("beat → Rays"). A rendered shot plays as it was rendered. A shot with no clip shows the example's still, or an empty frame that asks for a clip; no effects are sketched on an empty frame. The sketches are quick stand-ins; **Render** makes the real effect.
 
 The timeline under it shows, from top to bottom:
 
@@ -152,7 +152,7 @@ Click anywhere on the timeline to jump there. The readout next to **Play** gives
 
 ## Render all and Cut it
 
-**Render all** queues every shot that has a clip and isn't rendered yet. Its line shows how many and how long. The library runs on the CPU at about a minute per 4 s of video, so about a minute a shot, plus the SAM 3 track when an effect follows a subject. Each rendered shot goes into the bin as "(title) s01" and so on.
+**Render all** queues every shot that has a clip and isn't rendered yet, with one note for the lot ("Score · 12 shots queued"). Its line shows how many and how long. The library runs on the CPU at about a minute per 4 s of video, so about a minute a shot, plus the SAM 3 track when an effect follows a subject. Each rendered shot goes into the bin as "(title) s01" and so on.
 
 **Cut it** joins the rendered shots in order, each trimmed to its bars. If only some are rendered, it cuts those and says how many. The cut plays in the viewer and goes into the bin as "(title) · cut".
 

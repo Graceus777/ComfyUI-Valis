@@ -285,7 +285,7 @@ export class ScoreView {
   }
   // a shot plays until the next one starts (the bars' own grid: 106 or 107 frames), so the cut never repeats a frame of the song
   span(shot) { const all = this.sc.shots, next = all[all.indexOf(shot) + 1]; return (next ? next.start_frame - shot.start_frame : shot.frames) / 24; }
-  async renderShot(shot) {
+  async renderShot(shot, quiet = false) {
     const a = this.assign[shot.id] || {};
     if (!a.clip) return toast(`Give ${shot.id} a clip first`, true);
     const two = this.engine === "classic" ? [] : this.rules.filter(r => G.needsOther(r.effect));
@@ -301,7 +301,7 @@ export class ScoreView {
           source: "score", score, audio, layers: this.rules.map(r => G.fxLayer(r.effect, r.lane)).filter(Boolean),
           sound: $("#s-fxsound").checked, seconds: this.span(shot), start: shot.start_frame / 24, fit: true, prefix: `valis/score_${shot.id}_${tag}`,
           retime: await api.hasNode("ValisFrameRate"), own: !audio && await api.hasInput("ValisSoundDesign", "own")});
-    return new Promise((res) => this.run(g, `Score · ${shot.id}`, null, {onDone: (j) => {
+    return new Promise((res) => this.run(g, `Score · ${shot.id}`, null, {quiet, onDone: (j) => {
       const v = j.outputs.find(f => /\.(mp4|webm|mov)$/i.test(f.filename));
       if (v) { this.results[shot.id] = v; Bin.add(v, {from: "Score", label: `${this.sc.title || "score"} ${shot.id}`}); }
       this.renderShots(); this.preview(true); res(v);
@@ -310,7 +310,9 @@ export class ScoreView {
   async renderAll() {
     const todo = (this.sc?.shots || []).filter(s => this.assign[s.id]?.clip && !this.results[s.id]);
     if (!todo.length) return toast((this.sc?.shots || []).some(s => this.assign[s.id]?.clip) ? "Every shot with a clip is rendered" : "Give at least one shot a clip (Shots, or Fill from the bin)", true);
-    for (const s of todo) this.renderShot(s);
+    // one note for the batch, not one per shot
+    toast(todo.length > 1 ? `Score · ${todo.length} shots queued` : `Score · ${todo[0].id} queued`);
+    for (const s of todo) this.renderShot(s, true);
   }
   async cut() {
     const sc = this.sc; if (!sc) return;

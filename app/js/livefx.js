@@ -59,6 +59,13 @@ export class LivePreview {
     }
     const sw = s?.videoWidth || s?.naturalWidth || 9, sh = s?.videoHeight || s?.naturalHeight || 16;
     const sc = Math.min(W / sw, H / sh), dw = sw * sc, dh = sh * sc, ox = (W - dw) / 2, oy = (H - dh) / 2, cx = ox + dw / 2, cy = oy + dh / 2;
+    // nothing to light yet (no clip, or its first frame still loading): the empty frame, and no effects sketched on it
+    if (!(s && (s.readyState >= 2 || (s.complete && s.naturalWidth)))) {
+      x.fillStyle = "#07070a"; x.fillRect(0, 0, W, H);
+      const g = x.createLinearGradient(ox, oy, ox + dw, oy + dh); g.addColorStop(0, "#14161f"); g.addColorStop(1, "#0b0b10"); x.fillStyle = g; x.fillRect(ox, oy, dw, dh);
+      this.label.textContent = note; if (this._bk) { this._bk = ""; this.badges.replaceChildren(); }
+      return;
+    }
     // "Effect:preset" sketches as its effect; the preset decides the light's colour or side where it matters
     const active = rules.map(r => { const [id, preset] = String(r.effect).split(":"), ev = fxPreset(r.effect)?.params?.every || 1, ts = lanes[r.lane] || [];
       return {...r, preset, as: CLASSIC_AS[id] || id, ...ring(ev > 1 ? ts.filter((_, i) => i % ev === 0) : ts, t)}; });
@@ -71,8 +78,7 @@ export class LivePreview {
     const jx = proj.e > .05 ? (rand(Math.floor(t * 24)) - .5) * 6 * proj.e : 0, jy = proj.e > .05 ? (rand(Math.floor(t * 24) + 7) - .5) * 6 * proj.e : 0;
     x.translate(cx + jx, cy + jy); x.scale(z, z); x.translate(-cx, -cy);
     x.globalAlpha = dm.e > .05 ? Math.max(.15, 1 - .7 * Math.min(1, dm.e)) : 1;
-    if (s && (s.readyState >= 2 || s.complete)) x.drawImage(s, ox + (dm.e > .05 ? 4 * dm.e : 0), oy, dw, dh);
-    else { const g = x.createLinearGradient(ox, oy, ox + dw, oy + dh); g.addColorStop(0, "#1a1d2a"); g.addColorStop(1, "#0b0b10"); x.fillStyle = g; x.fillRect(ox, oy, dw, dh); }
+    x.drawImage(s, ox + (dm.e > .05 ? 4 * dm.e : 0), oy, dw, dh);
     x.globalAlpha = 1;
     // Echo: the last frames, fading
     if (echo.e > .05 && this.history.length) this.history.forEach((f, i) => { x.globalAlpha = .18 * echo.e * (i + 1) / this.history.length; x.drawImage(f, ox - 6 * (this.history.length - i), oy, dw, dh); });
@@ -110,12 +116,21 @@ export class LivePreview {
     // Rays (and the classic glows): light streaming from the top
     const ra = get("Rays");
     if (ra.e > .03) {
+      // soft shafts fanning down from a source above the frame, fading along their length, a glow where they start
+      const k = Math.min(1, ra.e), sx = cx + dw * .1, sy = oy + dh * .02;
       x.globalCompositeOperation = "screen";
-      const g = x.createRadialGradient(cx, oy + dh * .2, 0, cx, oy + dh * .2, dh * .8);
-      g.addColorStop(0, `rgba(255,236,200,${.55 * Math.min(1, ra.e)})`); g.addColorStop(1, "rgba(255,236,200,0)");
+      const g = x.createRadialGradient(sx, sy, 0, sx, sy, dh * .7);
+      g.addColorStop(0, `rgba(255,232,196,${.5 * k})`); g.addColorStop(.4, `rgba(255,232,196,${.16 * k})`); g.addColorStop(1, "rgba(255,232,196,0)");
       x.fillStyle = g; x.fillRect(ox, oy, dw, dh);
-      for (let i = 0; i < 9; i++) { const a0 = -Math.PI / 2 + (i - 4) * .18; x.strokeStyle = `rgba(255,240,210,${.08 * ra.e})`; x.lineWidth = 18; x.beginPath(); x.moveTo(cx, oy + dh * .2); x.lineTo(cx + Math.cos(a0) * -dh, oy + dh * .2 + Math.sin(a0) * -dh); x.stroke(); }
-      x.globalCompositeOperation = "source-over";
+      x.filter = `blur(${Math.max(3, dw * .012).toFixed(1)}px)`;
+      for (let i = 0; i < 7; i++) {
+        const a0 = Math.PI / 2 + (i - 3) * .13 + .025 * Math.sin(t * .6 + i * 1.7), w = .028 + .02 * rand(i + 3), L = dh * (.8 + .3 * rand(i + 11));
+        const gr = x.createLinearGradient(sx, sy, sx + Math.cos(a0) * L, sy + Math.sin(a0) * L);
+        gr.addColorStop(0, `rgba(255,238,210,${.55 * k})`); gr.addColorStop(.5, `rgba(255,238,210,${.22 * k})`); gr.addColorStop(1, "rgba(255,238,210,0)");
+        x.fillStyle = gr; x.beginPath(); x.moveTo(sx, sy);
+        x.lineTo(sx + Math.cos(a0 - w) * L, sy + Math.sin(a0 - w) * L); x.lineTo(sx + Math.cos(a0 + w) * L, sy + Math.sin(a0 + w) * L); x.closePath(); x.fill();
+      }
+      x.filter = "none"; x.globalCompositeOperation = "source-over";
     }
     // Frost: crystals creeping in from the edges after each hit
     const fr = get("Frost");
