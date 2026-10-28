@@ -80,7 +80,7 @@ class Cues:
 
     def at_bar(self, bar, beat=1.0):
         if not self.bpm:
-            raise ValueError("bar:beat cues need a bpm line")
+            raise ValueError("cue sheet: bar:beat times need a bpm line first, e.g. 'bpm 108 4/4'")
         return self.offset + ((bar - 1) * self.meter + (beat - 1)) * 60.0 / self.bpm
 
     def key(self, t):
@@ -89,12 +89,16 @@ class Cues:
         return t
 
     # ------------------------------------------------------------------ combining
-    def merge(self, other, prefix=""):
+    def merge(self, other, prefix="", replace=()):
+        """Both cues' lanes in one. A lane in both is joined, hit by hit; one named in `replace` is other's alone (YuE2's
+        sheet music has the exact beat grid: joined with the one heard from its audio, every beat fired twice)."""
         out = Cues(dict(self.lanes), dict(self.vals), dict(self.curves), max(self.duration, other.duration), self.fps,
                    self.bpm or other.bpm, self.meter if self.bpm else other.meter, self.offset if self.bpm else other.offset,
                    {**other.meta, **self.meta})
         for k, v in other.lanes.items():
             kk = prefix + k
+            if kk in replace:
+                out.lanes.pop(kk, None); out.vals.pop(kk, None)
             if kk in out.lanes:
                 vv = np.concatenate([out.vel(kk), other.vel(k)]); tt = np.concatenate([out.lanes[kk], v]); o = np.argsort(tt)
                 out.lanes[kk], out.vals[kk] = tt[o], vv[o]
@@ -150,7 +154,7 @@ class Cues:
         curves = {k: v for k, v in (s.get("envelopes") or {}).items()}
         lanes = {k: v for k, v in s["events"].items() if isinstance(v, list) and (not v or isinstance(v[0], (int, float)))}
         return cls(lanes, None, curves, s.get("duration_seconds", 0), s.get("fps", 24), s.get("bpm"), meter, 0.0,
-                   {"title": s.get("title"), "source": "valis score"})
+                   {"title": s.get("title"), "source": "valis score", **({"key": s["key"]} if s.get("key") else {})})
 
     @classmethod
     def from_schedule(cls, text, duration=None, fps=24.0):
@@ -183,6 +187,8 @@ class Cues:
             else:
                 n = float(num)
             beat = 60.0 / c.bpm if c.bpm else None
+            if unit in ("beat", "beats", "bar", "bars") and not beat:
+                raise ValueError(f"cue sheet: 'every {num} {unit}' needs a bpm line first, e.g. 'bpm 108 4/4'")
             if unit in ("beat", "beats"):
                 return n * beat
             if unit in ("bar", "bars"):

@@ -194,7 +194,7 @@ def cues_from_abc(abc, y=None, sr=None, fps=24.0):
         notes = P["voices"][name]
         lane = "melody" if "voc" in name.lower() or i == 0 and len(names) > 1 and "ins" not in name.lower() else ("ins" if "ins" in name.lower() else name.lower())
         tt = [T(n[0]) for n in notes]
-        lanes[lane] = tt; vals[lane] = [n[2] for n in notes]          # value = MIDI pitch
+        lanes[lane] = tt; vals[lane] = [n[2] for n in notes]          # MIDI pitch, made a strength below
         allnotes += [(T(n[0]), T(n[1]), n[2], lane) for n in notes]
     allnotes.sort()
     if not lanes.get("melody") and lanes.get("ins"):     # an instrumental: the tune is whatever plays it
@@ -215,8 +215,17 @@ def cues_from_abc(abc, y=None, sr=None, fps=24.0):
     end = max([n[0] + n[1] for n in allnotes] + [T(b) for b in P["bars"]] + [0])
     lanes["beat"] = list(np.arange(0, end, beat))
     lanes["section"] = [T(t) for t, _ in P["sections"]]
+    # a note's strength, not its pitch: an effect fired on 'melody' scaled by the MIDI number (60 and up) was pinned at
+    # full. Higher notes of a lane hit a little harder (0.6 to 1.0), so the sound design still picks the top notes first.
+    # (a chord change is a hit of 1: its value was the chord's index, so the first chord fired at nothing)
+    for k in list(vals):
+        p = np.asarray(vals[k], float)
+        if k == "chord" or not len(p):
+            vals[k] = [1.0] * len(p); continue
+        lo, hi = p.min(), p.max()
+        vals[k] = list(.6 + .4 * (p - lo) / (hi - lo)) if hi > lo else [1.0] * len(p)
     meta = {"source": "YuE2 ABC", "sections": [(round(T(t), 3), n) for t, n in P["sections"]], "chords": names_c,
-            "key": P["key"], "bpm": P["bpm"]}
+            "key": P["key"], "bpm": P["bpm"], "meter_unit": P["meter"][1]}
     c = Cues(lanes, vals, None, end, fps, P["bpm"], P["meter"][0], 0.0, meta)
     if y is not None:
         off, scale = align(c, y, sr)

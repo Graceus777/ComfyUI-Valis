@@ -96,6 +96,8 @@ try {
   await page.selectOption("#m-shots .fshot:nth-child(1) select", "frame 1"); await page.waitForTimeout(300);
   ok(/isn't made yet/.test(await page.$eval("#m-shots .fshot:nth-child(1)", e => e.textContent)), "Film: a shot on a frame that isn't made says so");
   await shot("film_build");
+  const shotFx = await page.$$eval("#m-shots .fshot:nth-child(1) select option", os => os.map(o => o.value));
+  ok(shotFx.includes("Flicker") && !shotFx.some(v => /^(Tear|TimeSlip|Eras|DoubleExposure|Split)\b/.test(v)), "Film: a shot card offers no effect that needs a second clip");
   // the close-up box: drag places it, the slider sizes it, the whole frame is no box
   const crop = await page.evaluate(async () => {
     const {cropEditor} = await import("/valis/app/js/filmbuild.js");
@@ -117,8 +119,28 @@ try {
   ok((await page.$$("#s-shots .shotrow")).length > 5, "Score: its shots are listed");
   ok((await page.$$("#s-map .rule")).length > 3, "Score: its rules are listed");
   await shot("score_example");
+  ok((await page.$$("#s-shots .layersel")).length > 5, "Score: the classic reveals take a transformed take per shot");
+  await page.click('#s-engine button[data-id="library"]'); await page.waitForTimeout(300);
+  const ruleFx = await page.$$eval("#s-map .rule select:nth-of-type(2) option", os => os.map(o => o.value));
+  ok(ruleFx.includes("Rays") && !ruleFx.some(v => /^(Tear|TimeSlip|Eras|DoubleExposure|Split)\b/.test(v)) && !(await page.$("#s-shots .layersel")),
+     "Score: library rules offer no effect that needs a second clip, and no reveal takes", ruleFx.slice(0, 4).join());
   await page.click('#s-source button[data-id="song"]'); await page.waitForTimeout(300);
   ok(await page.$("#s-song"), "Score: From a song asks for a song");
+  // ---- FX: a preset's own lane, Another clip asked for before a render, a loop keeps its own sound
+  await page.click('.tab[data-view="fx"]'); await page.waitForTimeout(400);
+  await page.click('.fxcard[data-id="Flicker"]'); await page.waitForTimeout(200);
+  ok(await page.$eval("#f-layers .layer input", i => i.value) === "beat", "FX: Flicker listens to the beat");
+  await page.selectOption("#f-layers .layer select.preset", "Flicker:tube"); await page.waitForTimeout(200);
+  ok(await page.$eval("#f-layers .layer input", i => i.value) === "downbeat", "FX: Strip light moves the layer to its own lane, the downbeat");
+  await page.$eval("#f-clip-sel", (s) => { s.append(Object.assign(document.createElement("option"), {value: "valis/x.mp4 [output]", textContent: "x"})); s.lastChild.dataset.url = "/view?filename=x.mp4"; s.value = "valis/x.mp4 [output]"; s.dispatchEvent(new Event("change")); });
+  await page.click('.fxcard[data-id="Tear"]'); await page.waitForTimeout(200);
+  await page.click("#f-render"); await page.waitForTimeout(300);
+  ok(/Tear needs Another clip/.test(await page.$eval("#toasts", e => e.textContent)), "FX: Tear without Another clip is stopped before the render", await page.$eval("#toasts", e => e.textContent));
+  await page.$eval(`details[data-key="f-sec-more"]`, d => { d.open = true; });
+  await page.check("#f-loop"); await page.waitForTimeout(200);
+  ok(await page.$eval("#f-sound", i => i.disabled) && await page.$eval("#f-beds", e => e.classList.contains("off")), "FX: a loop keeps its own sound (effect sounds and beds off)");
+  await page.uncheck("#f-loop"); await page.waitForTimeout(200);
+  ok(!(await page.$eval("#f-sound", i => i.disabled)), "FX: untick the loop and the sounds come back");
   // ---- Extras: the three modes
   await page.click('.tab[data-view="extras"]');
   for (const m of ["stereo", "loop", "stage"]) {

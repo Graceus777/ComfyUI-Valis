@@ -72,7 +72,7 @@ export function features() {
     "Create · Extend a shot": G.extend({video: "x.mp4", clipSeconds: 5, width: 768, height: 1344, action: "x"}),
     "Finish · Upscale (SeedVR2)": G.upscale({video: "x.mp4"}),
     "Score · Render with Valis": G.valisShot({clip: "x.mp4", score: "s.json", startBar: 0, section: "waltz", layer: "l.mp4",
-      rules: [{event: "pah", effect: "crowd"}], targetA: "a", targetB: "b"}),
+      rules: [{event: "pah", effect: "crowd"}], targetA: "a", targetB: "b", music: {audio: "song.flac", start: 0, seconds: 4}}),
     "Score · from a song": G.scoreMake({audio: "song.flac", title: "x"}),
     "Score · YuE2 writes it (instrumental)": G.songScore({style: "x", lyrics: "[Instrumental]"}),
     "Score · YuE2 writes it (with lyrics)": G.songScore({style: "x", lyrics: "x"}),

@@ -120,7 +120,9 @@ export class FxView {
       lane.addEventListener("input", () => { if (l.by) l.by = lane.value; else l.on = lane.value; });
       const f = G.fxPreset(l.key || l.effect), ps = f?.lib.presets || [];
       const pick = ps.length > 1 ? h("select", {class: "preset", tip: "The preset", onchange: (e) => {
-        const g = G.fxPreset(e.target.value); l.key = g.key; l.name = g.name; l.needs = g.needs; this.drawLayers(); }},
+        // a lane still on the old preset's own one follows the new preset (Strip light and Failing bulb fire once a bar)
+        const g = G.fxPreset(e.target.value); if (!l.by && (!l.on || l.on === f.on)) l.on = g.on || l.on;
+        l.key = g.key; l.name = g.name; l.needs = g.needs; this.drawLayers(); }},
         ...ps.map((p, j) => { const key = j ? `${f.id}:${p.id}` : f.id; return h("option", {value: key, selected: key === f.key}, p.name); })) : null;
       const missing = (l.needs || []).filter(n => (n === "other" && !this.F.other) || (n === "subject" && !$("#f-subject").value.trim()));
       return h("div", {class: "layer"},
@@ -137,11 +139,14 @@ export class FxView {
     if (!F.clip) return this.toast("Pick a clip first", true);
     if (!F.layers.length) return this.toast("Add at least one effect from the library", true);
     if (F.source === "song" && !F.audio) return this.toast("Drop the music first", true);
+    const subject = $("#f-subject").value.trim();
+    const missing = F.layers.map(l => [l, (l.needs || []).filter(n => (n === "other" && !F.other) || (n === "subject" && !subject))]).filter(([, m]) => m.length);
+    if (missing.length) return this.toast(missing.map(([l, m]) => `${l.name} needs ${m.map(n => n === "other" ? "Another clip" : "a subject").join(" and ")}`).join("; "), true);
     const songSpec = F.source === "write" ? {style: $("#f-style").value.trim() || "instrumental, cinematic", lyrics: $("#f-lyrics").value.trim() || "[Instrumental]",
       seconds: Number($("#f-secs").value) || 20} : null;
     const sc = F.source === "score" ? this.getScore() : null;
     if (F.source === "score" && !sc) return this.toast("Make or open a score in the Score tab first: FX fires on its lanes", true);
-    const g = G.fx({clip: F.clip, other: F.other, subject: $("#f-subject").value.trim(), source: F.source, audio: sc ? sc.audio : F.audio, songSpec,
+    const g = G.fx({clip: F.clip, other: F.other, subject, source: F.source, audio: sc ? sc.audio : F.audio, songSpec,
       cueSheet: $("#f-cues").value, score: sc?.score || null,
       layers: F.layers.map(l => ({...G.fxLayer(l.key || l.effect, l.on), by: l.by})), beds: [...F.beds], sound: $("#f-sound").checked,
       seconds: F.seconds || 107 / 24, prefix: `valis/fx_${Date.now().toString(36)}`, loop: $("#f-loop").checked, retime: await api.hasNode("ValisFrameRate"),

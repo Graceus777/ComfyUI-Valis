@@ -82,7 +82,10 @@ class ValisCues:
             y, sr = _audio_np(music)
             c = c.merge(Cues.from_audio(y, sr, bpm_hint=bpm_hint or None))
         if abc:
-            c = c.merge(Cues.from_abc(abc, y, sr), prefix="")
+            ab = Cues.from_abc(abc, y, sr)
+            # the sheet's beat grid, and its key and meter, over what the audio analysis heard
+            c = c.merge(ab, prefix="", replace=("beat",) if music is not None else ())
+            c.meta.update({k: v for k, v in ab.meta.items() if k in ("key", "meter_unit", "sections", "chords")})
         if voice is not None:
             from .nodes import speech_onsets
             vy, vsr = _audio_np(voice)

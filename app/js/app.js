@@ -10,7 +10,7 @@ import {ScoreView} from "./score.js";
 import {FxView} from "./fx.js";
 import {checkSetup, OPTIONAL} from "./check.js";
 import {planFilm, makeFilm, makeSong, frameShots, shootShots, chainShot, effectShots, cutFilm, SHOT_SECONDS, shotLen, songSeconds, songShort, cutOf, lookOf,
-        makeRefs, makeSetups, makeFrames, byName, keyStale, sheetPrompt} from "./film.js";
+        makeRefs, makeSetups, makeFrames, byName, keyStale, sheetPrompt, filmLanes, laneOf, useOwnSong} from "./film.js";
 import {drawBuild, cropEditor} from "./filmbuild.js";
 import * as R from "./refengine.js";
 import {Bin} from "./bin.js";
@@ -723,9 +723,9 @@ function compare(a, b) {
 }
 
 // ------------------------------------------------------------------ SCORE
-const Score = new ScoreView({run, onFilm: (sv) => {
+const Score = new ScoreView({run, onFilm: async (sv) => {
   // a film on this score's song: the Film tab gets the song and as many shots as the score has (up to 12)
-  if (!sv.audioRef) return toast("This score has no song to make a film on", true);
+  if (!await sv.ensureAudio()) return toast("This score has no song to make a film on", true);
   M.ownSong = {ref: sv.audioRef, name: sv.sc.title || "the score's song", url: sv.audioUrl};
   M.songSrc = "own"; $$("#m-song-src button").forEach(b => b.classList.toggle("on", b.dataset.id === "own")); $("#m-song-drop").style.display = "";
   fillDrop($("#m-song-drop"), h("span", {}, M.ownSong.name)); fsec.song.setValue(M.ownSong.name);
@@ -737,7 +737,10 @@ const Score = new ScoreView({run, onFilm: (sv) => {
 let FX_SCORE = null;
 const Fx = new FxView({$, h, toast, assets: ASSETS, api, G, run, VID, bin: Bin, getScore: () => FX_SCORE, estimate: () => fxEst()});
 async function fxEst() {
-  $("#f-sec-more-val").textContent = `${$("#f-loop").checked ? "loops" : "no loop"} · ${$("#f-sound").checked ? "sound on" : "no sound"}`;
+  // a loop keeps the clip's own sound (the effects' sounds and beds would jump at the join): they're off while it's ticked
+  const loop = $("#f-loop").checked;
+  $("#f-sound").disabled = loop; $("#f-beds").classList.toggle("off", loop);
+  $("#f-sec-more-val").textContent = loop ? "loops · its own sound" : `no loop · ${$("#f-sound").checked ? "sound on" : "no sound"}`;
   const F = Fx.F, secs = F.seconds || 107 / 24;
   const g = G.fx({clip: "x.mp4", layers: F.layers.length ? F.layers : [{effect: "Punch", on: "kick"}], source: F.source === "write" ? "write" : "sheet",
     songSpec: F.source === "write" ? {style: "x", lyrics: "x", seconds: Number($("#f-secs").value) || 20} : null});
@@ -1141,9 +1144,15 @@ function buildFilm() {
     const u = await api.upload(f); M.ownSong = {ref: api.inputRef(u), name: f.name, url: URL.createObjectURL(f)};
     fillDrop($("#m-song-drop"), h("audio", {src: M.ownSong.url, controls: true, style: "width:100%"}), h("span", {}, f.name));
     fsec.song.setValue(f.name);
-    if (M.plan) { M.plan.song.file = M.ownSong.ref; M.plan.song.fileName = f.name; M.plan.music = null; fsave(); fdraw(); }
+    if (M.plan) { M.plan.song.file = M.ownSong.ref; M.plan.song.fileName = f.name; M.plan.music = null; useOwnSong(M.plan); fsave(); fdraw(); }
   });
-  $("#m-song-drop")._onItem = (it) => { if (it.kind !== "audio") return; M.ownSong = {ref: Bin.ref(it), name: it.file.filename, url: Bin.url(it)}; fsec.song.setValue(it.file.filename); };
+  $("#m-song-drop")._onItem = (it) => {
+    if (it.kind !== "audio") return;
+    M.ownSong = {ref: Bin.ref(it), name: it.file.filename, url: Bin.url(it)};
+    fillDrop($("#m-song-drop"), h("audio", {src: M.ownSong.url, controls: true, style: "width:100%"}), h("span", {}, it.file.filename));
+    fsec.song.setValue(it.file.filename);
+    if (M.plan) { M.plan.song.file = M.ownSong.ref; M.plan.song.fileName = it.file.filename; M.plan.music = null; useOwnSong(M.plan); fsave(); fdraw(); }
+  };
 }
 function fshape() {
   const s = CR.shotSize("9:16", M.short), f = CR.frames(M.len);
@@ -1303,8 +1312,8 @@ function fdraw() {
       h("div", {class: "frow"},
         h("input", {type: "text", value: sh.subject, placeholder: "subject", tip: "What SAM 3 tracks for the effect", oninput: (e) => { sh.subject = e.target.value; fsave(); }}),
         h("select", {tip: "The effect", onchange: (e) => { sh.effect = e.target.value; sh.fx = null; fsave(); fsteps(); }}, h("option", {value: "none", selected: !G.fxPreset(sh.effect)}, "no effect"),
-          ...G.FX_GROUPS.map(g => h("optgroup", {label: g.name}, ...G.FX_CHOICES.filter(c => c.group === g.id).map(c => h("option", {value: c.key, selected: c.key === sh.effect}, c.name))))),
-        h("select", {tip: "The lane of the song that fires it", onchange: (e) => { sh.on = e.target.value; sh.fx = null; fsave(); fsteps(); }}, ...G.FILM_LANES.map(x => h("option", {value: x, selected: x === sh.on}, `on ${x}`)))));
+          ...G.FX_GROUPS.map(g => h("optgroup", {label: g.name}, ...G.ONE_CLIP_CHOICES.filter(c => c.group === g.id).map(c => h("option", {value: c.key, selected: c.key === sh.effect}, c.name))))),
+        h("select", {tip: "The lane of the song that fires it", onchange: (e) => { sh.on = e.target.value; sh.fx = null; fsave(); fsteps(); }}, ...filmLanes(p).map(x => h("option", {value: x, selected: x === laneOf(p, sh.on)}, `on ${x}`)))));
     // drop a still or a clip from the bin onto a shot
     card.addEventListener("dragover", (e) => { e.preventDefault(); card.classList.add("over"); });
     card.addEventListener("dragleave", () => card.classList.remove("over"));
@@ -1396,7 +1405,7 @@ $("#m-plan").addEventListener("click", async () => {
     M.plan = await planFilm({idea, shots: M.shots, genre: M.genre}, filmIO);
     const s = CR.shotSize("9:16", M.short); M.plan.size = {w: s.w, h: s.h};
     if (M.len !== SHOT_SECONDS) M.plan.shotSeconds = M.len;
-    if (M.songSrc === "own" && M.ownSong) { M.plan.song.file = M.ownSong.ref; M.plan.song.fileName = M.ownSong.name; }
+    if (M.songSrc === "own" && M.ownSong) { M.plan.song.file = M.ownSong.ref; M.plan.song.fileName = M.ownSong.name; useOwnSong(M.plan); }
     $("#m-progress").replaceChildren();
     $("#m-status").textContent = `Planned: ${M.plan.title}. Edit anything, then run the steps one by one, or Make the rest.`;
     fsave(); fdraw();
@@ -1458,7 +1467,6 @@ const TIPS = {
   "#f-song": "Its beats, kick, snare, hats, loudness and brightness become lanes",
   "#f-style": "YuE2's brief: genre, instruments, mood, tempo", "#f-lyrics": "Lyrics with [verse] and [chorus], or [Instrumental]", "#f-secs": "How long the song is",
   "#f-cues": "One cue per line: a time, a lane, an optional strength",
-  "#f-beds": "Background sound under everything",
   // renders
   "#r-free": "Unload every model and free GPU and system memory", "#r-stop": "Stop the job that is running now",
   "#r-engine": "Which model renders Edit's Transform and Swap, and Genjutsu", "#r-check": "Check every workflow against this ComfyUI again (after installing something)",

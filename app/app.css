@@ -799,3 +799,7 @@ details.prompt summary { color: var(--dim); font-size: 10.5px; letter-spacing: .
 .panel > .drop:has(> video), .panel > .drop:has(> img) { display: flex; align-items: center; gap: 12px; text-align: left; padding: 8px; border-style: solid; border-color: var(--line); background: var(--card); }
 .panel > .drop:has(> video) video, .panel > .drop:has(> img) img { width: 54px; height: 96px; object-fit: cover; margin: 0; border-radius: var(--r-xs); flex: none; }
 .panel > .drop:has(> video) span, .panel > .drop:has(> img) span { font-size: 12px; color: var(--text); line-height: 1.45; word-break: break-word; }
+
+/* FX: beds while the clip loops (it keeps its own sound) */
+#f-beds.off { opacity: .4; pointer-events: none; }
+.setrow.opt .t .hint { margin: 0 0 0 4px; }

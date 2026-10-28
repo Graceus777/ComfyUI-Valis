@@ -30,6 +30,8 @@ def make_score(c, title="untitled", shot_seconds=SHOT_SECONDS, section_bars=8, s
         bpm = 60.0 / float(np.median(np.diff(beats)))
     bpm = bpm or 120.0
     meter = meter_in or int(c.meter or 4)
+    # the meter as written: the sheet's own (6/8 in YuE2's M: line), or the Score tab's 6/8 and 7/8 when you pick them
+    unit = (8 if meter_in in (6, 7, 9, 12) else 4) if meter_in else int((c.meta or {}).get("meter_unit") or 4)
     regrid = (meter_in and meter_in != int(c.meter or 4)) or (bpm_in and c.bpm and abs(bpm_in - float(c.bpm)) > .5)
     beat_s = 60.0 / bpm
     bar_s = beat_s * meter
@@ -104,6 +106,6 @@ def make_score(c, title="untitled", shot_seconds=SHOT_SECONDS, section_bars=8, s
     if "mix" not in env and loud is not None:
         env["mix"] = env.get("loud")
     return {"valis_score": 1, "title": title, "made_by": "Valis Score (make)", "source": source or c.meta.get("source", ""),
-            "bpm": round(bpm, 2), "meter": f"{meter}/4", "beat_seconds": round(beat_s, 5), "bar_seconds": round(bar_s, 5),
+            "bpm": round(bpm, 2), "meter": f"{meter}/{unit}", "beat_seconds": round(beat_s, 5), "bar_seconds": round(bar_s, 5),
             "bars": n_bars, "duration_seconds": round(dur, 3), "fps": FPS, "key": c.meta.get("key", ""),
             "events": events, "velocities": vels, "envelopes": env, "sections": sections, "shots": shots}

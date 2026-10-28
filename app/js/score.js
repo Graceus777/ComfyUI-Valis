@@ -62,7 +62,7 @@ export class ScoreView {
       h("h3", {class: "lab", tip: "SAM 3 follows it in every shot, for effects about someone"}, "Subject"),
       h("div", {class: "row"}, h("input", {type: "text", id: "s-a", value: "the woman", tip: "subject A (the classic engine takes two)"}), h("input", {type: "text", id: "s-b", value: "the man", tip: "subject B"})));
     this.secShots = section("Shots", {id: "s-sec-shots", open: true, tip: "The score's shots, cut on whole bars. Give each a clip, then render."},
-      h("div", {class: "row", style: "margin-bottom:8px"}, h("button", {class: "btn small", type: "button", id: "s-fill", tip: "Lay the newest clips from the bin on the shots that have none, in order"}, "Fill from the bin")),
+      h("div", {class: "row", style: "margin-bottom:8px"}, h("button", {class: "btn small", type: "button", id: "s-fill", tip: "Lays the newest clips from the bin on the empty shots, in the order they were made"}, "Fill from the bin")),
       h("div", {class: "map", id: "s-shots"}));
     $("#s-sections").replaceChildren(this.secRules, this.secShots);
     this.engineSeg = seg($("#s-engine"), [{id: "library", name: "Library", tip: "The FX tab's effects: any lane, any score"}, {id: "classic", name: "Classic", tip: "The example's own effects: candles, ghost crowd, reveals. Made for its lanes"}],
@@ -137,11 +137,21 @@ export class ScoreView {
       this.set(sc);
     } catch (e) { toast("The example score is missing from the pack", true); }
   }
-  engineSet(id) { this.engine = id; $$("#s-engine button").forEach(b => b.classList.toggle("on", b.dataset.id === id)); }
+  engineSet(id) { this.engine = id === "classic" ? "classic" : "library"; $$("#s-engine button").forEach(b => b.classList.toggle("on", b.dataset.id === this.engine)); }
+  // the song as a ComfyUI input: the example's ships with the pack and is uploaded the first time a job needs it
+  async ensureAudio() {
+    if (this.audioRef || !this.audioUrl || this.audioUrl.startsWith("blob:")) return this.audioRef;
+    try {
+      const r = await fetch(this.audioUrl); if (!r.ok) return null;
+      const u = await api.upload(new File([await r.blob()], this.audioUrl.split("/").pop(), {type: "audio/mpeg"}));
+      this.audioRef = api.inputRef(u);
+    } catch { /* no song: the shots keep their own sound */ }
+    return this.audioRef;
+  }
   async loadFiles(files) {
     const j = files.find(f => f.name.endsWith(".json")), a = files.find(f => f.type.startsWith("audio/"));
     if (a) { this.audio.src = this.audioUrl = URL.createObjectURL(a); const u = await api.upload(a); this.audioRef = api.inputRef(u); }
-    if (j) { const sc = JSON.parse(await j.text()); this.thumbs = []; this.scoreRef = null; this.scoreFile = j; this.engineSet(sc.made_by ? "library" : "classic"); this.set(sc); }
+    if (j) { const sc = JSON.parse(await j.text()); this.thumbs = []; this.scoreRef = null; this.scoreFile = j; this.engineSet(sc.valis_engine || (sc.made_by ? "library" : "classic")); this.set(sc); }
   }
   // a made score comes back as a .json in output/valis/scores; its song is the file you gave, or YuE2's
   async made(j, audio) {
@@ -216,10 +226,11 @@ export class ScoreView {
         ...this.lanes.map(x => h("option", {value: x, selected: x === r.lane}, `${x.replaceAll("_", " ")} (${this.sc.events[x].length})`)));
       const fx = h("select", {onchange: (e) => { r.effect = e.target.value; this.renderRules(); this.draw(); }, tip: esc(blurb(r.effect))},
         ...(classic ? CLASSIC.map(x => h("option", {value: x.id, selected: x.id === r.effect}, x.name))
-          : G.FX_GROUPS.map(g => h("optgroup", {label: g.name}, ...G.FX_CHOICES.filter(c => c.group === g.id).map(c => h("option", {value: c.key, selected: c.key === r.effect}, c.name))))));
+          : G.FX_GROUPS.map(g => h("optgroup", {label: g.name}, ...G.ONE_CLIP_CHOICES.filter(c => c.group === g.id).map(c => h("option", {value: c.key, selected: c.key === r.effect}, c.name))))));
       return h("div", {class: "maprow rule"}, h("i", {class: "swatch", style: `background:${FX_COLOR[r.effect.split(":")[0]] || "#777"}`}), lane, h("span", {class: "arrow"}, "→"), fx,
         h("button", {class: "x", type: "button", tip: "Remove", onclick: () => { this.rules.splice(k, 1); this.renderRules(); this.draw(); }}, "×"));
     }));
+    if (this.sc?.shots && this.reveals() !== !!$("#s-shots .layersel")) this.renderShots();     // a reveal rule adds a take per shot
   }
   clipsInBin() { return Bin.list("clip").slice(0, 60); }
   renderShots() {
@@ -234,7 +245,10 @@ export class ScoreView {
       const row = h("div", {class: "shotrow" + (res ? " done" : "") + (this.cur === k ? " cur" : ""), "data-shot": shot.id},
         h("div", {class: "nm", onclick: () => this.seek(shot.start_frame / 24 + .01)}, `${shot.id}${shot.name ? " " + shot.name : ""}`,
           h("span", {}, `bars ${shot.start_bar + 1}–${shot.start_bar + Math.round(shot.frames / 24 / sc.bar_seconds)} · ${sec?.name || ""} · ${(shot.frames / 24).toFixed(1)} s`)),
-        h("button", {class: "btn go", type: "button", disabled: !a.clip, onclick: () => this.renderShot(shot)}, res ? "again" : "Render"), sel);
+        h("button", {class: "btn go", type: "button", disabled: !a.clip, onclick: () => this.renderShot(shot)}, res ? "again" : "Render"), sel,
+        this.reveals() ? h("select", {class: "layersel", tip: "The transformed take the reveal burns in (an Edit render of this shot)", onchange: (e) => {
+          const it = clips.find(c => c.id === e.target.value); a.layer = it ? {ref: Bin.ref(it), label: it.label || it.file.filename} : null; delete this.results[shot.id]; this.renderShots(); }},
+          h("option", {value: ""}, a.layer ? `reveal: ${a.layer.label}` : "— no reveal —"), ...clips.map(c => h("option", {value: c.id}, `reveal: ${c.label || c.file.filename}`))) : null);
       row.addEventListener("dragover", (e) => { e.preventDefault(); row.classList.add("over"); });
       row.addEventListener("dragleave", () => row.classList.remove("over"));
       row.addEventListener("drop", (e) => { e.preventDefault(); row.classList.remove("over"); const raw = e.dataTransfer.getData("application/x-valis-item"); if (!raw) return;
@@ -243,14 +257,20 @@ export class ScoreView {
     }));
   }
   fill() {
-    const clips = this.clipsInBin(); let i = 0;
+    // the newest clips, laid in the order they were made (a film's shot 1 first), or by shot number when each has one
+    const need = (this.sc?.shots || []).filter(s => !this.assign[s.id]?.clip).length;
+    const clips = this.clipsInBin().slice(0, need).reverse(), num = (it) => Number((it.label || "").match(/\bshot (\d+)\b/i)?.[1]);
+    if (clips.every(num)) clips.sort((a, b) => num(a) - num(b));
+    let i = 0;
     for (const s of this.sc?.shots || []) { const a = this.assign[s.id] || (this.assign[s.id] = {}); if (!a.clip && clips[i]) { const it = clips[i++]; a.clip = {ref: Bin.ref(it), url: Bin.url(it), label: it.label || it.file.filename}; } }
     this.renderShots(); this.preview(true);
     toast(i ? `${i} shot${i > 1 ? "s" : ""} got a clip from the bin` : "No clips in the bin yet", !i);
   }
+  // the classic engine's reveals bring in a second take: the transformed shot
+  reveals() { return this.engine === "classic" && this.rules.some(r => ["ignite", "vanish", "crowd"].includes(r.effect)); }
   sectionAt(t) { return (this.sc.sections || []).find(s => t >= s.start - 1e-6 && t < s.end); }
   // for the FX tab's "Score" lanes: the score (uploaded to input/) and its song
-  async forFx() { if (!this.sc) return null; return {score: await this.ensureScore(), audio: this.audioRef, title: this.sc.title}; }
+  async forFx() { if (!this.sc) return null; return {score: await this.ensureScore(), audio: await this.ensureAudio(), title: this.sc.title}; }
   async ensureScore() {
     if (this.scoreRef) return this.scoreRef;
     const u = await api.upload(this.scoreFile);
@@ -266,12 +286,17 @@ export class ScoreView {
   async renderShot(shot) {
     const a = this.assign[shot.id] || {};
     if (!a.clip) return toast(`Give ${shot.id} a clip first`, true);
-    const score = await this.ensureScore(), sec = this.sectionAt(shot.start_frame / 24), tag = Date.now().toString(36);
+    const two = this.engine === "classic" ? [] : this.rules.filter(r => G.needsOther(r.effect));
+    if (two.length) return toast(`${two.map(r => G.fxPreset(r.effect).name).join(", ")} needs a second clip, which only the FX tab takes: pick another effect`, true);
+    const who = this.engine === "classic" ? [] : this.rules.filter(r => G.fxPreset(r.effect)?.needs.includes("subject"));
+    if (who.length && !$("#s-a").value.trim()) return toast(`${who.map(r => G.fxPreset(r.effect).name).join(", ")} follows a subject: name it under Subject`, true);
+    const score = await this.ensureScore(), audio = await this.ensureAudio(), sec = this.sectionAt(shot.start_frame / 24), tag = Date.now().toString(36);
     const g = this.engine === "classic"
-      ? G.valisShot({clip: a.clip.ref, score, startBar: shot.start_bar, section: sec?.name || "", layer: null, rules: this.rules.map(r => ({event: r.lane, effect: r.effect})),
-          targetA: $("#s-a").value.trim(), targetB: $("#s-b").value.trim(), prefix: `valis/score_${shot.id}_${tag}`})
+      ? G.valisShot({clip: a.clip.ref, score, startBar: shot.start_bar, section: sec?.name || "", layer: a.layer?.ref || null, rules: this.rules.map(r => ({event: r.lane, effect: r.effect})),
+          targetA: $("#s-a").value.trim(), targetB: $("#s-b").value.trim(), prefix: `valis/score_${shot.id}_${tag}`,
+          music: audio ? {audio, start: shot.start_frame / 24, seconds: this.span(shot)} : null})
       : G.fx({clip: a.clip.ref, subject: this.rules.some(r => { const f = G.fxPreset(r.effect); return f && (f.needs.includes("subject") || f.params.at === "subject"); }) ? $("#s-a").value.trim() : "",
-          source: "score", score, audio: this.audioRef, layers: this.rules.map(r => G.fxLayer(r.effect, r.lane)).filter(Boolean),
+          source: "score", score, audio, layers: this.rules.map(r => G.fxLayer(r.effect, r.lane)).filter(Boolean),
           sound: $("#s-fxsound").checked, seconds: this.span(shot), start: shot.start_frame / 24, fit: true, prefix: `valis/score_${shot.id}_${tag}`,
           retime: await api.hasNode("ValisFrameRate")});
     return new Promise((res) => this.run(g, `Score · ${shot.id}`, null, {onDone: (j) => {
@@ -292,6 +317,7 @@ export class ScoreView {
     if (shots.length < sc.shots.length) toast(`Cutting the ${shots.length} rendered shots of ${sc.shots.length}`);
     // the song goes on past the last shot: an end card plays over the rest of it (up to 8 s), so the cut ends with the song
     const last = shots[shots.length - 1], end = last.start_frame / 24 + this.span(last), rest = sc.duration_seconds - end, text = $("#s-title").value.trim();
+    await this.ensureAudio();
     let title = null;
     if (text && this.audioRef && rest > 1) {
       const v = await new Promise((res) => { const e = document.createElement("video"); e.preload = "metadata"; e.onloadedmetadata = () => res(e); e.onerror = () => res(null); e.src = api.viewUrl(this.results[last.id]); });
@@ -299,7 +325,7 @@ export class ScoreView {
     }
     // no effect sounds and no gaps between the shots: the song runs unbroken under the whole cut
     const all = sc.shots, gapless = shots.every((s, k) => !k || all.indexOf(s) === all.indexOf(shots[k - 1]) + 1);
-    const song = !$("#s-fxsound").checked && this.audioRef && gapless
+    const song = (!$("#s-fxsound").checked || this.engine === "classic") && this.audioRef && gapless
       ? {audio: this.audioRef, start: shots[0].start_frame / 24, seconds: shots.reduce((t, s) => t + this.span(s), 0) + (title ? title.seconds : 0)} : null;
     this.run(G.filmCut({shots: shots.map(s => ({file: api.fileRef(this.results[s.id]), seconds: this.span(s)})), title, song, prefix: `valis/score_cut_${Date.now().toString(36)}`}),
       "Score · cut", $("#s-viewer"), {onDone: (j) => {

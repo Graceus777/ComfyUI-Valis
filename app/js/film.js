@@ -19,6 +19,15 @@ import * as P from "./presets.js";
 
 export const SHOT_SECONDS = 107 / 24;          // one H3 clip
 
+// the lanes a film's song has. YuE2's sheet music adds bar, melody and bass to what Valis hears; your own song only has
+// what it hears (kick, snare, hat, beat, downbeat), so a shot on a sheet-music lane fires on the nearest one it has
+export const OWN_SONG_LANES = ["kick", "snare", "hat", "beat", "downbeat"];
+const OWN_LANE = {bar: "downbeat", melody: "beat", bass: "kick"};
+export const filmLanes = (plan) => plan?.song?.file ? OWN_SONG_LANES : G.FILM_LANES;
+export const laneOf = (plan, on) => plan?.song?.file && OWN_LANE[on] ? OWN_LANE[on] : on;
+// a song of your own on a plan: every shot moved onto a lane the song has
+export function useOwnSong(plan) { for (const s of plan.shots || []) s.on = laneOf(plan, s.on); return plan; }
+
 export function parsePlan(text, shots) {
   const a = text.indexOf("{"), b = text.lastIndexOf("}");
   if (a < 0 || b < a) throw new Error("the planner wrote no JSON");
@@ -409,8 +418,10 @@ export async function effectShots(plan, io, {only = null, onStage = () => {}} = 
     const s = plan.shots[k], f = G.fxPreset(s.effect);
     if (!s.clip || stale(plan, s)) throw new Error(`shot ${k + 1} isn't shot${s.clip ? " at this length" : ""} yet`);
     onStage("effects", `effects and sound on shot ${k + 1} of ${plan.shots.length}`, k);
-    const layers = f ? [G.fxLayer(s.effect, s.on)] : [];
-    const subject = f && (f.needs.includes("subject") || f.params.at === "subject") ? s.subject : "";
+    if (f?.needs.includes("other")) throw new Error(`shot ${k + 1}: ${f.name} needs a second clip, which only the FX tab takes. Pick another effect`);
+    const layers = f ? [G.fxLayer(s.effect, laneOf(plan, s.on))] : [];
+    const subject = f && (f.needs.includes("subject") || f.params.at === "subject") ? (s.subject || "").trim() : "";
+    if (f?.needs.includes("subject") && !subject) throw new Error(`shot ${k + 1}: ${f.name} follows a subject. Name it on the card`);
     // a pass is found again only if it was made from this clip with these settings (a re-shot shot, or a new effect,
     // once picked up the old pass by its name)
     const tag = hash([s.clip.filename, s.effect, s.on, s.subject, s.holdColour !== false, s.key?.filename].join("|"));

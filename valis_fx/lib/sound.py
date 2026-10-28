@@ -587,7 +587,7 @@ EFFECT_SOUNDS = {
     "Rays": [("shimmer", "on", {})],
     "Split": [("slip", "on", dict(gain=.8))],
     "Eras": [("slip", "on", dict(gain=.7))],
-    "Projector": [("slip", "burn", dict(gain=.6))],
+    "Projector": [("slip", "burn|on", dict(gain=.6))],
     # light: a sound only where the light is a story event (a strike is heard, a flame gutters); light itself is silent
     "Lightning": [("thunder", "on", {})],
     "Flicker": [("candle", "on", dict(gain=.6))],
@@ -772,11 +772,34 @@ class SoundDesign:
         self.beds.append((x * (e * f)[:, None], BED_LEVEL + 20 * math.log10(max(gain, 1e-4) / .5), .2))
         return self
 
+    def rises(self, curve, lo=.35, hi=.6):
+        """A held curve's swells as a hit lane (it climbs past `hi` of its peak after dropping under `lo`), so an
+        effect driven by a level (a Tear opening with the loudness) is heard where it opens."""
+        name = f"_rise_{curve}"
+        if name not in self.cues.lanes:
+            if not getattr(self, "_own_cues", False):          # a lane of our own on a copy: the cues are shared with the render
+                import copy
+                self.cues = copy.copy(self.cues); self.cues.lanes = dict(self.cues.lanes); self.cues.vals = dict(self.cues.vals); self._own_cues = True
+            c = np.asarray(self.cues.curves.get(curve, []), float)
+            ts, vs, armed = [], [], True
+            top = c.max() if len(c) else 0.0
+            for i, v in enumerate(c):
+                if armed and top > 0 and v >= hi * top:
+                    ts.append(i / self.cues.fps); vs.append(min(1.0, v / top)); armed = False
+                elif v < lo * top:
+                    armed = True
+            self.cues.lanes[name] = np.asarray(ts, np.float64); self.cues.vals[name] = np.asarray(vs, np.float64)
+        return name
+
     def for_stack(self, effects, gain=1.0):
         for fx in effects:
             name = type(fx).__name__
             for design, attr, opt in EFFECT_SOUNDS.get(f"{name}:{getattr(fx, 'style', '')}", EFFECT_SOUNDS.get(name, [])):
-                lane = getattr(fx, attr, None)
+                # "burn|on": the first of those lanes the effect has; an effect on a held level (by=, no lane) sounds on its swells
+                lane = next((getattr(fx, a, None) for a in attr.split("|") if getattr(fx, a, None)), None)
+                by = getattr(fx, "by", None)
+                if not lane and attr == "on" and isinstance(by, str) and by in self.cues.curves:
+                    lane = self.rises(by)
                 if lane and isinstance(lane, (str, list, tuple)):
                     o = dict(opt)
                     if attr == "on" and int(getattr(fx, "every", 1) or 1) > 1:     # the sound keeps the effect's pace

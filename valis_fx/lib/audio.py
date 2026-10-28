@@ -82,6 +82,26 @@ def _beats(env, fr, bpm, tight=100.0):
     return np.array(out[::-1])
 
 
+# key profiles (Albrecht and Shanahan 2013), tonic first: major, minor
+_KEYS = (np.array([5.14, 0.71, 3.50, 0.75, 4.13, 3.97, 0.73, 4.69, 0.82, 3.55, 0.62, 1.79]),
+         np.array([5.42, 0.85, 3.27, 4.31, 0.88, 3.74, 1.07, 5.07, 2.92, 1.02, 2.52, 1.57]))
+_PC = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
+
+
+def key_of(y, min_r=.5):
+    """The song's key from its chroma (a key-profile match): 'G minor', 'Eb major', or None when nothing fits well
+    (a drum loop, noise). A long window (8192 at 22.05 kHz) so the low notes land on the right semitone. The sound
+    design tunes its bells, swells and hums to it. On four of the studio's songs it names the key their sheet music says."""
+    f, t, Z = ss.stft(y, SR, nperseg=8192, noverlap=8192 - 2048, boundary=None, padded=True)
+    sel = (f >= 55) & (f <= 2000)
+    pc = np.round(12 * np.log2(f[sel] / 440.0) + 69).astype(int) % 12
+    chroma = np.bincount(pc, weights=np.log1p(10 * np.abs(Z[sel])).sum(1), minlength=12)
+    if chroma.sum() <= 0 or chroma.std() < 1e-9:
+        return None
+    r, t, mode = max((float(np.corrcoef(chroma, np.roll(prof, k))[0, 1]), k, m) for m, prof in zip(("major", "minor"), _KEYS) for k in range(12))
+    return f"{_PC[t]} {mode}" if r >= min_r else None
+
+
 def analyse(y, sr, fps=24.0, bpm_hint=None, meter=4):
     from .cues import Cues
     y = _mono(y, sr)
@@ -120,4 +140,4 @@ def analyse(y, sr, fps=24.0, bpm_hint=None, meter=4):
         e = M[(f >= lo) & (f < hi)].mean(0); e = ss.lfilter([.15], [1, -.85], e)
         curves[name] = np.interp(tf, tt, e / (np.percentile(e, 99) + 1e-9)).clip(0, 1.2).astype(np.float32)
     return Cues(lanes, vals, curves, dur, fps, float(bpm), meter, float(lanes["downbeat"][0]) if len(lanes["downbeat"]) else 0.0,
-                {"source": "audio analysis", "bpm": round(float(bpm), 2)})
+                {"source": "audio analysis", "bpm": round(float(bpm), 2), **({"key": k} if (k := key_of(y)) else {})})

@@ -670,7 +670,9 @@ export function turn({a, b, swapAt = -1, person = "person", voice = false, prefi
 // another lane remaps it, so "melody -> candles" lights a candle on every melody note.
 const ENGINE_EVENT = {candles: "musicbox", crowd: "pah", ignite: "kick", vanish: "response_right", shockwave: "stroke",
   lightning: "violin", rim: "heartbeat", flare: "stab", halo: "impact", whiteout: "final_hit", glint: "glint"};
-export function valisShot({clip, score, startBar, mode = "auto", section = "", layer = null, rules = [], targetA = "", targetB = "", prefix = "valis/valis"}) {
+// music: {audio, start, seconds}: the score's song under the shot in place of the clip's own sound (a scored film never
+// carries H3's own sound: its room tone and murmurs bled under the music)
+export function valisShot({clip, score, startBar, mode = "auto", section = "", layer = null, rules = [], targetA = "", targetB = "", prefix = "valis/valis", music = null}) {
   const has = (fx) => rules.some(r => r.effect === fx);
   const remap = {};
   for (const r of rules) { const k = ENGINE_EVENT[r.effect]; if (k && r.event !== k) remap[k] = r.event; }
@@ -706,7 +708,13 @@ export function valisShot({clip, score, startBar, mode = "auto", section = "", l
   }
   if (layer) { g["40"] = N("LoadVideo", {file: layer}); g["41"] = N("GetVideoComponents", {video: ["40", 0]}); fx.fx_images = ["41", 0]; }
   g["80"] = N("ValisFX", fx);
-  g["81"] = N("CreateVideo", {images: ["80", 0], fps: 24, audio: ["17", 1]});     // the pass keeps the shot's own sound
+  let audio = ["17", 1];                                                            // no song: the pass keeps the shot's own sound
+  if (music?.audio) {
+    g["45"] = N("LoadAudio", {audio: music.audio});
+    g["46"] = N("TrimAudioDuration", {audio: ["45", 0], start_index: music.start || 0, duration: music.seconds});
+    audio = ["46", 0];
+  }
+  g["81"] = N("CreateVideo", {images: ["80", 0], fps: 24, audio});
   g["82"] = N("SaveVideo", {video: ["81", 0], filename_prefix: prefix, format: "auto", codec: "auto"});
   return g;
 }
@@ -791,8 +799,12 @@ export function fxPreset(key) {
 // every effect and preset as one list (the Score rules, a Film shot), by group
 export const FX_CHOICES = LIBRARY.flatMap(l => (l.presets?.length ? l.presets : [null]).map((p, k) => {
   const f = fxPreset(p && k ? `${l.id}:${p.id}` : l.id);
-  return {key: f.key, name: f.name, group: l.group, blurb: p?.tip || l.blurb};
+  return {key: f.key, name: f.name, group: l.group, blurb: p?.tip || l.blurb, needs: f.needs};
 }));
+// what Film's shot cards and Score's rules offer: one clip each, so nothing that shows another scene (Tear, Time slip,
+// Era cut, Double exposure, Split time need Another clip, which only the FX tab has)
+export const ONE_CLIP_CHOICES = FX_CHOICES.filter(c => !c.needs.includes("other"));
+export const needsOther = (key) => !!fxPreset(key)?.needs.includes("other");
 // the layer the renderer takes for a key on a lane
 export function fxLayer(key, on, extra = {}) {
   const f = fxPreset(key);
@@ -908,7 +920,10 @@ export function fx({clip, other = null, subject = "", source = "sheet", audio = 
     prev = id;
   });
   const r = {images: frames, cues: ["50", 0], stack: [prev, 0], fps: 24, start: 0};
-  if (other) { g["40"] = N("LoadVideo", {file: other}); g["41"] = N("GetVideoComponents", {video: ["40", 0]}); r.other = ["41", 0]; }
+  if (other) {
+    g["40"] = N("LoadVideo", {file: other}); g["41"] = N("GetVideoComponents", {video: ["40", 0]}); r.other = ["41", 0];
+    if (retime) { g["41r"] = N("ValisFrameRate", {images: ["41", 0], source_fps: ["41", 2], fps: 24}); r.other = ["41r", 0]; }
+  }
   if (subject) { Object.assign(g, personMatte(frames, subject, 30, 10)); r.subject = ["33", 0]; }
   // loop: the clip already loops (Extras · Loop); the stack is rendered so it loops with it (Valis Loop · Render: the cues
   // repeat, every effect is played once round first, what still differs is sealed), the clip keeps its own sound, plus a GIF

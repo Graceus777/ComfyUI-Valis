@@ -354,6 +354,47 @@ ok(shotSeconds(bar.seconds).bars === 4, "film · whole bars in a clip (4 bars of
   { const c = shotSeconds(60 / 100 * 4); ok(c.bars === 1 && Math.abs(c.seconds - 2.4) < .01, "film · two bars at 100 BPM don't: one bar", JSON.stringify(c)); }
 }
 
+// ---- a scored film never carries H3's own sound: the song (and the effects' sounds) replace it
+{
+  const usesClipSound = (g) => Object.values(g).some(n => Object.values(n.inputs || {}).some(v => Array.isArray(v) && v[0] === "17" && v[1] === 1));
+  const film = G.fx({clip: "a.mp4", source: "song", audio: "s.flac", abc: "", layers: [G.fxLayer("Flicker", "beat")], sound: true, seconds: 4.46, start: 8.9});
+  const quiet = G.fx({clip: "a.mp4", source: "song", audio: "s.flac", layers: [], sound: true, seconds: 4.46, start: 8.9});
+  const scoreFx = G.fx({clip: "a.mp4", source: "score", score: "x.json", audio: "s.flac", layers: [G.fxLayer("Glow", "beat")], sound: true, fit: true});
+  const scoreBare = G.fx({clip: "a.mp4", source: "score", score: "x.json", audio: "s.flac", layers: [G.fxLayer("Glow", "beat")], sound: false, fit: true});
+  ok(![film, quiet, scoreFx, scoreBare].some(usesClipSound), "Sound · Film's effects pass and Score's library renders never route the shot's own sound");
+  const classic = G.valisShot({clip: "a.mp4", score: "x.json", startBar: 4, rules: [], music: {audio: "s.flac", start: 8.9, seconds: 4.46}});
+  ok(!usesClipSound(classic) && classic["81"].inputs.audio[0] === "46" && classic["46"].inputs.start_index === 8.9, "Sound · a classic Score render carries its slice of the song, not the shot's sound");
+  ok(usesClipSound(G.valisShot({clip: "a.mp4", score: "x.json", startBar: 0, rules: []})), "Sound · with no song (a cue sheet) the classic pass keeps the shot's sound");
+  ok(usesClipSound(G.fx({clip: "a.mp4", source: "sheet", cueSheet: "1 kick", layers: [G.fxLayer("Punch", "kick")], sound: true, own: true})), "Sound · the FX tab on a cue sheet keeps the clip's voices");
+  const io = {ref: (f) => f.filename, exists: async () => false, run: async (g) => { io.g = g; return {outputs: [{filename: "fx.mp4", subfolder: "valis", type: "output"}]}; }};
+  const plan = {tag: "t", music: {audio: {filename: "s.flac"}, abc: "", bar: {seconds: 2.23}}, shots: [{clip: {filename: "a.mp4"}, key: {filename: "k.png"}, effect: "Glint", on: "downbeat", subject: "the blade"}]};
+  await F.effectShots(plan, io);
+  ok(!usesClipSound(io.g) && io.g["45"]?.inputs.audio === "s.flac", "Sound · Film's effects pass, as film.js sends it, puts the song under the shot");
+}
+// ---- Film and Score take one clip per shot: nothing that needs another clip is offered, and an old plan's says so
+{
+  ok(G.ONE_CLIP_CHOICES.length && G.ONE_CLIP_CHOICES.every(c => !c.needs.includes("other")) && !G.ONE_CLIP_CHOICES.some(c => /^(Tear|TimeSlip|Eras|DoubleExposure|Split)/.test(c.key)),
+     "Choices · Film and Score don't offer Tear, Time slip, Era cut, Double exposure or Split time");
+  ok(G.FX_CHOICES.some(c => c.key === "Tear") && G.needsOther("Tear") && !G.needsOther("Flicker:tube"), "Choices · the FX tab still has them");
+  const io = {ref: (f) => f.filename, exists: async () => false, run: async () => { throw new Error("should not run"); }};
+  let err = ""; try { await F.effectShots({tag: "t", music: {audio: {filename: "s.flac"}, abc: "", bar: {seconds: 2}}, shots: [{clip: {filename: "a.mp4"}, effect: "Tear", on: "beat"}]}, io); } catch (e) { err = e.message; }
+  ok(/needs a second clip/.test(err), "Film · a shot on Tear says it needs a second clip instead of failing in ComfyUI", err);
+  err = ""; try { await F.effectShots({tag: "t", music: {audio: {filename: "s.flac"}, abc: "", bar: {seconds: 2}}, shots: [{clip: {filename: "a.mp4"}, effect: "Echo", on: "beat", subject: " "}]}, io); } catch (e) { err = e.message; }
+  ok(/follows a subject/.test(err), "Film · Echo with no subject says so", err);
+  const fx = G.fx({clip: "a.mp4", other: "b.mp4", layers: [G.fxLayer("Tear")], retime: true});
+  ok(fx["41r"]?.class_type === "ValisFrameRate" && fx["80"].inputs.other[0] === "41r", "FX · Another clip is retimed to 24 fps like the clip");
+}
+// ---- your own song in Film: only the lanes Valis hears in it (no sheet music: no bar, melody or bass)
+{
+  const own = {song: {file: "mine.flac"}, shots: [{on: "bar"}, {on: "melody"}, {on: "bass"}, {on: "snare"}]};
+  ok(F.filmLanes(own).join() === "kick,snare,hat,beat,downbeat" && F.filmLanes({song: {}}).includes("melody"), "Film · your own song offers the lanes it has");
+  F.useOwnSong(own);
+  ok(own.shots.map(s => s.on).join() === "downbeat,beat,kick,snare", "Film · a shot on bar, melody or bass moves to downbeat, beat or kick with your own song", own.shots.map(s => s.on).join());
+  const io = {ref: (f) => f.filename, exists: async () => false, run: async (g) => { io.g = g; return {outputs: [{filename: "fx.mp4", subfolder: "valis", type: "output"}]}; }};
+  await F.effectShots({tag: "t", song: {file: "mine.flac"}, music: {audio: {filename: "mine.flac"}, own: true, abc: "", bar: {seconds: 2}}, shots: [{clip: {filename: "a.mp4"}, effect: "Sweep", on: "bar"}]}, io);
+  ok(io.g["60"].inputs.on === "downbeat", "Film · an old plan's bar lane fires on the downbeat of your own song", io.g["60"].inputs.on);
+}
+
 // ---- Setup covers every graph the studio sends (each is validated with the rest of features() at the top), and the
 // end-to-end test brings its own song
 {
