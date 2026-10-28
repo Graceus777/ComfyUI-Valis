@@ -100,7 +100,7 @@ does every move from words.
 | Arc left ✦ | The ArcShot LoRA only learned left to right, so arc left is arc right run on the mirrored keyframe and mirrored back. | the ArcShot LoRA, Wan 2.2 |
 
 Dolly zoom out and whip pan carry no ✦ because no LoRA is involved, but they use their Valis step only while **trained
-moves** is on. The LoRAs, their sources and their licences (the Wan 2.2 move LoRAs are non-commercial) are listed in
+moves (✦)** is on. The LoRAs, their sources and their licences (the Wan 2.2 move LoRAs are non-commercial) are listed in
 [Install](../install.md).
 
 Things to know about trained moves:
@@ -146,8 +146,8 @@ the subject behind. It pins the shot's last frame:
 - Crane over the head, top-down, crane up, helicopter, FPV drone, arc left and arc right end on a frame made first by a
   Qwen Image 2.1 edit of the keyframe, seen from where the camera should finish (saved as `…_end`).
 
-Other moves have no pinned end. A trained move ignores this box, and so does the whip pan while **trained moves** is
-on, since the whip already lands back on the subject.
+Other moves have no pinned end. A trained move ignores this box, and so does the whip pan while **trained moves (✦)**
+is on, since the whip already lands back on the subject.
 
 **trim the hold** is on by default. H3 tends to reach a pinned frame
 early and hold it still, for up to 1.4 s. Valis Trim Hold keeps a quarter second of the hold (6 frames) and cuts the
@@ -336,21 +336,24 @@ The graphs Create sends, in ComfyUI API format:
 | [`20_cinema_extend.json`](../../workflows/20_cinema_extend.json) | Extend |
 | [`21_finish_upscale.json`](../../workflows/21_finish_upscale.json) | Upscale |
 
-The CLI frames, casts and shoots with a shorter set of choices than the panel:
+The CLI's `frame` and `shoot` go through Create's own planner with the panel's choices, by id, so a command makes what
+the button makes:
 
 ```sh
-node cli/valis.mjs frame --prompt "a lighthouse keeper on a rocky shore at night, holding a lantern" --genre gothic
+node cli/valis.mjs frame --prompt "a lighthouse keeper on a rocky shore at night, holding a lantern" --genre gothic --body 16mm --look noir
 node cli/valis.mjs cast --keyframe key.png --character sheet.png
-node cli/valis.mjs shoot --image key.png --motion "he raises the lantern and turns to the sea" --move push
+node cli/valis.mjs shoot --image key.png --motion "he raises the lantern and turns to the sea" --move crane_up --anchor
 ```
 
-`frame` takes `--genre`, `--framing`, `--lens`, `--light` and `--grade` (`none`, `teal`, `bleach`, `mono`, `techni`,
-`faded`, `steel`). `shoot` takes `--move` from `static`, `push`, `pull`, `orbit`, `crane`, `track`, `hand` and
-`dolly`, all done from words, and `--seconds`. For trained moves, the dolly zoom, the whip pan or a relight, run the
-workflow and point its keyframe loader at your still: node `fa` in 17, 18, 19, 22 and 25, node `img` in 24.
+`frame` takes `--genre`, `--framing`, `--lens`, `--body`, `--kit`, `--light`, `--setup`, `--era`, `--look`,
+`--colours`, `--aspect` and `--seed`. `shoot` takes the same, plus `--move` (any of the 44, trained when its LoRA is
+installed, with the dolly zoom and whip pan steps), `--emotion`, `--tempo`, `--seconds`, `--size`, `--who`, `--sound`,
+`--prompt`, `--relit`, `--anchor`, `--untrained`, `--no-trim` and `--no-grade`. Its default move is `static`, a
+locked-off camera, where Create starts on push in. A relight has no command: run workflow 24 with its keyframe loader (node `img`) on your still, then
+give the relit still to `shoot --relit` for a light change.
 
 ```sh
-node cli/valis.mjs run workflows/19_cinema_dolly_zoom.json --set fa.image=key.png
+node cli/valis.mjs run workflows/24_cinema_relight_keyframe.json --set img.image=key.png
 ```
 
 [The command line](../cli.md) has every command and option.

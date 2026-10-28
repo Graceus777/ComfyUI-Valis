@@ -68,8 +68,9 @@ for the Score tab and Valis Score (load).
 
 - **Inputs:** `cues`, `title`, `shot_seconds` (a shot is as many whole bars as fit in this; default 4.46 s, one
   MiniMax H3 clip), `section_bars` (default 8); optional `bpm` and `meter` (0 takes the source's or the analysis's;
-  music analysis assumes 4 beats a bar, so a waltz needs `meter` 3)
-- **Outputs:** `score`, `json` (the score as text)
+  music analysis assumes 4 beats a bar, so a waltz needs `meter` 3; a `meter` of 6 or 7 is written 6/8 or 7/8)
+- **Outputs:** `score`, `json` (the score as text). The score keeps the cues' key: the sheet music's, or the one heard
+  in the music.
 - **Workflows:** [33](../../workflows/33_score_from_a_song.json), [34](../../workflows/34_score_written_by_yue2.json)
 
 ### Valis Cues (score / music / sheet music / voice / cue sheet)
@@ -81,9 +82,10 @@ to the lanes this makes.
 
 - **Inputs:** `cue_sheet` (plain-text cues, below), `duration` (seconds; 0 takes it from the sources); optional
   `score` (its events become lanes), `music` (any audio: `kick`, `snare`, `hat`, `onset`, `beat` and `downbeat` lanes,
-  and `loud`, `bright`, `low`, `mid` and `high` curves), `abc` (YuE2 sheet music, aligned to `music` when both are
-  given: `melody`, `ins`, `note`, `bass`, `chord`, `bar`), `voice` (a `syllable` lane), `offset` (shifts every cue;
-  a shot that starts 8 s into the song takes -8), `bpm_hint`
+  and `loud`, `bright`, `low`, `mid` and `high` curves, and the key it hears), `abc` (YuE2 sheet music, aligned to
+  `music` when both are given: `melody`, `ins`, `note`, `bass`, `chord`, `bar`; with both, the sheet's `beat` replaces
+  the one heard in the music, its bar starts are the `downbeat`, and its tempo, meter and key win), `voice` (a `syllable` lane), `offset` (shifts every cue; a
+  shot that starts 8 s into the song takes -8), `bpm_hint`
 - **Outputs:** `cues` (`VALIS_CUES`), `summary` (each lane with its count, the curves, the tempo)
 - **Workflows:** [10](../../workflows/10_fx_library_cue_sheet.json), [11](../../workflows/11_fx_new_song_yue2.json),
   [31](../../workflows/31_fx_on_a_loop.json), [33](../../workflows/33_score_from_a_song.json),
@@ -162,10 +164,10 @@ Synthesizes every effect's own sound on the same cues, adds beds and extra hits,
 - **Inputs:** `cues`, `duration`, `beds` (e.g. `rain:.5, wind:.3`; from wind, rain, sea, fire, room, neon), `hits`
   (extra sounds, one per line as `design@lane[:gain]`, e.g. `thunder@strike:.9`; the tooltip lists the designs),
   `music_gain` (default 0.9), `duck` (how far the music dips under the effects; 0 lets the song lead)
-- **Optional:** `stack` (each effect brings its own sound on its own lanes), `music`, `seed`, `key` (for tuned
-  sounds, e.g. `Bb`, `Dm`, `D phrygian`; blank takes it from the cues' sheet music, else D minor), `space` (the room
-  every sound sits in: `hall`, `room`, `cathedral`, `open`, `water`, `dry`), `own` (`music` is the clip's own sound:
-  it keeps its level and the effects go under it)
+- **Optional:** `stack` (each effect brings its own sound on its own lanes), `music`, `seed`, `key` (for tuned sounds,
+  e.g. `Bb`, `Dm`, `D phrygian`; blank takes the cues' key: the sheet music's, else the one a score stores, else the
+  one Valis heard in the music, else D minor), `space` (the room every sound sits in: `hall`, `room`, `cathedral`,
+  `open`, `water`, `dry`), `own` (`music` is the clip's own sound: it keeps its level and the effects go under it)
 - **Outputs:** `AUDIO`
 - **Workflows:** [10](../../workflows/10_fx_library_cue_sheet.json), [11](../../workflows/11_fx_new_song_yue2.json),
   [35](../../workflows/35_score_shot_with_the_library.json), [37](../../workflows/37_fx_light.json)
@@ -615,12 +617,14 @@ Grades every frame with a named look or your own colours. Create's shots and the
 `ValisFrameRate` · `Valis/library`
 
 Retimes a clip from its own frame rate to `fps`. Wan 2.2 makes 16 fps clips and phones shoot 30; played as 24 they run
-fast and short. Each output frame is the source frame showing at that moment, as ffmpeg's fps filter does. The FX,
-Score and Film tabs add it when it is installed.
+fast and short. Each output frame is the source frame showing at that moment, as ffmpeg's fps filter does. The FX
+tab (on the clip and on **Another clip**), Score's **Library** engine and the Film tab add it when it is installed.
 
 - **Inputs:** `images`, `source_fps` (Get Video Components' fps), `fps` (default 24)
 - **Outputs:** `IMAGE`
-- **Workflows:** none exported
+- **Workflows:** [10](../../workflows/10_fx_library_cue_sheet.json), [11](../../workflows/11_fx_new_song_yue2.json),
+  [31](../../workflows/31_fx_on_a_loop.json), [35](../../workflows/35_score_shot_with_the_library.json),
+  [37](../../workflows/37_fx_light.json)
 
 ### Valis Canny (batched: long clips without running out of VRAM)
 

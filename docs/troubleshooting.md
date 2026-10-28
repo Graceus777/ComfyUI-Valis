@@ -1,7 +1,8 @@
 # Troubleshooting
 
-Start with the **setup** pill in the top bar. It checks every graph the studio sends against your ComfyUI and lists,
-per feature, the node pack, model file or input that's missing. Most problems show up there before anything is queued.
+Start with the **setup** pill in the top bar. It checks the graph of every feature the studio has against your ComfyUI
+and lists, per feature, the node pack, model file or input that's missing. Most problems show up there before anything
+is queued.
 
 ## The studio
 
@@ -52,15 +53,19 @@ Create, name the light in the shot's words.
 ([Film](guides/film.md#build-it-from-references)): one sheet per character, an empty plate per camera setup, and every
 later moment made from the seated frame. Turning a set that has people in it brings them back twice.
 
-**A Wan 2.2 camera move plays fast and short.** Wan 2.2 shoots 16 fps. FX, Score and Film retime any clip to 24 fps
-first when the **Valis Frame Rate** node is loaded; restart ComfyUI if it isn't.
+**A Wan 2.2 camera move plays fast and short.** Wan 2.2 shoots 16 fps. FX (the clip and **Another clip**), Score's
+**Library** engine and Film retime any clip to 24 fps first when the **Valis Frame Rate** node is loaded; restart
+ComfyUI if it isn't.
 
 **An effect didn't fire.** Each layer listens to one lane. A lane with no hits in the clip's span (no hats in a slow
 intro, no `bar` lane from a dropped song) fires nothing. Check the lane names in [Lanes and cue sheets](reference/cues.md)
 and pick another lane on the layer.
 
-**Effects that show another scene fail.** Time slip, Era cut, Split time, Tear and Double exposure need **Another clip**
-in the FX tab. Pick one before you render.
+**Effects that show another scene won't render.** Time slip, Era cut, Split time, Tear and Double exposure need
+**Another clip**, which only the FX tab takes. There, **Render** refuses to start without it and names the layer; pick
+one. Film's shot cards and Score's library rules don't offer these five, and an older plan or saved score with one
+stops with an error that names it: pick another effect. Effects that follow someone (Rim light, Echo, Gravity lens,
+Vertigo, Double exposure) need a subject the same way.
 
 **Remove leaves something behind.** Remove takes out the person you name; what they hold or wear can stay. Run Remove
 again on the result, naming what's left ("the sword"). The [Edit guide](guides/edit.md) has the details.

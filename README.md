@@ -53,7 +53,7 @@ score-driven pass can be played without generating anything.
 | **Create** (Cinema Studio) | A director's panel in sections: genre, framing, focal length, camera body, lens kit, era, light source and setup, emotion, tempo, a **colour palette** (39 looks in rows, previewed live on your keyframe as you hover; the chosen look's colours are swatches you can change before you render) and one of 44 camera moves. Every option's tooltip shows the exact words it adds; your choices lead the prompt and the genre fills only what you leave on *From genre*. A **resolution** slider (draft 384 px to 1024, keyframes always full size) and a free **length** (snapped to H3's frame grid). *Frame it* makes two Krea 2 keyframes (or drop your own still); drop a character sheet to cast it in. *Shoot it* turns the keyframe into a MiniMax H3 shot. **Trained moves** (✦): with a camera LoRA installed, the move is learned, not described (360 orbit, bullet time, push-in, crane up, FPV on H3; crash zoom and arcs on Wan 2.2). **Dolly zoom** is a real trained push re-framed by *Valis Dolly Zoom*; **whip pan** is a steady pan speed-ramped by *Valis Whip Pan*. **Relight** and **light change**. Under every result: **Extend**, **Lead-in**, **Upscale** (SeedVR2). |
 | **Genjutsu** | Drop a video. **Motion transfer**: up to 8 reference images become the new cast and place; SDPose skeletons carry the motion, camera and timing (H3 Fun ControlNet Union); the source audio is kept. **Restyle**: 24 looks over Canny edges. **Object swap**: name one thing, describe its replacement; SAM 3 finds it, the ControlNet inpaints only that, and the result is composited back onto the untouched plate. **Check source** runs only the pose step and *Valis Pose Check* marks where the body can't be read before a 20-minute render. |
 | **Edit** | Drop a clip and name what to change ("his head", "her dress"). SAM 3 tracks it. **Transform** re-renders only the masked region in a new look: **your own** (drop a picture of it, or say what it is and *Paint it* with Krea 2; Krea 2 and H3 both see the picture), or one of 57 presets in seven groups (elements, materials, light and tech, costume, age and weather, spirits, creatures), each shown on the same costume-test sheets, and any preset can be matched to your picture. **Remove** takes a person out with the H3 Person Remover LoRA: what was behind them fills in, and everything outside the mask stays the source's own pixels. **Swap** replaces the whole person with a character sheet (dropped, or painted from words); *Match the plate* checks the take first and matches brightness, contrast, colour and grain back to the plate with no AI. **Turn** makes one take become another on a chosen word, and can turn the voice on the same word. |
-| **FX** | The library: 24 effects in four groups, **light first** (flicker, firelight, lightning, a light sweep and rim light relight the shot itself, so they read as the scene's own light; glow, light shafts, glint and heat haze work with them), then camera and lens, time, and break and blend; most come with presets (a candle or a strip light, headlights or a lighthouse, a breath of frost or a whiteout). Pick a clip (and another for the effects that open onto a second scene), optionally name a subject, stack effects. Each layer listens to one lane: from a soundless cue sheet, from any song (beats, kick/snare/hat, loudness, brightness), from YuE2 writing and performing a new song (every note becomes a cue), or from a Valis score. Every effect brings its own sound, under the clip's own sound (or the song); add beds (rain, wind, sea, fire, room, neon). A clip at another frame rate (Wan 2.2's 16 fps camera moves, a phone's 30) is retimed to 24 first. On a looping clip the effects loop with it: the cues repeat and every effect is played once round first, so trails, echoes and frost carry across the join (MP4 and GIF). |
+| **FX** | The library: 24 effects in four groups, **light first** (flicker, firelight, lightning, a light sweep and rim light relight the shot itself, so they read as the scene's own light; glow, light shafts, glint and heat haze work with them), then camera and lens, time, and break and blend; most come with presets (a candle or a strip light, headlights or a lighthouse, a breath of frost or a whiteout). Pick a clip (and another for the effects that open onto a second scene), optionally name a subject, stack effects. Each layer listens to one lane: from a soundless cue sheet, from any song (beats, kick/snare/hat, loudness, brightness), from YuE2 writing and performing a new song (every note becomes a cue), or from a Valis score. Every effect brings its own sound, under the clip's own sound (or the song); add beds (rain, wind, sea, fire, room, neon). A clip at another frame rate (Wan 2.2's 16 fps camera moves, a phone's 30) is retimed to 24 first. On a looping clip the effects loop with it: the cues repeat and every effect is played once round first, so trails, echoes and frost carry across the join (MP4 and GIF), and the loop keeps its own sound. |
 | **Score** | Make a score in Valis: from **any song** (Valis hears its beats, bars, kick, snare and hats, how loud and bright it is, and lays out sections and shots on whole bars), from a song **YuE2 writes** (every note of its sheet music becomes a lane), or from a **cue sheet**; save it as `.json` and open it again (DANSE MACABRE is the example). Map lanes to library effects, lay clips from the bin on its shots, and the **live preview** plays your clips on the music with every effect sketched as it fires. *Render all*, then *Cut it* on the bars, or *Make a film on it*. |
 | **Extras** | **Stereogram**: hide whatever moves in a clip in a field of dots, as a magic-eye stereogram (parallel or cross-eyed) and a kinetogram (it exists only while it moves), drawn in squares, halftone or letters, with a check that the depth survives an upload. **Loop**: a shot that plays forever, H3 joining its end to its start ([MiniMax H3 Loop](https://github.com/pxl-pshr/ComfyUI-MiniMaxH3-Loop)), then effects that loop with it. **Stage** (experimental): one still split into depth layers and played by a live 2.5D camera. |
 | **Renders** | The queue, *Free memory*, *Stop*, everything made (the bin, kept between sessions) to send to any tab, and **Setup**: the studio's graphs checked against this ComfyUI, with missing node packs and model files listed per feature. **Detect hardware** reads the GPU, driver, CUDA, cuDNN, attention kernels and ComfyUI's flags, and sets the safe shot size for this GPU. The **end-to-end test** renders every Create combination and every chain after it at low resolution and checks each result. |
@@ -84,7 +84,7 @@ score-driven pass can be played without generating anything.
   slit-scan, gravity lens (the real lens equation), datamosh, echo, frost, vertigo, shockwave, split time,
   era cut, tear, projector, glitch, punch.
 - **Sound design that is synthesized, not sampled** (`ValisSoundDesign`): bells, swells, booms, shimmer and hums (tuned
-  to the song's key when Valis has its sheet music, as with a YuE2 song), every hit measured (K-weighted) and set a fixed number of dB under the music, the effect bus held
+  to the song's key: the key of YuE2's sheet music, else the key Valis hears in the song, else D minor), every hit measured (K-weighted) and set a fixed number of dB under the music, the effect bus held
   under the song, dense lanes sounding only on their accents.
 - **The Valis pass** (`ValisFX`, from DANSE MACABRE): an excitable-medium reveal (a Barkley model on the SAM mask,
   carried by optical flow) that burns a transformation across a body on the beat; shockwaves, rays, mist, candles,
@@ -171,8 +171,8 @@ It needs Node 18+ and nothing else.
 ```sh
 node cli/valis.mjs film --idea "a lighthouse keeper rows out into the storm to bring back the woman the sea took" --genre gothic --shots 6
 node cli/valis.mjs film --idea "..." --plan-only > plan.json      # edit it, then: valis film --plan plan.json
-node cli/valis.mjs frame --prompt "a lighthouse keeper on a rocky shore at night, holding a lantern" --genre gothic
-node cli/valis.mjs shoot --image key.png --motion "he raises the lantern and turns to the sea" --move push
+node cli/valis.mjs frame --prompt "a lighthouse keeper on a rocky shore at night, holding a lantern" --genre gothic --body 16mm --look noir
+node cli/valis.mjs shoot --image key.png --motion "he raises the lantern and turns to the sea" --move crane_up --anchor
 node cli/valis.mjs swap --video take.mp4 --character vampire_sheet.png --background ballroom.png --person man
 node cli/valis.mjs turn --a take_as_the_man.mp4 --b take_as_the_vampire.mp4 --at 3.8
 node cli/valis.mjs transform --video clip.mp4 --target "his head" --look bronze
@@ -181,10 +181,12 @@ node cli/valis.mjs run workflows/14_genjutsu_motion_transfer.json --set v.file=d
 node cli/valis.mjs help
 ```
 
-It prints a JSON summary (job id, seconds, output files), so a coding agent can drive Valis directly. That's how
-*DANSE MACABRE* and the demo's cold open were produced: by describing the shot to an agent that built and queued
-these graphs. `--api` / `--key` point the CLI at Comfy Cloud or a Comfy API deployment. Every command and flag is
-in [docs/cli.md](docs/cli.md).
+`frame` and `shoot` take Create's choices by id and go through Create's own planner, so they make what its buttons
+make. A bad command line (an unknown id, a misspelt option, a missing value) stops with exit code 2 and says what is
+valid, before anything is sent. The CLI prints a JSON summary (job id, seconds, output files), so a coding agent can
+drive Valis directly. That's how *DANSE MACABRE* and the demo's cold open were produced: by describing the shot to an
+agent that built and queued these graphs. `--api` / `--key` point the CLI at Comfy Cloud or a Comfy API deployment.
+Every command and flag is in [docs/cli.md](docs/cli.md).
 
 ## How it's built
 
@@ -216,7 +218,11 @@ in [docs/cli.md](docs/cli.md).
 
 - `node tests/graphs.test.mjs`: every graph the studio can send, and Create across every camera move, aspect, size and
   option, built with the same planner the buttons use and checked against a ComfyUI node list (40,000+ checks, no GPU).
+- `node tests/cli.test.mjs`: the CLI against a stand-in ComfyUI, with nothing uploaded or queued: `frame` and `shoot`
+  build what Create's buttons build, and bad ids, options and plan files exit with code 2.
 - `python tests/check_grade.py`: the browser's live colour grade against `palette.py`'s (within 0.2 levels on every look).
+- `python tests/check_cues.py`: cue-sheet errors, sheet-music strengths, one beat grid for a song with its sheet music,
+  the key heard in a song, and the effects that should be heard (no ComfyUI, no GPU).
 - `node tests/ui/run.mjs`: the studio clicked through in a headless browser against a stand-in ComfyUI
   (`tests/ui/mock_server.mjs`), with a screenshot of every screen.
 - **Renders → End-to-end test** (or `(await import("/valis/app/js/selftest.js")).run()` in the browser console): short,

@@ -41,6 +41,11 @@ lane (see [A Valis score](#a-valis-score)).
 Strengths: a `kick`, `snare` or `hat` hit is its size against the lane's 90th-percentile hit (0 to 1.5); `onset` and
 `beat` carry the onset strength there (0 to 1); `downbeat` hits are 1.
 
+Valis also hears the song's key: the twelve pitch classes of the song (its chroma, from 55 Hz to 2 kHz) matched against
+a major and a minor key profile on every tonic. The best match, such as `G minor`, is the key the tuned effect sounds
+use, unless sheet music gives one. A song where no key fits well (a drum loop, noise) has none, and the sounds are in D
+minor.
+
 ### Sheet music from YuE2
 
 From **New song** in the FX tab, a song YuE2 writes in the Score tab, or the `abc` input of *Valis Cues* (YuE2
@@ -61,22 +66,26 @@ plan.
 | `beat` | a grid at the written tempo |
 | `section` | each `%` section comment (`% verse`, `% chorus`) |
 
-All of these are hits. When the audio is there too (**New song**, a score YuE2 writes), Valis lines the sheet up with
-it. It searches an offset from -0.5 to 3 s and a tempo from 0.75 to 1.25 times the written one, since YuE2 does not
-always play at the tempo it wrote, and it drops the notes past the end of the audio. The sheet's `K:` line gives the
-key the tuned effect sounds use.
+All of these are hits. When the audio is there too (**New song**, Film's YuE2 song, a score YuE2 writes), Valis lines
+the sheet up with it. It searches an offset from -0.5 to 3 s and a tempo from 0.75 to 1.25 times the written one,
+since YuE2 does not always play at the tempo it wrote, and it drops the notes past the end of the audio. The sheet's
+`K:` line gives the key the tuned effect sounds use, over the key heard in the audio.
 
-Sheet-music lanes carry each note's MIDI pitch (and `chord` the chord's number) where other lanes carry a strength.
-Effects read those hits as strong ones, and the sound design takes the highest notes as the accents.
+Strengths: a note's hit is a strength from 0.6 to 1, the higher notes of a lane a little harder (the lane's lowest note
+0.6, its highest 1; a lane of one pitch is all 1), so the sound design takes the highest notes as the accents.
+Each `chord` change is a hit of 1, and so is every hit of `bar`, `beat`, `long` and `section`.
 
-With **New song**, the song's audio is also read as in [A song](#a-song), so `kick`, `hat`, `downbeat` and the curves
-are there as well. `beat` comes from both and holds both sets of hits.
+With the audio there, it is also read as in [A song](#a-song), so `kick`, `hat` and the curves are there as well.
+Where the sheet is exact it stands: `beat` is the sheet's own grid alone (the one heard in the audio is dropped, so each
+beat fires once), `downbeat` is the sheet's bar starts, and the tempo, meter and key are the sheet's. A 3/4 song is
+scored in bars of three.
 
 ### A Valis score
 
 From **Score** in the FX tab (the score open in the Score tab), or *Valis Score (load)* into the `score` input of
 *Valis Cues*. Every list of times in the score's `events` becomes a hit lane, and every curve in its `envelopes` a
-curve. Hits from a score fire at strength 1.
+curve. Hits from a score fire at strength 1. The score's `key`, when it has one (its sheet music's, or the one Valis
+heard in its song), is the key the tuned effect sounds use.
 
 A score made by *Valis Score (make)* (the Score tab's **From a song**, **YuE2 writes it** and **Cue sheet**) holds
 every lane of what it was made from, plus:
@@ -114,8 +123,10 @@ sine, triangle or saw, any number of cycles per loop, between two values you set
 ### Merging sources
 
 *Valis Cues* reads its inputs in this order: score, music, sheet music, voice, cue sheet. Hits of lanes with the same
-name join into one lane. A curve with the same name as an earlier one replaces it. The tempo is that of the first
-source that has one.
+name join into one lane, with one exception: when both music and sheet music are given, the sheet's `beat` replaces the
+one heard in the music and its bar starts are the `downbeat`. A curve with the same name as an earlier one replaces it.
+The tempo and meter are the sheet music's when it has them, else those of the first source that has one. The key is
+the sheet music's when it has one, else the score's, else the one heard in the music.
 
 `offset` moves every hit and curve by that many seconds. The Score tab and Film place a shot in a song this way: a
 shot that starts 8.9 s into the song gets offset -8.9, so its own clock starts at 0. The FX tab always uses 0.
@@ -189,10 +200,11 @@ practice a sheet has one tempo; write a tempo change in seconds.
 
 A sheet that can't be read stops the job. In the studio the message shows when the render fails.
 
-- `bar:beat cues need a bpm line`: a bar:beat time above any `bpm` line.
+- `cue sheet: bar:beat times need a bpm line first, e.g. 'bpm 108 4/4'`: a bar:beat time above any `bpm` line.
+- `cue sheet: 'every 1 beat' needs a bpm line first, e.g. 'bpm 108 4/4'`: an `every` line stepping in beats or bars
+  above any `bpm` line (the message quotes its step).
 - `cue sheet: can't read '<the line>'`: an `every` line that doesn't follow the pattern.
-- An `every` line in beats or bars with no `bpm` line, or a hit line with a time and no lane, also fails, with a less
-  readable message.
+- A hit line with a time and no lane also fails, with a less readable message.
 
 ## Worked examples
 
@@ -313,5 +325,6 @@ Each effect's sound follows its hit lane, on the strongest hits, with a minimum 
   name; commas give several (`kick, snare`).
 - **Score**: each rule picks from the open score's own lanes, shown with their number of hits.
 - **Film**: each shot's effect fires on one of `kick`, `snare`, `hat`, `beat`, `downbeat`, `bar`, `melody` or
-  `bass`.
+  `bass`. With your own song only the first five are offered, and a shot on `bar`, `melody` or `bass` fires on
+  `downbeat`, `beat` or `kick`.
 - **ComfyUI**: *Valis Layer*'s `on` (hits, comma separated) and `by` (a held amount).

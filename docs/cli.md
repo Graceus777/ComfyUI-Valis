@@ -1,9 +1,9 @@
 # The command line
 
 `cli/valis.mjs` runs the studio's graphs from a terminal or from a coding agent. It builds each graph with the same code
-the buttons use (`app/js/graphs.js`, `app/js/presets.js`, and `app/js/film.js` for whole films), sends it through the
-same bundled Comfy SDK, uploads your local files and downloads the results. It needs Node 18 or later and nothing
-else.
+the buttons use (`app/js/graphs.js`, `app/js/presets.js`, Create's planner `app/js/create.js` for `frame` and `shoot`,
+and `app/js/film.js` for whole films), sends it through the same bundled Comfy SDK, uploads your local files and
+downloads the results. It needs Node 18 or later and nothing else.
 
 ```sh
 cd ComfyUI/custom_nodes/ComfyUI-Valis
@@ -18,9 +18,9 @@ models and node packs a command needs are the same as its studio button's, liste
 | Command | What it makes | Studio equivalent |
 |---|---|---|
 | `film` | a scored, cut short film from one line, or from a plan file | Film |
-| `frame` | two Krea 2 keyframes | Create · **Frame it** |
+| `frame` | two Krea 2 keyframes from Create's choices | Create · **Frame it** |
 | `cast` | a character put into a keyframe (Krea 2 identity edit) | Create's character drop |
-| `shoot` | a MiniMax H3 image-to-video shot | Create · **Shoot it** |
+| `shoot` | the shot Create would shoot: MiniMax H3, a trained move, a dolly zoom or a whip pan | Create · **Shoot it** |
 | `find` | a SAM 3 matte and an overlay preview | Edit · **Find it** |
 | `transform` | a tracked region re-rendered in a new look | Edit · Transform |
 | `remove` | a person taken out of a clip | Edit · Remove |
@@ -46,8 +46,10 @@ COMFY_BASE_URL=http://127.0.0.1:8188 node cli/valis.mjs find --video clip.mp4 --
 ```
 
 Jobs, progress and results go through the SDK. A few calls go to ComfyUI's own endpoints on the same base:
-`/object_info/<node>` (to spell a model path in a subfolder the way the server lists it, `Krea2/...` or `Krea2\...`),
-and, for `film` only, `/view` and `/free`. Where `/object_info` can't be read, paths are sent as written.
+`/object_info/<node>` (to spell a model path in a subfolder the way the server lists it, `Krea2/...` or `Krea2\...`,
+and, for `shoot` and `film`, to see which Valis nodes and camera LoRAs this ComfyUI has), and, for `film` only,
+`/view` and `/free`. Where `/object_info` can't be read, paths are sent as written, and `shoot` builds the shot as if
+every node and camera LoRA were installed and says so on stderr.
 
 The CLI always renders Edit's ref2va graphs with MiniMax H3 ref2va. The FastH3 switch under
 [Renders · Engine](guides/renders.md#engine) is a setting of the studio in your browser and doesn't reach the CLI.
@@ -62,20 +64,21 @@ Any option that takes a file accepts two kinds of path:
 
 When the job finishes, the CLI downloads the outputs of the graph's Save nodes (SaveVideo, SaveImage, SaveText and so
 on) into `--out`, `./valis_out` by default, created if missing. Loader previews are skipped. The server keeps its own
-copies under `ComfyUI/output/valis/`, named after the command and a time stamp (`valis/shot_<stamp>`,
-`valis/edit_<stamp>`, `valis/swap_<stamp>`); `run` keeps each Save node's own `filename_prefix`.
+copies under `ComfyUI/output/valis/`, named after the command and a time stamp (`valis/key_<stamp>`,
+`valis/shot_<stamp>`, `valis/edit_<stamp>`, `valis/swap_<stamp>`); `run` keeps each Save node's own `filename_prefix`.
 
 | Option | What it does |
 |---|---|
 | `--out DIR` | where results are written (default `./valis_out`) |
-| `--json` | print the graph the command would queue, then stop. Uploaded files appear as `<asset path>`. Local files are still uploaded, because the graph refers to them. Every command but `film` takes it. |
+| `--json` | print the graph the command would queue, then stop. Uploaded files appear as `<asset path>`. Local files are still uploaded, because the graph refers to them. Every command but `film` takes it; on `film` it is an error, and `--plan-only` prints the plan instead. |
 
 ## What it prints
 
 Progress goes to stderr and the result goes to stdout as JSON, so you can pipe or parse stdout alone.
 
 For every command but `film`, stderr shows the job id and the server, a progress line (`step <n>/<steps> · node <id>`,
-or a percentage), each status change, and `done in <n>s`. Stdout gets:
+or a percentage), each status change, and `done in <n>s`. `shoot` first prints how it will shoot (`Shot`, or
+`Shot · Push in (trained)`) and anything it had to change, as Create's notes do. Stdout gets:
 
 ```json
 {
@@ -92,19 +95,30 @@ files written to `--out`.
 |---|---|
 | 0 | the job succeeded, or `help` was shown |
 | 1 | the job failed: stderr says `failed after <n>s:` and the failing node's class and message |
-| 2 | a usage error: a required option is missing (`--video is required for transform`), an unknown command (the help follows), or a `--set` names a node the workflow doesn't have |
+| 2 | a bad command line, caught before anything is uploaded or queued: an unknown command (the help follows), a required option missing (`--video is required for transform`), an option the command doesn't take, an option with no value, a stray word, an id a list doesn't have, a number that isn't one or is out of range, a plan file or workflow that can't be read, or a `--set` that isn't `node.input=value` or names a node the workflow doesn't have |
 
 Any other error (the server can't be reached, a film step fails) ends the process with a non-zero exit and Node's error
 message.
 
 ## Options in general
 
-Options are `--name value`. An option followed by another option, or by nothing, is a switch set to true
-(`--plan-only`, `--slow`, `--json`). `--help` anywhere shows the help, as does running with no command.
+Options are `--name value`. The switches (`--json`, `--plan-only`, `--slow`, `--anchor`, `--untrained`, `--no-trim`,
+`--no-grade`, `--help`) take no value and never take the word after them. Every other option needs a value, so an
+option followed by another option, or by nothing, is an error (`--prompt needs a value`). `--help` anywhere shows the
+help, as do `help` and running with no command. There is no help per command: `help` prints everything.
 
-Options that pick from a list (`--genre`, `--framing`, `--lens`, `--light`, `--grade`, `--move`, `--look`) take the
-list's id. An id the list doesn't have falls back to the list's first entry without a warning, so check spelling
-against the tables below.
+Each command checks its whole command line before it uploads or queues anything, and exits with code 2 and a message
+that says what it takes:
+
+- An option the command doesn't take lists the ones it does (`frame has no option --genere. Its options: ...`).
+- A word that isn't an option's value is refused (`unexpected "a lighthouse" (every option is --name value)`). Only
+  `run` takes one, the workflow file.
+- Options that pick from a list (`--genre`, `--framing`, `--lens`, `--body`, `--kit`, `--light`, `--setup`, `--era`,
+  `--look`, `--aspect`, `--move`, `--emotion`, `--tempo`, `--grade`, and `transform --look`) take the list's id. An id
+  the list doesn't have names the ones it has (`--genre gothik: no such id. Pick one of: gothic noir ...`).
+- Numbers are checked for kind and range (`--seconds takes a number from 2 to 15, not "4,5"`).
+
+`node cli/valis.mjs help` lists every id of every list.
 
 ## film
 
@@ -115,11 +129,11 @@ frames) makes those first.
 
 | Option | What it does |
 |---|---|
-| `--idea "..."` | what the film is about. Needed unless `--plan` names a file that exists. |
-| `--genre ID` | the genre's look (default `gothic`): `gothic`, `noir`, `neon`, `fairytale`, `western`, `music`, `documentary`, `fantasy`, `thriller`, `romance`, `period`, `scifi`, `horror`, `adventure`, `anime` |
-| `--shots N` | how many shots (default 6) |
-| `--plan-only` | write the plan to stdout as JSON and stop |
-| `--plan FILE` | make the film from a plan file. If the file doesn't exist, the CLI plans from `--idea` instead. |
+| `--idea "..."` | what the film is about. Needed unless you give `--plan`. |
+| `--genre ID` | the genre's look: `gothic`, `noir`, `neon`, `fairytale`, `western`, `music`, `documentary`, `fantasy`, `thriller`, `romance`, `period`, `scifi`, `horror`, `adventure`, `anime`. Default `gothic`, or with `--plan` the plan's own genre. |
+| `--shots N` | how many shots, a whole number of at least 1 (default 6) |
+| `--plan-only` | write the plan to stdout as JSON and stop. With `--plan`, it prints that plan, with the genre it would be made in. |
+| `--plan FILE` | make the film from a plan file: one from `--plan-only`, a plan the studio saved (`ComfyUI/user/default/valis/films/<tag>.json`), or one you wrote. A file that can't be read, isn't JSON or has no shots is an error. `--idea` and `--shots` can't be given with it. |
 | `--out DIR` | where the finished film is written |
 
 ```sh
@@ -130,20 +144,21 @@ To edit the plan before anything is rendered:
 
 ```sh
 node cli/valis.mjs film --idea "a lighthouse keeper rows out into the storm" --genre gothic --plan-only > plan.json
-node cli/valis.mjs film --plan plan.json --genre gothic
+node cli/valis.mjs film --plan plan.json
 ```
 
 The plan has a title, a logline, the cast (a name and a one-sentence look each), the place, the song brief, and one
 entry per shot: who is in it, `keyframe` (what the still shows), `motion`, `subject` (what SAM 3 tracks), `effect` and
-`on` (the lane it fires on). Pass `--genre` again with `--plan`: the CLI takes the genre from the option, not from the
-file.
+`on` (the lane it fires on). It also keeps its `genre`, and `--plan` makes the film in that genre unless you give
+`--genre`, which then replaces it. A plan with no genre is made in `gothic`; a genre the list doesn't have is an
+error.
 
 A plan keeps its `tag`, the name its files are saved under. Run the same plan file again after a stop and the steps
 already saved under that tag in `ComfyUI/output/valis/` are found and not made again; the cut always runs.
 
-stderr shows each job (`Film · plan: job <id>`, `done in <n>s`), `plan: <title>, <n> shots`, and a line per stage
-(`song: ...`, `keyframes: ...`, `shots: MiniMax H3 shoots shot 1 of 6`, `effects: ...`, `cut: ...`). Only the finished
-film is downloaded. Stdout gets:
+stderr shows each job (`Film · plan: job <id>`, `done in <n>s`), `plan: <title>, <n> shots, <genre>`, and a line per
+stage (`song: ...`, `keyframes: ...`, `shots: MiniMax H3 shoots shot 1 of 6`, `effects: ...`, `cut: ...`). Each step
+finds its results in the output folder its Save node wrote them to. Only the finished film is downloaded. Stdout gets:
 
 ```json
 {
@@ -156,23 +171,37 @@ film is downloaded. Stdout gets:
 }
 ```
 
-`plan` is the full plan with every file it made. `--json` doesn't apply to `film`.
+`plan` is the full plan with every file it made. `film --json` is an error; use `--plan-only` to see the plan.
 
 ## frame
 
-Two Krea 2 keyframes, 768 by 1344, from a prompt built the way Create builds it.
+Two Krea 2 keyframes, as Create's **Frame it** makes them: the same keyframe prompt from the same choices (Create's
+planner, `app/js/create.js`), at the aspect's full size (768×1344, 1344×768 or 1024×1024). These choices are
+Create's panel by id; `shoot` takes them too.
 
 | Option | What it does |
 |---|---|
-| `--prompt "..."` | what's in the frame (needed) |
+| `--prompt "..."` | what's in the frame, Create's **who, what, where** (needed) |
 | `--genre ID` | as for `film` (default `gothic`) |
 | `--framing ID` | `wide` (default), `medium`, `close`, `ecu`, `ots`, `low`, `high` |
-| `--lens ID` | `auto` (default, no focal length in the prompt), `18`, `35`, `50`, `85`, `135`, `macro` |
-| `--light ID` | `auto` (default, from the genre), `moon`, `candle`, `golden`, `neon`, `overcast`, `back`, `fire`, `storm` |
-| `--grade ID` | `none` (default), `teal`, `bleach`, `mono`, `techni`, `faded`, `steel` |
+| `--lens ID` | focal length: `auto` (default, no focal length in the prompt), `18`, `35`, `50`, `85`, `135`, `macro` |
+| `--body ID` | camera body: `auto` (default, from the genre), `digital`, `35mm`, `16mm`, `super8`, `imax`, `dv`, `vhs`, `phone`, `action`, `cctv`, `silent` |
+| `--kit ID` | lens kit: `auto` (default, from the genre), `spherical`, `anamorphic`, `vintage`, `macro`, `fisheye` |
+| `--light ID` | light source: `auto` (default, from the genre), `moon`, `candle`, `golden`, `neon`, `overcast`, `back`, `fire`, `storm` |
+| `--setup ID` | lighting setup: `auto` (default, none), `silhouette`, `practicals`, `window`, `overhead`, `contre_jour`, `soft_cross` |
+| `--era ID` | `auto` (default, from the genre), `1920s`, `1940s`, `1950s`, `1960s`, `1970s`, `1980s`, `1990s`, `2000s`, `2010s`, `today` |
+| `--look ID` | the colour palette: its words go in the keyframe (and `shoot` grades the shot in it). `auto` (default, the genre's colour), `natural`, any of Create's 38 other looks (`teal_orange`, `noir`, `kodachrome`, `daguerreotype`...; `help` lists them all), or `custom` |
+| `--colours "..."` | your own colours, two or more as `#rrggbb`, separated by spaces or commas: mapped through `--look`, or alone (the look becomes `custom`). `--look custom` needs them. |
+| `--aspect ID` | `9:16` (default), `16:9`, `1:1` |
+| `--seed N` | the keyframes' seeds are N and N+101 (default 7101) |
+
+Older ids are still taken, each as the Create choice nearest it: `--grade` is the older name for `--look` (`none` is
+`auto`, `teal` is `teal_orange`, `bleach` is `bleach_bypass`, `mono` is `silver_mono`, `techni` is `technicolor`,
+`faded` is `faded_70s`, `steel` is `chrome`). Give `--grade` or `--look`, not both.
 
 ```sh
 node cli/valis.mjs frame --prompt "a lighthouse keeper on a rocky shore at night, holding a lantern" --genre gothic --framing close --lens 85 --light candle
+node cli/valis.mjs frame --prompt "a lighthouse keeper on the rocks at night" --body 16mm --era 1970s --look noir --aspect 16:9
 ```
 
 ## cast
@@ -187,22 +216,41 @@ Puts a character from a sheet into a keyframe with a Krea 2 identity edit.
 
 ## shoot
 
-Turns a keyframe into a MiniMax H3 shot (8-step image-to-video), 768 by 1344.
+Turns a keyframe into the shot Create's **Shoot it** would make from the same choices, through Create's own planner:
+MiniMax H3 image-to-video at 8 steps for a move done from words, or a trained move (an H3 camera LoRA, or Wan 2.2 for
+the crash zoom and the arcs) when its LoRA is installed, with the dolly zoom lock, the whip-pan ramp, the hold trim and
+the colour grade where they apply. The default is 768×1344, 4.46 s, with a locked-off camera. It takes every option of
+[`frame`](#frame) (the look grades the shot as well as giving its words), plus these:
 
 | Option | What it does |
 |---|---|
 | `--image FILE` | the keyframe (needed) |
-| `--motion "..."` | what happens in the shot (needed) |
-| `--move ID` | the camera: `static` (default, locked off), `push`, `pull`, `orbit`, `crane`, `track`, `hand`, `dolly` |
-| `--seconds N` | the shot's length (default 4.46, one H3 clip) |
-| `--genre ID` | as for `film` (default `gothic`) |
+| `--motion "..."` | what happens in the shot, Create's **What happens** (needed) |
+| `--prompt "..."` | what the keyframe shows, Create's **who, what, where**. H3's sound and a trained move's prompt use it. |
+| `--move ID` | the camera move, any of Create's 44 (default `static`): `push_in`, `crane_up`, `orbit_360`, `dolly_zoom_in`, `whip_pan`, `crash_zoom_in`...; `help` lists them all |
+| `--emotion ID` | `neutral` (default), `joy`, `sadness`, `fear`, `anger`, `awe`, `tension`, `love`, `mystery` |
+| `--tempo ID` | `single` (default), `calm`, `measured`, `energetic`, `chaotic` |
+| `--seconds N` | the shot's length, 2 to 15 (default 4.46, one H3 clip). A move that needs longer lengthens it, as in Create. |
+| `--size N` | the shot's short side in px, 320 to 1024 (default 768) |
+| `--who "..."` | who the camera is about (default `the subject`) |
+| `--sound "..."` | what H3 hears (default: the scene as it happens) |
+| `--relit FILE` | a relit version of the keyframe: the light changes to it during the shot (Create's **light change**) |
+| `--anchor` | end on the subject: the last frame is pinned so the move finishes on them |
+| `--untrained` | every move from words, with no camera LoRA (Create's **trained moves (✦)** off) |
+| `--no-trim` | keep the still end that a pinned last frame leaves (Create's **trim the hold** off) |
+| `--no-grade` | the palette's words only: the shot isn't graded |
+| `--seed N` | the shot's seed (default 51101) |
+
+The older move ids are still taken, each as the Create move nearest it: `push` (`push_in`), `pull` (`pull_out`),
+`orbit` (`orbit_360`), `crane` (`crane_up`), `track` (`dolly_right`), `hand` (`handheld`), `dolly` (`dolly_zoom_in`).
 
 ```sh
-node cli/valis.mjs shoot --image key.png --motion "he raises the lantern and turns to the sea" --move push
+node cli/valis.mjs shoot --image key.png --motion "he raises the lantern and turns to the sea" --move push_in
+node cli/valis.mjs shoot --image key.png --motion "he raises the lantern" --move crane_up --untrained --anchor
 ```
 
-These eight moves are described to H3 in words. Create's trained camera moves (orbit LoRAs, Wan 2.2 moves, dolly zoom,
-whip pan) aren't commands; run their workflows (17, 18, 19, 22) with `run`.
+A relight itself has no command: run [workflow 24](../workflows/24_cinema_relight_keyframe.json) with `run` (its
+keyframe loader is node `img`), then give the relit still to `--relit`.
 
 ## find
 
@@ -276,7 +324,7 @@ swaps.
 |---|---|
 | `--a FILE` | the first take, whose sound is kept (needed) |
 | `--b FILE` | the take it turns into (needed) |
-| `--at SECONDS` | where the word is. Default: the first syllable after the longest pause. |
+| `--at SECONDS` | where the word is, a number of at least 0. Default: the first syllable after the longest pause. |
 | `--person WORD` | who SAM 3 tracks (default `person`) |
 
 ```sh
@@ -289,13 +337,15 @@ The voice turn is not a CLI option; for the face and the voice turning together,
 ## score
 
 The score-driven Valis pass (Valis FX) on one shot, keeping the shot's own sound. It listens to the score's own
-events: `impact` for the halo, `kick` for the reveal, `stroke` for shockwaves.
+events: `impact` for the halo, `kick` for the reveal, `stroke` for shockwaves. The Score tab's **Classic** renders
+put the song's slice under the shot instead; [workflow 09](../workflows/09_valis_score_pass.json) does the same with
+`run`.
 
 | Option | What it does |
 |---|---|
 | `--clip FILE` | the shot (needed) |
 | `--score FILE` | a Valis score `.json` (needed) |
-| `--bar N` | the score bar the shot starts on (needed) |
+| `--bar N` | the score bar the shot starts on, a whole number from 0 (needed) |
 | `--layer FILE` | a second clip to reveal over the shot (an Edit render, say) |
 | `--section NAME` | with `--layer`: in a section named `drop`, `finale` or `chorus` the layer burns in on the kicks; in any other it is held on |
 | `--a "..."` | subject A for SAM 3 to track |
@@ -321,13 +371,17 @@ first dot is the input name, so dotted input names work. A value that is a numbe
 is treated as a file path: a file on this disk is uploaded, and anything else is sent as text, such as a path in
 `ComfyUI/input` or a prompt. [The workflows README](../workflows/README.md) lists each file's inputs to replace.
 
+A workflow file that can't be read or isn't JSON, a `--set` that isn't written as `node.input=value`, and a node id the
+workflow doesn't have are errors, found before anything is uploaded.
+
 ## For agents
 
 The CLI was built to be driven by a coding agent as well as by hand:
 
 - stdout carries only JSON (the job id, the time and the local output paths, or the film summary), so the agent reads
   results without scraping progress lines.
-- Exit codes separate a failed job (1) from a bad command line (2).
+- Exit codes separate a failed job (1) from a bad command line (2). A bad command line is caught before anything is
+  uploaded or queued, and its message lists the options or ids that are valid, so the agent can correct the call.
 - `--json` shows the graph a command would queue. Save it, edit it and queue it with `run`, replacing each
   `<asset ...>` entry with a `--set`.
 - `run` with `--set` reaches every graph the studio sends, exported under `workflows/`, and any graph the agent writes.

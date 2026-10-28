@@ -48,10 +48,11 @@ work together. Number keys switch tabs: **0** Film, **1** Create, **2** Edit, **
 
 ## 3. See what's ready
 
-Click the **setup** pill (or open **Renders → Setup**). Valis builds every graph the studio can send and checks it
-against this ComfyUI's node list: a missing node pack, a missing model file or a renamed input is listed under the
-feature that needs it, before anything is queued. A feature with nothing listed is ready. Setup can download some
-optional files for you; see [Renders and Setup](guides/renders.md#setup).
+Click the **setup** pill (or open **Renders → Setup**). Valis builds the graph of every feature the studio has and
+checks it against this ComfyUI's node list: a missing node pack, a missing model file or a renamed input is listed
+under the feature that needs it, before anything is queued. A feature with nothing listed is ready. Film's full-quality
+shot is optional: its model missing doesn't count against `setup ready`. Setup can download some optional files for
+you; see [Renders and Setup](guides/renders.md#setup).
 
 Then press **Renders → Detect hardware**. It reads the GPU, driver, CUDA, cuDNN, attention kernels and ComfyUI's
 launch flags and sets the safe shot size for your card.
@@ -101,7 +102,7 @@ Start with the row for the tab you want; Setup lists anything still missing.
 | Extras · Stereogram | SAM 3.1, `depth_anything_3_small` |
 | Extras · Loop | the MiniMax H3 Loop pack. Its default engine, **Draft · FastH3**, uses `fasth3_omniref_8step_pruned_int8_convrot` (22.2 GB; **Renders → Engine** can download it); **Final · H3 25 steps** uses `minimax_h3_ref2va_pruned_int8_convrot` with H3's text encoder and VAEs |
 | Extras · Stage | SAM 3.1, Depth Anything 3, Krea 2 with `krea2_anypaint_rank32` (or Qwen Image 2.1 with `qwen-image-2.1-outpaint-v2`) |
-| Shoot at full quality (the shot card's **full quality** box) | `minimax_h3_fl2va_pruned_int8_convrot` |
+| Shoot at full quality (the shot card's **full quality (30 steps)** box; Setup lists it as optional) | `minimax_h3_fl2va_pruned_int8_convrot` |
 
 ### Every file
 

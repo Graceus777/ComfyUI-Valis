@@ -151,7 +151,8 @@ In FX, open **Loop and sound** and tick **the clip is a loop**. The stack then r
 - The cues from 0 s to the loop's length repeat on every pass.
 - Every effect is played once round before frame 0, so trails, echoes and frost carry across the join.
 - Whatever still differs between the two passes is faded over the last 12 frames.
-- The clip keeps its own sound. The effects' own sounds aren't mixed in on a loop.
+- The clip keeps its own sound. The effects' own sounds and the beds aren't mixed in on a loop, so ticking the box
+  turns off **every effect makes its own sound** and the beds.
 - The result is saved as an MP4 and a GIF.
 
 For cues that land on the same beat every pass, pick a tempo whose whole bars fill the loop. A 4.25 s loop is 2 bars of
@@ -177,7 +178,7 @@ Name what's in a still. Valis cuts it into depth layers and paints in what each 
 it: push in, arc, crane, dolly zoom. The split is one GPU job. After that every move plays live in the browser at the
 still's own resolution, and the export draws the same frames with no new render.
 
-Stage is marked experimental in the studio. Its panel lists the known weak spots:
+Stage is marked experimental in the studio, and its panel says how to work round its known weak spots:
 
 - Smoke and haze that aren't named sit at ground depth and can streak on a big move.
 - A very broad name ("the desert") can take the whole picture.
@@ -194,8 +195,9 @@ move that crops in past the still's own pixels looks soft at 1080p.
 - For **Paint what the camera uncovers**, the krea2-anypaint pack and its LoRA, or Qwen Image 2.1 (GGUF) with the
   outpaint LoRA.
 
-All of these are in [install](../install.md). Setup under Renders doesn't check Stage's graphs, so a missing piece shows
-up as an error when you split or paint.
+All of these are in [install](../install.md). Setup under Renders checks Stage's graphs (splitting a still, a set from
+words, and painting past the frame with Krea 2 AnyPaint or with Qwen Image 2.1), so a missing piece shows up there
+before you split or paint.
 
 ### Split a still
 

@@ -11,6 +11,7 @@ For each effect below:
 - **Needs** is a subject mask (SAM 3, from the tab's **Subject**) or another clip (**Another clip**).
 - **Key** names an effect or a preset in a layer, a Score rule or a Film shot: `Effect` alone is the first preset,
   `Effect:preset` another one (`Lightning:storm`). The effect part is also the `effect` value of a *Valis Layer* node.
+  Score rules and Film shots take one clip each, so they offer every effect but the five that need another clip.
 - **Settings** are the effect's own parameters, for the `params` JSON of a *Valis Layer* node, with their defaults.
   A preset is a set of these.
 - **Sound** is what the effect adds when **every effect makes its own sound** is ticked. [Sounds](#sounds) has
@@ -33,7 +34,7 @@ For each effect below:
 | Shockwave | `Shockwave` | `downbeat` | | Ripple, Blast | swell, boom |
 | Vertigo | `Vertigo` | held, `loud` | subject | | none |
 | Gravity lens | `Lens` | `kick` | subject | | lens |
-| Projector | `Projector` | `beat` | | Light touch, Old reel | none in the FX tab |
+| Projector | `Projector` | `beat` | | Light touch, Old reel | slip |
 | Echo | `Echo` | `beat` | subject | | ghost |
 | Slit-scan | `SlitScan` | held, `loud` | | | none |
 | Time slip | `TimeSlip` | `beat` | other | | slip |
@@ -41,13 +42,14 @@ For each effect below:
 | Era cut | `Eras` | `beat` | other | | slip |
 | Frost | `Frost` | `downbeat` | | Breath on glass, Creeping, Whiteout | frost |
 | Glitch | `Glitch` | `hat` | | Tape slip, Hard | tick |
-| Tear | `Tear` | held, `loud` | other | | none in the FX tab |
+| Tear | `Tear` | held, `loud` | other | | tear |
 | Double exposure | `DoubleExposure` | `beat` | subject, other | | whoosh |
 | Split time | `Split` | `downbeat` | other | | slip |
 
-Without its subject, Rim light and Echo leave the picture as it is and Gravity lens sits in the middle of the frame.
-Without another clip, Time slip, Era cut, Split time and Double exposure stop the render with an error, and Tear opens
-onto black.
+The FX tab won't start a render whose layer needs a subject or another clip it hasn't been given, and names the layer.
+In a *Valis Render* node without them, Rim light and Echo leave the picture as it is, Gravity lens sits in the middle
+of the frame, Time slip, Era cut, Split time and Double exposure stop the render with an error, and Tear opens onto
+black.
 
 ## How the light effects differ
 
@@ -287,8 +289,8 @@ strength follows the lane's hits and fades between them. With no subject it sits
 On every frame the picture becomes projected film, with exposure flicker, gate weave, vertical scratches and dust.
 Hits on its lane make the flicker jump.
 
-**Lane** `beat` · **Needs** nothing · **Sound** none in the FX tab. Its sound (the `slip` film-gate sound) follows a
-`burn` lane, which only a *Valis Layer* node sets.
+**Lane** `beat` · **Needs** nothing · **Sound** the `slip` film-gate sound (at 60%), on its `burn` lane when it has
+one (only a *Valis Layer* node sets it), else on its own lane
 
 | Preset | Key | What it does |
 |---|---|---|
@@ -404,8 +406,10 @@ Reality rips along a jagged seam through the middle of the frame, tilted 8°. Th
 held amount, up to a third of the frame's width when it is full, and in the gap the other clip shows behind a
 burning magenta rim with sparks. The seam flutters.
 
-**Lane** held, `loud` · **Needs** other · **Sound** none in the FX tab. Its tearing sound follows a hit lane, which a
-*Valis Layer* node can give it as `on`. · no presets
+**Lane** held, `loud` · **Needs** other · **Sound** something tearing open, filtered noise rising through a band with a
+low breath under it (`tear`). It plays where the tear opens: on the swells of the curve it follows (each time the
+curve climbs past 60% of its peak, after falling under 35% since the last), or on a hit lane a *Valis Layer* node
+gives it as `on` · no presets
 
 **Settings** `width` 0.35, `angle` 8, `at` (a mask name for the seam to pass through; the middle otherwise),
 `flutter` 6, `rim` (the rim colour), `tau` 0.8
@@ -438,11 +442,11 @@ between them that flares on each hit.
 
 ## Sounds
 
-Each effect's sound is synthesized fresh for every hit (no samples) and placed on the same lane as the picture. Valis
-plays it on the strongest hits, the top half of the lane by strength (any hit for thunder, the top 70% for crackle). The
-same sound keeps a minimum number of beats from itself and plays a maximum number of times per render, so a longer
-clip gets no more of them. A beat is the cues' tempo (from a song, a sheet or a cue sheet's `bpm`), or 0.5 s when
-there is none.
+Each effect's sound is synthesized fresh for every hit (no samples) and placed on the same lane as the picture (an
+effect held by a curve, such as Tear, sounds on the curve's swells). Valis plays it on the strongest hits, the top
+half of the lane by strength (any hit for thunder, the top 70% for crackle). The same sound keeps a minimum number of
+beats from itself and plays a maximum number of times per render, so a longer clip gets no more of them. A beat is the
+cues' tempo (from a song, a sheet or a cue sheet's `bpm`), or 0.5 s when there is none.
 
 | Sound | Effects | Beats apart, at least | Per render, at most |
 |---|---|---|---|
@@ -457,16 +461,18 @@ there is none.
 | `swell` | Shockwave | 4 | 2 |
 | `lens` | Gravity lens | 4 | 2 |
 | `ghost` | Echo | 4 | 2 |
-| `slip` | Time slip, Era cut, Split time | 2 | 3 |
+| `slip` | Time slip, Era cut, Split time, Projector | 2 | 3 |
+| `tear` | Tear | 4 | 2 |
 | `stutter` | Datamosh | 2 | 3 |
 | `frost` | Frost | 4 | 2 |
 | `tick` | Glitch | 1 | 6 |
 
 Every sound is set a fixed number of dB under the music at its moment (thunder 6 dB under, a tick 20 dB under), the
 whole effects bus is held at least 6 LU under the music, and all of them share one reverb. Tuned sounds take the key
-of YuE2's sheet music when there is one and D minor otherwise. Two effects asking for the same sound within 0.25 s
-get one. The [FX guide](../guides/fx.md#loop-and-sound) has how the sounds, beds, the song and the clip's own sound
-are mixed.
+of YuE2's sheet music when there is one, else the key Valis hears in the song (a key-profile match on its chroma) or
+the key stored in a score made from one, and D minor when there is none (a cue sheet, or a song with no clear key).
+Two effects asking for the same sound within 0.25 s get one. The [FX guide](../guides/fx.md#loop-and-sound) has how
+the sounds, beds, the song and the clip's own sound are mixed.
 
 ## In ComfyUI
 

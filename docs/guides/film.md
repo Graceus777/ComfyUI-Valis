@@ -49,7 +49,7 @@ On a plan that already has shots, a new length means those shots are shot again 
 
 ### Song
 
-**YuE2 writes it** sends the plan's song brief to YuE2, which writes the sheet music and plays it. **My song** opens a drop zone for a wav, flac or mp3. Valis reads its tempo and bars, the shots are cut on its bars and the effects fire on its beats. A song dropped from disk while a plan is open goes into that plan.
+**YuE2 writes it** sends the plan's song brief to YuE2, which writes the sheet music and plays it. **My song** opens a drop zone for a wav, flac or mp3. Valis reads its tempo and bars, the shots are cut on its bars and the effects fire on its beats. A song dropped while a plan is open, from disk or from the bin, goes into that plan. Your own song has no sheet music, so it has only the lanes Valis hears: a shot on **bar**, **melody** or **bass** moves to **downbeat**, **beat** or **kick** (see [Shot cards](#shot-cards)).
 
 ## Plan it
 
@@ -126,7 +126,7 @@ H3 shoots each keyframe at the plan's size and length: 8 steps with the PDD acce
 
 ### Effects
 
-For each shot, the library fires the shot's effect on its lane at the shot's own place in the song, and synthesizes the effect's sound in the song's key under the song's slice. SAM 3 tracks the subject when the effect follows one. Every frame's colours are matched to the keyframe unless the card says otherwise. A clip at another frame rate is retimed to 24 fps first. The library runs on the CPU, about a minute per 4 s of video, plus the SAM 3 track (about 35 s warm, 2.5 min cold). A shot with no effect still gets its slice of the song and its colours held. If there is no song yet, **Effects** makes it first.
+For each shot, the library fires the shot's effect on its lane at the shot's own place in the song, and synthesizes the effect's sound in the song's key under the song's slice. The key is the one YuE2's sheet music gives, or with your own song the one Valis hears in it (D minor if it hears none). SAM 3 tracks the subject when the effect follows one; an effect that follows a subject on a card with no **subject** stops the step with an error that names the shot. The shot's own sound from H3 isn't used (see [Limits and tips](#limits-and-tips)). Every frame's colours are matched to the keyframe unless the card says otherwise. A clip at another frame rate is retimed to 24 fps first. The library runs on the CPU, about a minute per 4 s of video, plus the SAM 3 track (about 35 s warm, 2.5 min cold). A shot with no effect still gets its slice of the song and its colours held. If there is no song yet, **Effects** makes it first.
 
 ### Cut
 
@@ -152,9 +152,9 @@ Under the header are three pictures: the keyframe, the shot and the shot with ef
 | **what moves** | What happens during the shot, for H3. |
 | **full quality (30 steps)** | Shoots on the int8 weights with the full 30-step recipe instead of the 8-step one. About three times as long (~20 min), for a shot whose motion came apart. It loads `minimax_h3_fl2va_pruned_int8_convrot.safetensors` from `diffusion_models`. |
 | **keep the keyframe's colours** | On by default. The effects pass matches every frame's colours to the keyframe, because H3 drifts the light over a shot (SÉANCE's red lamp went warm white by the last second). Untick it for a shot whose light is meant to change, like a lamp going out, or THE IRON SAINT's shot 2, where fire races up the blade and lights her face. |
-| **subject** | What SAM 3 tracks. Only effects that follow someone use it: Rim light, Shockwave (it starts from the subject), Echo, Gravity lens, Vertigo, Double exposure. |
-| effect | **no effect**, or any effect and preset in the library, in the FX tab's four groups. |
-| lane | The lane of the song that fires it: **on kick**, **on snare**, **on hat**, **on beat**, **on downbeat**, **on bar**, **on melody**, **on bass**. |
+| **subject** | What SAM 3 tracks. Only effects that follow someone use it: Rim light, Shockwave (it starts from the subject), Echo, Gravity lens, Vertigo. Rim light, Echo, Gravity lens and Vertigo need it. |
+| effect | **no effect**, or any effect and preset in the library, in the FX tab's four groups, except the five that need a second clip (Tear, Time slip, Era cut, Double exposure, Split time). |
+| lane | The lane of the song that fires it: **on kick**, **on snare**, **on hat**, **on beat**, **on downbeat**, **on bar**, **on melody**, **on bass**. With your own song only the first five are offered. |
 
 Changing the effect, the lane or the colour box clears that shot's effects pass, so **Effects** makes it again.
 
@@ -271,14 +271,14 @@ node cli/valis.mjs film --idea "..." --plan-only > plan.json
 node cli/valis.mjs film --plan plan.json
 ```
 
-`--plan-only` prints the plan as JSON so you can edit it; `--plan` makes the film from a plan, including one built from references. The genre is gothic unless you name another, and the film is saved to `./valis_out` (`--out` for another folder).
+`--plan-only` prints the plan as JSON so you can edit it; `--plan` makes the film from a plan, including one built from references or one the studio saved. A new plan is gothic unless you name another genre with `--genre`; `--plan` uses the plan's own genre unless you give `--genre`. The film is saved to `./valis_out` (`--out` for another folder).
 
 ## Limits and tips
 
 - Look at every still before you shoot. Re-roll it, edit its words, or take it to Create. A still takes seconds and a shot about 7 minutes.
-- The planner writes no dialogue, and the cut doesn't keep the sound H3 made with a shot. The effects pass puts the song and the effects' sounds under every shot, so a line spoken in a shot doesn't reach the film.
-- Your own song has no sheet music, so only **kick**, **snare**, **hat**, **beat** and **downbeat** have hits. A shot **on bar**, **on melody** or **on bass** has nothing to fire on.
-- Time slip, Era cut, Tear, Double exposure and Split time open onto a second clip, and the Film tab doesn't give them one. Use them in the FX tab.
+- A film is scored: the effects pass puts the song and the effects' sounds under every shot, and never the sound H3 made with the shot. The planner writes no dialogue, and H3's room tone and murmurs bled under the music, so the song carries the film. A line spoken in a shot doesn't reach the film.
+- Your own song has no sheet music, so only **kick**, **snare**, **hat**, **beat** and **downbeat** have hits. The lane select offers only those, and a shot planned **on bar**, **on melody** or **on bass** moves to **downbeat**, **beat** or **kick** when the song is set.
+- Time slip, Era cut, Tear, Double exposure and Split time open onto a second clip, which only the FX tab takes, so the shot cards don't offer them. An older plan with one stops at **Effects** with an error that names the shot. Use them in the FX tab.
 - To make a draft and then the film, shoot at 384, then set the size to native and shoot each shot again with **▶ shoot**. Shots already made keep their size.
 - YuE2 writes at most 120 s, so very long films need your own song.
 - Timings for every step on a 12 GB laptop are in the README's [timings table](../../README.md#timings-on-an-rtx-4080-laptop-12-gb-vram-32-gb-ram).

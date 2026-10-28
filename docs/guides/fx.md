@@ -50,7 +50,7 @@ The whole clip is rendered, every frame, at its own size.
 retimed to 24 first by *Valis Frame Rate*. Each new frame shows the source frame at that moment, as ffmpeg's fps
 filter does, so a 16 fps Wan 2.2 camera move keeps its length and a 30 fps phone clip drops frames. Played as 24
 without it, Wan's 16 fps moves came out 1.5 times too fast and a third short. The studio adds the step whenever
-ComfyUI has the node loaded. Only the main clip is retimed, so give **Another clip** at 24 fps.
+ComfyUI has the node loaded. **Another clip** is retimed the same way.
 
 ## Another clip
 
@@ -59,8 +59,9 @@ other era), Era cut, Tear (the scene behind the seam), Double exposure (the scen
 time. It is scaled to cover the frame (centre-cropped), starts with the clip, and holds its last frame if it is
 shorter.
 
-A layer that needs it reads **needs other** until you pick one. Without it, Time slip, Era cut, Split time and Double
-exposure stop the render with an error, and Tear opens onto black.
+A layer that needs it reads **needs other** until you pick one, and **Render** refuses to start without it, naming the
+layer ("Tear needs Another clip"). Film's shot cards and Score's library rules don't offer these five effects, since
+they take one clip per shot.
 
 ## Subject
 
@@ -68,8 +69,7 @@ Optional. Name one thing in the clip, such as `the man`, `her face` or `the car`
 every frame, and the mask is cleaned up before the effects use it.
 
 - Rim light, Vertigo, Gravity lens, Echo and Double exposure need it. Their layers read **needs subject** while the
-  box is empty. Without it, Rim light and Echo leave the picture as it is and Gravity lens sits in the middle of the
-  frame.
+  box is empty, and **Render** refuses to start until it has words in it, naming the layer ("Echo needs a subject").
 - Shockwave starts its rings from the subject's centre when there is one, and from the frame's centre otherwise.
 
 The track runs whenever the box has words in it, whether a layer uses it or not. It takes about 35 s with SAM 3
@@ -84,7 +84,7 @@ used. The cue sheet, for example, is read only while **Cues** is on.
 |---|---|---|
 | **Cues** | whatever the cue sheet names | the clip's own sound |
 | **Music** | kick, snare, hat, onset, beat, downbeat; curves loud, bright, low, mid, high | the song |
-| **New song** | the sheet music's lanes (melody, bass, chord, bar, section...) plus everything **Music** gives | the song YuE2 played |
+| **New song** | the sheet music's lanes (melody, bass, chord, bar, section...) plus everything **Music** gives, with the sheet's own `beat` | the song YuE2 played |
 | **Score** | the score's lanes and curves | the score's song, or the clip's own sound if it has none |
 
 ### Cues
@@ -122,7 +122,9 @@ make a score in **Score** with the meter set to 3/4 and use its `bar` lane throu
 
 YuE2 writes a song's sheet music (ABC notation) from your brief, then performs it. Valis lines the sheet up with the
 audio and every note it wrote becomes a hit: `melody`, `note`, `bass`, `lead`, `chord`, `bar`, `section` and more.
-The song's audio is also heard as in **Music**, so `kick`, `hat`, `downbeat` and the curves are there too.
+The song's audio is also heard as in **Music**, so `kick`, `hat` and the curves are there too. `beat` is the sheet
+music's own grid alone, so each beat fires once, and `downbeat` is its bar starts. Each note is a hit with a strength from 0.6 to 1, the higher
+notes of a lane a little harder, and each chord change a hit of 1.
 
 - **style**: the brief (genre, instruments, mood, tempo), as in the placeholder `southern gothic, slow slide guitar,
   54 BPM…`. Empty, it is `instrumental, cinematic`.
@@ -137,13 +139,13 @@ render (`fx_<id>_song_...`) with its sheet music as text; the clip carries only 
 
 ### Score
 
-This source uses the score open in the **Score** tab, with its lanes, its curves, and its song if the Score tab has
-the song as a file (a score made from a song or by YuE2). Make or open a score there, then click **Score** here. The FX tab takes the score
-that is open at that moment, so click **Score** again after you change it. With no score open, **Render** says
+This source uses the score open in the **Score** tab, with its lanes, its curves, and its song if it has one (a score
+made from a song or by YuE2, a `.json` opened with its song, or the Example, whose song is uploaded when you click
+**Score** here). Make or open a score there, then click **Score** here. The FX tab takes the score that is open at
+that moment, so click **Score** again after you change it. With no score open, **Render** says
 "Make or open a score in the Score tab first: FX fires on its lanes".
 
-A score without a song file (the bundled DANSE MACABRE example, or a `.json` opened on its own) leaves the clip its
-own sound.
+A score without a song (a cue sheet, or a `.json` opened on its own) leaves the clip its own sound.
 
 **Music**, **New song** and **Score** all line the clip up with the start of the song (0 s). To place a clip later in
 a song, lay it on a shot in the **Score** tab, which renders each shot at its own place.
@@ -179,7 +181,8 @@ instead, starting on `loud`. A held amount is a curve (`loud`, `bright`, `low`, 
 Hover the box to see which kind it takes.
 
 A preset's own lane is set when you add the preset from its card: **Strip light** and **Failing bulb** come in on
-`downbeat`. Switching to one in a layer's preset list keeps the lane the layer already had.
+`downbeat`. Switching presets in a layer's list moves the layer to the new preset's own lane when it was still on the
+old preset's; a lane you typed yourself stays.
 
 ### Order
 
@@ -189,8 +192,8 @@ drag to reorder. To move a layer to the bottom, remove it and add it again.
 
 ## Loop and sound
 
-This section is folded under **Loop and sound**. Its summary reads *loops* or *no loop*, then *sound on* or
-*no sound*.
+This section is folded under **Loop and sound**. Its summary reads *loops · its own sound*, or *no loop* then
+*sound on* or *no sound*.
 
 ### The clip is a loop
 
@@ -205,7 +208,8 @@ then loop with it:
   last 12 frames.
 
 A loop is saved as an MP4 and a GIF up to 480 px wide. It keeps the clip's own sound and nothing else: no effect
-sounds, no beds and no song, whatever is set below.
+sounds, no beds and no song, since they would jump at the join. While the box is ticked, **every effect makes its own
+sound** and the beds are turned off.
 
 ### Each effect's own sound
 
@@ -218,17 +222,17 @@ sounds, no beds and no song, whatever is set below.
 - Each hit is synthesized fresh, set a fixed number of dB under the music at that moment, and the whole effects bus
   is held at least 6 LU under the music. All of them share one hall reverb.
 - The tuned sounds (the swell, boom, shimmer, ghost, frost and lens sounds, and the tape note in the slip sound) are
-  in the key of YuE2's sheet music with **New song**. With any other source they are in D minor.
-- Glow, Heat haze, Rim light, Vertigo and Slit-scan make no sound. Tear makes none in this tab, since its sound
-  follows a hit lane and the tab gives it a held amount. Projector makes none either, since its sound follows a
-  `burn` lane that the tab does not set.
+  in the song's key: the key of YuE2's sheet music with **New song**, the key Valis hears in the song with **Music**,
+  and the score's key with **Score**. With a cue sheet, or a song with no clear key, they are in D minor.
+- Glow, Heat haze, Rim light, Vertigo and Slit-scan make no sound. Projector plays the film-gate `slip` sound on its
+  lane. Tear, which follows a held amount, sounds where it opens: on the swells of the curve it follows.
 
 ### Beds
 
 Six chips under the checkbox: **rain**, **wind**, **sea**, **fire**, **room**, **neon**. Click to switch each on or
 off; **room** starts on. A bed runs under everything for the whole clip, fading in and out over a second, about 25 dB
 under the music's average loudness (or the clip's own sound). Beds play only while **every effect makes its own
-sound** is ticked.
+sound** is ticked, and never on a loop.
 
 ### The clip's own sound or a song
 
@@ -246,7 +250,8 @@ effect sounds and beds on their own.
 
 **Render** is enabled once there is a clip. Its label shows an estimate learned from this machine's past FX jobs.
 It refuses to start without a clip ("Pick a clip first"), without a layer ("Add at least one effect from the
-library"), on **Music** without a song, or on **Score** without a score.
+library"), on **Music** without a song, with a layer that needs **Another clip** or a subject that isn't given (the
+message names the layer), or on **Score** without a score.
 
 The job's progress shows in the viewer. **Renders** has the queue and **Stop**. When it finishes:
 
@@ -257,7 +262,7 @@ The job's progress shows in the viewer. **Renders** has the queue and **Stop**. 
 
 Time is about a minute per 4 seconds of video on the README's laptop, plus the SAM 3 track when there is a subject
 and the song when YuE2 writes one. A cue sheet that can't be read stops the job with a message such as
-`bar:beat cues need a bpm line`.
+`cue sheet: bar:beat times need a bpm line first, e.g. 'bpm 108 4/4'`.
 
 ## Limits and tips
 
@@ -285,8 +290,9 @@ The studio's FX graphs are exported in [`workflows/`](../../workflows/README.md)
 | [`35_score_shot_with_the_library.json`](../../workflows/35_score_shot_with_the_library.json) | One shot of a score from 8.9 s on: Punch on `kick`, Shockwave on `downbeat`, mixed with the song's own slice |
 | [`37_fx_light.json`](../../workflows/37_fx_light.json) | Lightning from the left on `downbeat` and a candle Flicker on `beat` |
 
-The exported files have no Valis Frame Rate step, so give them 24 fps clips. In 10 and 37 the clip's own sound is not
-mixed in.
+All five include the Valis Frame Rate step, as the studio sends them, so a clip at another frame rate (and, in 10, the
+other clip) is retimed to 24 first. In 10 and 37 (a cue sheet, no song) the clip's own sound is kept under the effect
+sounds.
 
 There is no `fx` command in the CLI. Run a workflow file with your own files instead:
 

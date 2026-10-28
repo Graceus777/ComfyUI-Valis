@@ -14,7 +14,7 @@ Open the tab with **Genjutsu** in the top bar, or press **6**.
 | **Restyle** | the H3 Fun ControlNet Union |
 | **Object swap** | the H3 Fun ControlNet Union 2.0; SAM 3 |
 | **Check source** | SDPose and RT-DETR, and the Valis nodes (Valis Pose Check) |
-| **turbo** | the ref2v turbo LoRA |
+| **turbo (8 steps)** | the ref2v turbo LoRA |
 
 SAM 3, SDPose and the H3 nodes are part of ComfyUI itself. The files and where they go are in [Install](../install.md),
 and **Renders → Setup** lists anything a mode still lacks.
@@ -138,7 +138,7 @@ another clip.
 - **turbo (8 steps)**: 8 steps with the turbo LoRA in place of 20.
 
 With **FastH3 OmniRef** chosen under **Renders → Engine**, every Genjutsu render runs in 8 steps on FastH3 and the turbo
-LoRA is skipped, so the **turbo** box changes nothing.
+LoRA is skipped, so the **turbo (8 steps)** box changes nothing.
 
 ## The prompt and the graph
 

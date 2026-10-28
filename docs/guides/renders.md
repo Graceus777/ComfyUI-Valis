@@ -107,7 +107,7 @@ Notes follow when they apply:
 - under 24 GB of RAM: switching between Krea, H3 and Qwen reloads them from disk
 - ComfyUI in a low or no VRAM mode
 - a GPU above 85 °C
-- under 8 GB of GPU memory: video models offload to system RAM and run very slowly
+- under 7.5 GB of GPU memory: video models offload to system RAM and run very slowly
 
 Pressing **Detect hardware** sets Create's shot size and the Film tab's size to the safe short side, and a toast says
 so. The first time the studio opens on a machine it does this once by itself.
@@ -118,9 +118,22 @@ The **setup** pill in the top bar says whether the studio can run here: `setup r
 toast naming the features that miss something. Click it to jump to **Setup** in this tab.
 
 Setup builds the studio's graphs with the same code the buttons use and checks each against this ComfyUI's node list
-(`/object_info`), before anything is queued. It covers 34 features (Film's plan, keyframes and cut; Create's buttons,
-trained moves, relight and extend; Edit; FX; Genjutsu; Score's Classic pass; Upscale) plus one more row,
-**Comfy SDK · job API**, which checks that Comfy API v2 answers on this server.
+(`/object_info`), before anything is queued. It covers 51 features plus one more row, **Comfy SDK · job API**, which
+checks that Comfy API v2 answers on this server:
+
+| Tab | Features |
+|---|---|
+| Film | the plan, the song (YuE2), a character's sheet, a sheet's state or a prop, a set from another side, a frame (the cast seated in the set), a close-up cut from a frame, the keyframes, a shot at full quality, the cut |
+| Create | Frame it, cast a character, Shoot it (plain, graded, ending on the subject, from a cleaned keyframe), the trained moves on H3 and Wan 2.2, the orbit in halves, relight, light change, whip pan, dolly zoom, trimming the hold, Extend |
+| Edit | Find it, Transform, Swap, Swap matched to the plate, Turn, Turn the voice, Remove |
+| FX | the library stack, a song YuE2 writes, an instrumental YuE2 writes |
+| Genjutsu | Motion transfer, Restyle, Object swap, the source check |
+| Score | the Classic render, a score from a song, a score YuE2 writes (instrumental and with lyrics) |
+| Extras | Stereogram, Loop (draft and final), Stage (split a still, a set from words, and painting past the frame with Krea 2 AnyPaint or with Qwen Image 2.1) |
+| Finish | Upscale |
+
+**Film · a shot at full quality (H3 int8, 30 steps)** is optional. A film is shot without it, so when its model file
+is missing the row reads *optional*, is listed after the features to fix, and doesn't count against `setup ready`.
 
 Each feature lists what's wrong with it:
 
@@ -131,12 +144,12 @@ Each feature lists what's wrong with it:
 | an input doesn't match | a required input not set, an input the node no longer has, a menu value that isn't an option, or a link to the wrong type |
 | the job API is missing | `comfy-api-proxy: not installed: run python -m pip install comfy-api-proxy in ComfyUI's Python, then restart ComfyUI` |
 
-Features with problems come first, with up to five issues each. The ready ones fold into one line (`N more ready`, or
-`All N workflows ready`). Press **Check again** after installing something. Install steps for every pack and model are
-in [install](../install.md).
+Features with problems come first, with up to five issues each, then an optional one that misses something. The ready
+ones fold into one line (`N more ready`, or `All N workflows ready`). Press **Check again** after installing
+something. Install steps for every pack and model are in [install](../install.md).
 
-Setup doesn't build the Extras graphs (Stereogram, Loop, Stage), Score's song analysis and YuE2 scores, Film's
-reference sheets and frames, or video relight. A missing piece there shows up as an error when you run it.
+A few steps the studio adds on top of these graphs aren't checked on their own: FX on a looping clip, the retime to
+24 fps, the cut's title card and Film's colour hold. They use Valis's own nodes and ComfyUI's core nodes.
 
 ### Downloading a model
 
@@ -165,8 +178,8 @@ The download goes through the pack's own route, `/valis/models/fetch`:
 
 ## Engine
 
-**Engine** picks the model that renders with MiniMax H3 ref2va: Edit (Transform, Remove, Swap), Genjutsu and video
-relight.
+**Engine** picks the model that renders with MiniMax H3 ref2va: Edit's Transform and Swap, and Genjutsu. Edit's Remove
+always renders on H3 ref2va, because the Person Remover LoRA was trained on it.
 
 | Option | What it is |
 |---|---|
@@ -240,9 +253,9 @@ Then 21 chains, fed with what those made:
 A chain takes its sources from this run, else from the newest earlier run that made them. One whose sources never ran
 stops with an error such as `needs c03 first (run the Create combinations once)`.
 
-x14 and x18 read a song from `ComfyUI/input/danse_score.wav`. The test expects the DANSE MACABRE score's audio there
-(x18 makes its score at 161.5 BPM in 3/4), and nothing in the pack copies it there, so put the file in place before
-running those two.
+x14 and x18 play the DANSE MACABRE score's song, which the pack ships for Score's **Example**
+(`app/assets/demo/danse_v3.mp3`; x18 makes its score at 161.5 BPM in 3/4). The test uploads it to ComfyUI's input
+folder the first time one of them needs it, so nothing has to be put there first.
 
 ### The checks
 
