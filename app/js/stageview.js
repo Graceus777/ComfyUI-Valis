@@ -506,13 +506,15 @@ export class StageView {
     cv.width = outW; cv.height = outH;
     const fps = 24, n = Math.max(2, Math.round(this.S.sec * fps)), job = `x${Date.now()}`;
     const btn = this.$("#st-export"); btn.disabled = true;
+    let held = false;                                                 // the server is holding this export: dropped if it fails
     try {
       const name = [this.S.move, ...this.S.then.map(t => t.move)].join("_then_") + `_${this.S.focus.replace(/[^a-z0-9]+/gi, "_")}`;
       const rb = await fetch("/valis/stage/begin", {method: "POST", headers: {"Content-Type": "application/json"},
         body: JSON.stringify({job, fps, width: outW, height: outH, subfolder: this.S.sub, name, seconds: this.S.sec, audio: this.S.audio ? this.S.audioName : null})});
-      if (rb.status === 404 || rb.status === 405) return await this.exportJpeg(job, fps, n, outW, outH, name, btn);   // a pack loaded before the raw route
+      if (rb.status === 404 || rb.status === 405) { held = true; await this.exportJpeg(job, fps, n, outW, outH, name, btn); held = false; return; }   // a pack loaded before the raw route
       const b = await rb.json();
       if (!b.ok) throw new Error(b.error || "could not start the export");
+      held = true;
       // raw pixels straight from the GPU: no JPEG in the browser, encoded by ComfyUI as they arrive
       const gl = this.stage.gl, px = new Uint8Array(outW * outH * 4);
       const t0 = performance.now();
@@ -526,6 +528,7 @@ export class StageView {
       }
       btn.textContent = "Encoding…";
       const r = await fetch("/valis/stage/finish", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({job})}).then(r => r.json());
+      held = false;
       if (r.error) throw new Error(r.error);
       const secs = ((performance.now() - t0) / 1000).toFixed(1);
       this.toast(`Saved ${r.subfolder}/${r.filename} · ${r.frames} frames in ${secs} s`);
@@ -533,6 +536,8 @@ export class StageView {
       v.replaceChildren(this.h("video", {src: `/view?filename=${encodeURIComponent(r.filename)}&subfolder=${encodeURIComponent(r.subfolder)}&type=output`, controls: true, loop: true, style: "width:100%;border-radius:8px"}));
       this.S.lastExport = {...r, seconds: +secs};
     } finally {
+      // a frame that didn't upload, or a failed start of the encode: the open video and its half-written file are closed and deleted
+      if (held) fetch("/valis/stage/abort", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({job})}).catch(() => {});
       cv.width = prev[0]; cv.height = prev[1]; btn.disabled = false; btn.innerHTML = `Export MP4<span class="sub">the preview's frames</span>`;
       this.draw();
     }

@@ -225,11 +225,15 @@ Every command and flag is in [docs/cli.md](docs/cli.md).
   the key heard in a song, and the effects that should be heard (no ComfyUI, no GPU).
 - `python tests/check_stage.py`: a stage folder's files stay inside the folder (a crafted `stage.json` can't read or
   overwrite pictures elsewhere), and the plate still paints a stage's own layers (no ComfyUI, no GPU).
+- `python tests/check_stage_routes.py`: the Stage export routes on a real aiohttp server with a stand-in for PyAV: encoding runs
+  off the server's loop, and an export that fails, repeats its id, is aborted or goes quiet is closed and its half-written
+  video deleted (needs `pip install aiohttp`; no ComfyUI, no GPU).
 - `node tests/ui/run.mjs`: the studio clicked through in a headless browser against a stand-in ComfyUI
   (`tests/ui/mock_server.mjs`), with a screenshot of every screen.
 - `node tests/ui/film_save.test.mjs`: the Film tab's saves: a reopened film keeps its shot length, your own song survives a
   reload, and a save waiting when you switch films lands in its own film.
 - `node tests/ui/score_open.test.mjs`: a Valis score you open is shown as text, whatever its title, bars or names hold.
+- `node tests/ui/stage_export.test.mjs`: Stage's MP4 export on a stand-in server: a frame that fails to upload gets the export dropped.
 - **Renders → End-to-end test** (or `(await import("/valis/app/js/selftest.js")).run()` in the browser console): short,
   low-resolution renders on the GPU through the studio's own code. 15 Create combinations (IMAX 65mm + fisheye + 1950s
   + noir, Super 8, VHS, trained moves, Wan, custom palettes, an end frame, a loop, relight, a cast character), then the
