@@ -727,6 +727,7 @@ const Score = new ScoreView({run, onFilm: async (sv) => {
   // a film on this score's song: the Film tab gets the song and as many shots as the score has (up to 12)
   if (!await sv.ensureAudio()) return toast("This score has no song to make a film on", true);
   M.ownSong = {ref: sv.audioRef, name: sv.sc.title || "the score's song", url: sv.audioUrl};
+  if (typeof sv.audioRef === "object") await keepSong(M.ownSong, await (await fetch(sv.audioUrl)).blob()).catch(() => {});
   M.songSrc = "own"; $$("#m-song-src button").forEach(b => b.classList.toggle("on", b.dataset.id === "own")); $("#m-song-drop").style.display = "";
   fillDrop($("#m-song-drop"), h("span", {}, M.ownSong.name)); fsec.song.setValue(M.ownSong.name);
   M.shots = Math.min(12, sv.sc.shots.length); $$("#m-shots-n button").forEach(b => b.classList.toggle("on", Number(b.dataset.id) === M.shots));
@@ -1143,6 +1144,7 @@ function buildFilm() {
   }, "yue");
   dropzone($("#m-song-drop"), "audio/*", async (f) => {
     const u = await api.upload(f); M.ownSong = {ref: api.inputRef(u), name: f.name, url: URL.createObjectURL(f)};
+    await keepSong(M.ownSong, f);
     fillDrop($("#m-song-drop"), h("audio", {src: M.ownSong.url, controls: true, style: "width:100%"}), h("span", {}, f.name));
     fsec.song.setValue(f.name);
     if (M.plan) { M.plan.song.file = M.ownSong.ref; M.plan.song.fileName = f.name; M.plan.music = null; useOwnSong(M.plan); fsave(); fdraw(); }
@@ -1160,7 +1162,7 @@ function fshape() {
   fsec.shape?.setValue(`${M.shots} × ${M.len.toFixed(1)} s · ${s.w}×${s.h}`);
   $("#m-len-hint").textContent = `About ${Math.round(M.shots * M.len)} s of film before the title card.` +
     (f < CR.TRAINED_FRAMES[0] ? " Shorter than H3's training (5.2–15 s): fine, fast moves can feel rushed." : "");
-  if (M.plan && !M.busy) {
+  if (M.plan && !M.busy && !M.opening) {          // (opening a film moves the sliders to the plan's values: they must not write theirs back)
     M.plan.size = {w: s.w, h: s.h};
     const was = shotLen(M.plan);
     M.plan.shotSeconds = M.len === SHOT_SECONDS ? undefined : M.len;
@@ -1173,12 +1175,43 @@ function fshape() {
   }
 }
 // ---- the plan, kept in ComfyUI/user/default/valis/films/<tag>.json so a reload (or another day) picks it up
-let fsaveT = null;
+// A save waits 600 ms so typing isn't a write per key. What waits is the plan as it stood (its snapshot, tag and genre): a
+// film opened in that time must not be written into the old film's file, and the old film's last edit must not be lost
+// (the next save of another film, and fopen, write what waits first).
+// An SDK asset (the song you dropped) can't be saved as the handle it is: api.keep copied its bytes, and the plan saves a pointer.
+let fsaveP = null, fwrote = Promise.resolve();
+const fsaveAs = (k, v) => (v && typeof v === "object" && v.commit && !v.filename) ? (api.kept(v) ? {__kept: api.kept(v)} : undefined) : v;
 function fsave() {
   if (!M.plan) return;
-  clearTimeout(fsaveT);
-  const plan = JSON.parse(JSON.stringify(M.plan, (k, v) => (v && typeof v === "object" && v.commit && !v.filename) ? undefined : v));
-  fsaveT = setTimeout(() => api.writeUser(`valis/films/${M.plan.tag}.json`, {...plan, genre: M.genre?.id, saved: Date.now()}).then(frecent).catch(() => {}), 600);
+  const tag = M.plan.tag;
+  if (fsaveP && fsaveP.tag !== tag) fflush();
+  clearTimeout(fsaveP?.timer);
+  const body = {...JSON.parse(JSON.stringify(M.plan, fsaveAs)), genre: M.genre?.id, saved: Date.now()};
+  fsaveP = {tag, body, timer: setTimeout(fflush, 600)};
+}
+function fflush() {
+  const w = fsaveP;
+  if (!w) return fwrote;
+  clearTimeout(w.timer); fsaveP = null;
+  return fwrote = fwrote.then(() => api.writeUser(`valis/films/${w.tag}.json`, w.body)).then(frecent).catch(() => {});
+}
+// the pointers fsave left for your song become live assets again (uploaded once more, the proxy forgets them on a ComfyUI restart)
+async function frevive(pl) {
+  const live = new Map();
+  const back = async (v) => {
+    const k = v?.__kept;
+    if (!k) return v;
+    if (!live.has(k.path)) live.set(k.path, api.revive(k).catch((e) => { toast(`${e.message}: drop the film's song in Song again`, true); return null; }));
+    return (await live.get(k.path))?.asset || null;
+  };
+  if (pl.song?.fileName && !pl.song.file) {            // saved before the song's bytes were kept: it can't come back by itself
+    pl.music = pl.music?.own ? null : pl.music;
+    toast(`This film is cut on your song ${pl.song.fileName}, which wasn't kept: drop it in Song again`, true);
+  }
+  if (pl.song) pl.song.file = await back(pl.song.file);
+  if (pl.music) { pl.music.audio = await back(pl.music.audio); if (!pl.music.audio) pl.music = null; }
+  const k = pl.song?.file && api.kept(pl.song.file), got = k && await live.get(k.path);
+  return got ? {ref: pl.song.file, name: pl.song.fileName || k.name, url: got.url} : null;
 }
 async function frecent() {
   let list = [];
@@ -1186,7 +1219,7 @@ async function frecent() {
   list = (Array.isArray(list) ? list : []).filter(f => /\.json$/.test(f.path || f)).sort((a, b) => (b.modified || 0) - (a.modified || 0)).slice(0, 8);
   $("#m-recent").replaceChildren(...(list.length ? [h("span", {class: "hint"}, "Recent: "), ...list.map(f => {
     const p = f.path || f, tag = p.replace(/^.*\//, "").replace(/\.json$/, "");
-    return h("button", {class: "chip" + (M.plan?.tag === tag ? " on" : ""), type: "button", onclick: () => fopen(p)}, tag);
+    return h("button", {class: "chip" + (M.plan?.tag === tag ? " on" : ""), type: "button", disabled: M.busy, onclick: () => fopen(p)}, tag);
   })] : []));
   for (const b of $$("#m-recent .chip")) {               // name them by title
     const p = `valis/films/${b.textContent}.json`;
@@ -1194,18 +1227,38 @@ async function frecent() {
   }
 }
 async function fopen(path) {
+  // a step running on this film saves its results into it as they land: another film can't open until it's done
+  const busy = () => toast("A step is still running: let it finish (or stop it in Renders) before opening another film", true);
+  if (M.busy) return busy();
+  await fflush();                                       // the film you're leaving is written first, as it stands
   const pl = await api.readUser(path.startsWith("valis/") ? path : `valis/films/${path}`);
   if (!pl) return toast("Couldn't read that film's plan", true);
-  M.plan = pl; M.genre = P.GENRES.find(g => g.id === pl.genre) || M.genre;
-  // the panel follows the plan: its genre, its shot count, its size
-  $$("#m-genre .card").forEach(c => c.classList.toggle("on", c.dataset.id === M.genre?.id)); fsec.genre.setValue(M.genre?.name || "");
-  M.shots = pl.shots.length; $$("#m-shots-n button").forEach(b => b.classList.toggle("on", Number(b.dataset.id) === M.shots));
-  if (pl.size) { const short = Math.min(pl.size.w, pl.size.h); M.short = short; M.res?.set(short); }
-  M.len = pl.shotSeconds || SHOT_SECONDS; M.lenCtl?.set(Math.round(M.len * 2) / 2);
+  const song = await frevive(pl);
+  if (M.busy) return busy();
+  M.opening = true;                                     // the panel follows the plan here: its sliders must not write their old values into it
+  try {
+    M.plan = pl; M.genre = P.GENRES.find(g => g.id === pl.genre) || M.genre;
+    // the panel follows the plan: its genre, its shot count, its size and shot length
+    $$("#m-genre .card").forEach(c => c.classList.toggle("on", c.dataset.id === M.genre?.id)); fsec.genre.setValue(M.genre?.name || "");
+    M.shots = pl.shots.length; $$("#m-shots-n button").forEach(b => b.classList.toggle("on", Number(b.dataset.id) === M.shots));
+    if (pl.size) { const short = Math.min(pl.size.w, pl.size.h); M.short = short; M.res?.set(short); }
+    M.lenCtl?.set(Math.round((pl.shotSeconds || SHOT_SECONDS) * 2) / 2);
+    M.len = pl.shotSeconds || SHOT_SECONDS;             // (the slider moves in half seconds; the film keeps its own length)
+    fshape();
+    if (song) { M.ownSong = song; ownSongShow(); }
+  } finally { M.opening = false; }
   $("#m-idea").value = pl.idea || "";
   fdraw(); frecent();
   if (pl.film) { $("#m-viewer").replaceChildren(media(pl.film)); finishBar($("#m-finish"), pl.film, $("#m-viewer"), null); }
 }
+// the Song section shows the song of your own that's in use (dropped, taken from the bin or the Score tab, or a film's)
+function ownSongShow() {
+  const o = M.ownSong;
+  M.songSrc = "own"; $$("#m-song-src button").forEach(b => b.classList.toggle("on", b.dataset.id === "own")); $("#m-song-drop").style.display = "";
+  fillDrop($("#m-song-drop"), o.url ? h("audio", {src: o.url, controls: true, style: "width:100%"}) : h("span", {}), h("span", {}, o.name)); fsec.song.setValue(o.name);
+}
+// a song dropped in the studio is an SDK asset; the plan can only save it if its bytes are kept (api.keep)
+const keepSong = (o, blob) => api.keep(o.ref, blob, o.name).catch((e) => toast(`${e.message}: this film loses the song when the page reloads`, true));
 // ---- the steps panel: what each step makes, how much is done, a button to run it alone
 const STEPS = [
   {id: "refs", name: "References", tip: "A sheet per character, state and prop: painted by Krea 2, or a Krea 2 edit of other sheets."},
@@ -1269,6 +1322,8 @@ async function fstep(id, only = null) {
   finally { M.busy = false; $("#m-progress").replaceChildren(); fsave(); fdraw(); fsteps(); }
 }
 // ---- the script and the shot cards
+// where the plan's song plays from: YuE2's is a file ComfyUI made; yours is the one in the Song section (its bytes or its bin item)
+const songUrl = (p) => !p.music?.audio ? null : p.music.own ? (M.ownSong?.ref === p.music.audio ? M.ownSong.url : null) : api.viewUrl(p.music.audio);
 function fdraw() {
   const p = M.plan, box = $("#m-planbox");
   filmActions();
@@ -1285,7 +1340,7 @@ function fdraw() {
     field("place", () => p.place, (v) => { p.place = v; }, "The setting: goes into every keyframe"),
     p.song.file ? h("div", {class: "maprow"}, h("label", {}, "song"), h("span", {class: "hint"}, p.song.fileName || "your song"))
       : field("song", () => p.song.style, (v) => { p.song.style = v; p.music = null; }, "YuE2's brief: genre, instruments, mood, tempo"),
-    p.music?.audio ? h("audio", {src: api.viewUrl(p.music.audio), controls: true, class: "songbar"}) : null].filter(Boolean));
+    songUrl(p) ? h("audio", {src: songUrl(p), controls: true, class: "songbar"}) : null].filter(Boolean));
   if (built(p)) drawBuild($("#m-build"), p, {busy: M.busy, save: fsave, redraw: fdraw, run: (id, only) => fstep(id, only), view: (f) => $("#m-viewer").replaceChildren(media(f))});
   else $("#m-build").replaceChildren(h("div", {class: "bstart"}, h("button", {class: "btn small", type: "button", disabled: M.busy, tip: "So the same people stay in the same places, shot after shot",
     onclick: () => { toBuilt(p); fsave(); fdraw(); }}, "Build it from references"), h("span", {class: "hint"}, "a sheet per character, the set from every camera setup, frames each shot is cut from")));

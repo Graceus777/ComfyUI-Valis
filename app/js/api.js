@@ -172,6 +172,27 @@ export async function writeUser(path, data) {
   if (!r.ok) throw new Error(`couldn't save ${path}: ${r.status}`);
 }
 
+// A file dropped into the studio is an SDK asset: a handle that lives in this page, and in the proxy's memory until
+// ComfyUI restarts. A film plan that points at one (your own song) can't save the handle, so keep() copies the bytes into
+// ComfyUI's user folder and remembers where; the plan saves that pointer, and revive() uploads the file again on the next open.
+const KEPT = new WeakMap();
+export async function keep(asset, blob, name = asset.filePath) {
+  const hash = String(await asset.hash()).replace(/^.*:/, "").slice(0, 16), safe = String(name).replace(/[^\w.-]+/g, "_");
+  const path = `valis/files/${hash}_${safe}`;
+  const r = await fetch(`/api/userdata/${encodeURIComponent(path)}?overwrite=true`, {method: "POST", body: blob});
+  if (!r.ok) throw new Error(`couldn't keep ${name}: ${r.status}`);
+  KEPT.set(asset, {path, name: String(name), type: blob.type || ""});
+  return asset;
+}
+export const kept = (asset) => KEPT.get(asset);                  // {path, name, type} once keep() has copied it, else undefined
+export async function revive(k) {
+  const r = await fetch(`/api/userdata/${encodeURIComponent(k.path)}`);
+  if (!r.ok) throw new Error(`${k.name} isn't in ComfyUI's user folder any more`);
+  const blob = await r.blob(), asset = await upload(new File([blob], k.name, {type: k.type || undefined}));
+  KEPT.set(asset, k);                                            // saved again, it still points at the same bytes
+  return {asset, url: URL.createObjectURL(blob)};
+}
+
 export async function cancel(id) {
   const j = jobs.get(id)?.sdkJob;
   return j ? j.cancel() : null;
