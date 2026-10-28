@@ -231,6 +231,19 @@ import * as F from "../app/js/film.js";
   await F.chainShot(plan, 1, io);
   ok(plan.shots[1].key.filename === "film_x_shot_1_last_00001_.png" && plan.shots[1].clip === null && plan.shots[1].fx === null && runs[0].g["1"].inputs.file === "film_x_shot_1_00001_.mp4"
      && runs[0].g["4"].inputs.filename_prefix === "valis/film_x_shot_1_last", "Film · a chained shot's keyframe is the last frame of the shot before; its old shot and effects go");
+  { // a chained shot built from a frame isn't stale: Keyframes (and so Make the rest) leaves its last-frame key, clip and effects alone
+    const fp = {tag: "x", frames: [{name: "F1", still: {filename: "frame_f1.png", subfolder: "valis", type: "output"}}],
+      shots: [{key: {filename: "k0.png"}, clip: {filename: "film_x_shot_1_00001_.mp4", subfolder: "valis"}}, {frame: "F1", key: {filename: "k.png"}, keyFrom: "frame_f1.png", clip: {filename: "old.mp4"}, fx: {filename: "fx.mp4"}}]};
+    await F.chainShot(fp, 1, io);
+    const key = fp.shots[1].key;
+    fp.shots[1].clip = {filename: "chained_shot.mp4"}; fp.shots[1].fx = {filename: "chained_fx.mp4"};
+    ok(!F.keyStale(fp, fp.shots[1]), "Film · a chained shot's key isn't stale against its frame's still");
+    runs.length = 0; await F.frameShots(fp, io, {});
+    ok(fp.shots[1].key === key && fp.shots[1].clip?.filename === "chained_shot.mp4" && fp.shots[1].fx?.filename === "chained_fx.mp4" && runs.length === 0,
+       "Film · Keyframes again keeps a chained shot's last frame, its shot and its effects");
+    await F.frameShots(fp, io, {only: [1]});
+    ok(fp.shots[1].key.filename === "frame_f1.png" && !fp.shots[1].keyChain && !F.keyStale(fp, fp.shots[1]), "Film · asking for the shot's still again goes back to its frame");
+  }
   let threw = 0;
   try { await F.chainShot({tag: "x", shots: [{}, {}]}, 1, io); } catch { threw++; }
   try { await F.chainShot({tag: "x", shots: [{clip: {filename: "a.mp4"}}]}, 0, io); } catch { threw++; }

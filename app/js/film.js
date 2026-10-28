@@ -358,6 +358,7 @@ export async function frameShots(plan, io, {genre = null, only = null, onStage =
   for (const k of built) {
     const s = plan.shots[k], f = shotFrame(plan, s);
     if (!f.still) throw new Error(`shot ${k + 1}'s frame ${f.name} isn't made yet`);
+    delete s.keyChain;                                  // the still is cut from the frame again: no longer a chain
     if (!s.crop) { if (s.key?.filename !== f.still.filename) { s.clip = null; s.fx = null; } s.key = f.still; s.keyFrom = f.still.filename; continue; }
     const seed = keySeed(s, k);
     onStage("keyframes", `shot ${k + 1}: a close-up cut from frame ${f.name}`);
@@ -417,7 +418,10 @@ export async function chainShot(plan, k, io, {onStage = () => {}} = {}) {
   const r = await io.run(G.lastFrame({clip: io.ref(prev.clip), prefix: `${pre(plan)}_shot_${k}_last`}), `Film · shot ${k + 1} from shot ${k}`);
   const f = png(r);
   if (!f) throw new Error(`no last frame from shot ${k}`);
-  s.key = f; s.keyFrom = prev.clip.filename; s.clip = null; s.fx = null;
+  // The key is the last frame of a clip, not a cut of the shot's frame: keyFrom (the frame still a key was cut from, which
+  // keyStale compares with the frame's own) is cleared, or the next Keyframes step would find the shot stale and put the
+  // frame's still back. keyChain remembers which clip it follows.
+  s.key = f; s.keyFrom = null; s.keyChain = prev.clip.filename; s.clip = null; s.fx = null;
   return plan;
 }
 
