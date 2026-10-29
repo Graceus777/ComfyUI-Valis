@@ -187,6 +187,19 @@ Stage is marked experimental in the studio, and its panel says how to work round
 Two more limits come from how it works. The 3D set is made from one view, so the far side of things stays empty. And a
 move that crops in past the still's own pixels looks soft at 1080p.
 
+### What it's for
+
+- **A shot.** Any move on a keyframe, exported as an MP4 you can cut in like any other clip: a push in on a painting, a
+  dolly zoom out on the knight, a slow drift that makes a still breathe, a crane up over a set. The move is exact and
+  repeatable, and after the split it costs no render. A modest move on a clean split holds up in a film; a wide one shows
+  the limits above.
+- **A set.** The layers as Gaussian splats (a `.ply`), with what Valis painted behind them, to open in SuperSplat, Blender
+  or a game engine and look around.
+- **A camera path.** The move as a camera track (a `_cameras.json` in the format 3DGS training writes), to play the same
+  move on the splats in SuperSplat.
+- **A scene that acts on the music.** Layers glow, flicker, rise, sway or appear on the lanes of a song or a cue sheet,
+  and the camera can punch on a hit, while the move plays.
+
 ### What it needs
 
 - SAM 3 and Depth Anything 3 for the split.

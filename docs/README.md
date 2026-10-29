@@ -16,7 +16,7 @@
 | [Genjutsu](guides/genjutsu.md) | Keep a performance, change the cast, the place or the look: motion transfer, restyle, object swap, check source. |
 | [Score](guides/score.md) | A song as lanes: make a score, map lanes to effects, lay clips on the shots, preview live, render and cut on the bars. |
 | [FX](guides/fx.md) | The library of 24 effects as layers on a clip, each firing on a lane, each with its own sound. |
-| [Extras](guides/extras.md) | Stereograms and kinetograms, loops, and Stage (experimental). |
+| [Extras](guides/extras.md) | Stereograms and kinetograms, loops, and Stage (experimental): a camera for one still, exported as an MP4, a 3D set and a camera path. |
 | [Renders](guides/renders.md) | The queue, the bin, the machine, Setup, the engine switch and the end-to-end test. |
 
 ## Reference

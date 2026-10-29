@@ -55,7 +55,7 @@ score-driven pass can be played without generating anything.
 | **Edit** | Drop a clip and name what to change ("his head", "her dress"). SAM 3 tracks it. **Transform** re-renders only the masked region in a new look: **your own** (drop a picture of it, or say what it is and *Paint it* with Krea 2; Krea 2 and H3 both see the picture), or one of 57 presets in seven groups (elements, materials, light and tech, costume, age and weather, spirits, creatures), each shown on the same costume-test sheets, and any preset can be matched to your picture. **Remove** takes a person out with the H3 Person Remover LoRA: what was behind them fills in, and everything outside the mask stays the source's own pixels. **Swap** replaces the whole person with a character sheet (dropped, or painted from words); *Match the plate* checks the take first and matches brightness, contrast, colour and grain back to the plate with no AI. **Turn** makes one take become another on a chosen word, and can turn the voice on the same word. |
 | **FX** | The library: 24 effects in four groups, **light first** (flicker, firelight, lightning, a light sweep and rim light relight the shot itself, so they read as the scene's own light; glow, light shafts, glint and heat haze work with them), then camera and lens, time, and break and blend; most come with presets (a candle or a strip light, headlights or a lighthouse, a breath of frost or a whiteout). Pick a clip (and another for the effects that open onto a second scene), optionally name a subject, stack effects. Each layer listens to one lane: from a soundless cue sheet, from any song (beats, kick/snare/hat, loudness, brightness), from YuE2 writing and performing a new song (every note becomes a cue), or from a Valis score. Every effect brings its own sound, under the clip's own sound (or the song); add beds (rain, wind, sea, fire, room, neon). A clip at another frame rate (Wan 2.2's 16 fps camera moves, a phone's 30) is retimed to 24 first. On a looping clip the effects loop with it: the cues repeat and every effect is played once round first, so trails, echoes and frost carry across the join (MP4 and GIF), and the loop keeps its own sound. |
 | **Score** | Make a score in Valis: from **any song** (Valis hears its beats, bars, kick, snare and hats, how loud and bright it is, and lays out sections and shots on whole bars), from a song **YuE2 writes** (every note of its sheet music becomes a lane), or from a **cue sheet**; save it as `.json` and open it again (DANSE MACABRE is the example). Map lanes to library effects, lay clips from the bin on its shots, and the **live preview** plays your clips on the music with every effect sketched as it fires. *Render all*, then *Cut it* on the bars, or *Make a film on it*. |
-| **Extras** | **Stereogram**: hide whatever moves in a clip in a field of dots, as a magic-eye stereogram (parallel or cross-eyed) and a kinetogram (it exists only while it moves), drawn in squares, halftone or letters, with a check that the depth survives an upload. **Loop**: a shot that plays forever, H3 joining its end to its start ([MiniMax H3 Loop](https://github.com/pxl-pshr/ComfyUI-MiniMaxH3-Loop)), then effects that loop with it. **Stage** (experimental): one still split into depth layers and played by a live 2.5D camera. |
+| **Extras** | **Stereogram**: hide whatever moves in a clip in a field of dots, as a magic-eye stereogram (parallel or cross-eyed) and a kinetogram (it exists only while it moves), drawn in squares, halftone or letters, with a check that the depth survives an upload. **Loop**: a shot that plays forever, H3 joining its end to its start ([MiniMax H3 Loop](https://github.com/pxl-pshr/ComfyUI-MiniMaxH3-Loop)), then effects that loop with it. **Stage** (experimental): name what's in a still and a camera moves through it: push in, arc, crane, dolly zoom, a handheld drift, the set pulled apart into its layers. Export the move as an MP4, or the set as Gaussian splats with the camera path for SuperSplat ([below](#stage-a-camera-for-one-still)). |
 | **Renders** | The queue, *Free memory*, *Stop*, everything made (the bin, kept between sessions) to send to any tab, and **Setup**: the studio's graphs checked against this ComfyUI, with missing node packs and model files listed per feature. **Detect hardware** reads the GPU, driver, CUDA, cuDNN, attention kernels and ComfyUI's flags, and sets the safe shot size for this GPU. The **end-to-end test** renders every Create combination and every chain after it at low resolution and checks each result. |
 
 | Film | Score |
@@ -65,6 +65,44 @@ score-driven pass can be played without generating anything.
 | ![Edit: her crimson cloak, found by SAM 3, transformed to liquid chrome, before and after](docs/edit.jpg) | ![Create: shot 1 of THE IRON SAINT opened from its card, with the camera moves and its keyframe](docs/create.jpg) |
 | **FX** | **Renders and Setup** |
 | ![The FX tab: the 24 effects, light first, two stacked as layers on a clip and fired by a cue sheet](docs/fx.jpg) | ![Renders: the machine, the end-to-end test and everything made so far](docs/renders_setup.jpg) |
+
+## Stage: a camera for one still
+
+Stage is in Extras and marked experimental. Drop a still (a keyframe from Create, a painting, a photograph), name what is in
+it, one thing a line (`the knight`, `the demon`, `the sky`), and press *Split it*. SAM 3 finds every one of each name, Depth
+Anything 3 puts them in order front to back, and Valis paints in what each layer hides behind the ones in front of it. With
+Krea 2's edit nodes installed the split erases first: the things standing in the still are removed, checked gone, and set back
+on top as cutouts, so a camera that moves finds real paint where a thing stood instead of a smear. That is one GPU job. After
+it, every move plays live in the browser at the still's own resolution, and changing the move, its amount or its length costs
+no render at all. You can also *make the set from words*: Krea 2 paints a 16:9 still and the split runs, in one job.
+
+**The camera.** Fourteen moves: locked off, push in, pull back, truck left and right, crane up and down, arc left and right,
+dolly zoom in and out, zoom in (lens), drift (a handheld breath) and *show the layers* (the set pulled apart so you can see how
+it was built). A move is built around a layer you pick: a dolly zoom holds it at one size while the room stretches behind it,
+an arc circles it. Moves chain with *then another move*, and a click on the sound strip starts the next one on a word or a hit.
+The camera can see past the still's edge into a painted dome (*Paint what the camera uncovers*, Krea 2 AnyPaint or Qwen Image
+2.1), which allows wider moves with less crop.
+
+**On the music.** Drop a song or a voice line, or write a cue sheet, and layers get something to do on its lanes, read by the
+same cue engine as FX: a lamp that glows on the kick, a fire that flickers and throws embers, smoke that rises, trees that sway,
+a layer that appears on the first hit, a zoom punch on every snare. Thirteen effects in all.
+
+**What comes out.**
+
+| | |
+|---|---|
+| **MP4** | The move as a shot: H.264, 720p or 1080p at 24 fps, the dropped sound under it, saved in the stage's folder under `ComfyUI/output/valis/stage/`. These are plain clips. Cut them into a film, or use a push-in or a dolly zoom out on a keyframe as a shot you did not have to ask a video model for. The Stage showcase in the Valis demo is exports like these, all from one THE IRON SAINT still. |
+| **3D set** | `<stage>_set.ply`: the layers as Gaussian splats, written in the browser, with what Valis painted behind them and the far dome around them. Opens in SuperSplat, Blender and game engines. |
+| **Camera path** | `<stage>_<moves>_cameras.json`, one key per frame at 30 fps in the format 3DGS training writes. Drop it on the 3D set in SuperSplat and render at 30 fps to play the same move on the splats. |
+
+**What to expect.** It works from one view, so the far side of things stays empty, big arcs can tear thin shapes, smoke and haze
+that you did not name sit at ground depth and can streak on a big move, a very broad name ("the desert") can take the whole
+picture, and a move that crops in past the still's own pixels is soft at 1080p (by default a still under 1300 px is sharpened to
+1440 with SeedVR2 before the split). A *Checks* line under the viewer says what a move will show before you export: pixel tests run when
+the stage was split (the first frame is the still, no ghost outlines, few torn triangles, real paint behind the things). A
+modest move on a clean split cuts into a film; wide moves are where it shows. It needs SAM 3.1 and Depth Anything 3, and Krea 2
+with its edit nodes for erase first and for painting past the frame; [install](docs/install.md) lists them and Setup under
+Renders checks them. The full guide is in [Extras](docs/guides/extras.md#stage-experimental).
 
 ## What's new here
 
@@ -98,6 +136,9 @@ score-driven pass can be played without generating anything.
 - **Real camera moves from real motion** (`ValisDollyZoom`, `ValisWhipPan`, `ValisTrimHold`, `ValisPoseCheck`,
   `ValisCanny`): the vertigo shot and the whip pan are made from footage the video model shoots well, not from prompts
   it shoots badly.
+- **A camera for one still** (`ValisStage` and the Stage nodes; Extras · Stage, experimental): a still split by words into
+  depth layers with the paint behind them, then a live 2.5D camera, layers that act on the music, and exports as an MP4, a
+  set of Gaussian splats and a camera path. See [Stage](#stage-a-camera-for-one-still).
 - **Built on the Comfy SDK.** Every job (submit, live progress, uploads, results) goes through the official
   [`@comfyorg/sdk`](https://docs.comfy.org/development/api-development/sdks) over Comfy API v2. The pack mounts
   Comfy-Org's [`comfy-api-proxy`](https://docs.comfy.org/development/comfyui-server/api-proxy) on ComfyUI's own server
