@@ -619,32 +619,42 @@ class Split:
 
 class Eras:
     """The same shot in several eras (clips), cutting from one to the next on every hit, each cut bleeding light-first
-    into the last for a couple of frames. by= instead holds a crossfade position (0 = the first clip, 1 = the last)."""
+    into the last for a couple of frames. by= instead holds a crossfade position (0 = the first clip, 1 = the last).
+    clips omitted: the shot ("a") and whichever of "b" and "c" are loaded (a render has the shot and one other clip)."""
 
-    def __init__(self, clips=("a", "b", "c"), on="beat", by=None, bleed=2, grades=None, order="cycle", seed=3):
+    def __init__(self, clips=None, on="beat", by=None, bleed=2, grades=None, order="cycle", seed=3):
         self.__dict__.update(locals()); del self.__dict__["self"]
 
-    def _frame(self, ctx, k, img):
-        c = self.clips[k % len(self.clips)]
+    def _names(self, ctx):
+        if self.clips is None:
+            return [c for c in ("a", "b", "c") if c == "a" or c in ctx.clips]
+        gone = [c for c in self.clips if c != "a" and c not in ctx.clips]
+        if gone:
+            raise ValueError(f"Era cut: clip {gone[0]!r} isn't loaded (a render has the shot, 'a', and the other clip, 'b')")
+        return list(self.clips)
+
+    def _frame(self, ctx, k, img, names):
+        c = names[k % len(names)]
         f = img if c == "a" else ctx.clip(c)
         g = self.grades[k % len(self.grades)] if self.grades else None
         return era_grade(f, g, ctx.t) if g else f
 
     def __call__(self, ctx, img):
+        names = self._names(ctx)
         if self.by:
-            x = np.clip(ctx.level(self.by), 0, 1) * (len(self.clips) - 1)
+            x = np.clip(ctx.level(self.by), 0, 1) * (len(names) - 1)
             k = int(math.floor(x)); f = x - k
-            a = self._frame(ctx, k, img)
-            return a if f < 1e-3 or k + 1 >= len(self.clips) else a * (1 - f) + self._frame(ctx, k + 1, img) * f
+            a = self._frame(ctx, k, img, names)
+            return a if f < 1e-3 or k + 1 >= len(names) else a * (1 - f) + self._frame(ctx, k + 1, img, names) * f
         n = ctx.cues.count(self.on, ctx.t)
         if self.order == "random":
-            r = np.random.default_rng(self.seed + n); k = int(r.integers(len(self.clips)))
+            r = np.random.default_rng(self.seed + n); k = int(r.integers(len(names)))
         else:
             k = n
-        cur = self._frame(ctx, k, img)
+        cur = self._frame(ctx, k, img, names)
         a_, _ = ctx.since(self.on)
         if a_ < self.bleed / ctx.fps and n > 0:
-            prev = self._frame(ctx, k - 1, img)
+            prev = self._frame(ctx, k - 1, img, names)
             mix = 1 - a_ * ctx.fps / max(self.bleed, 1)
             cur = screen(cur, prev * .55 * mix)
         return cur

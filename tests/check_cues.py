@@ -211,6 +211,39 @@ if late:
         ok(good, f"{name}: a hit a hair after the frame gives a finite picture")
     cv2.remap = _remap
 
+# Era cut with its default clips on a render that has the shot and one other clip ("a" and "b"): the third era was a KeyError 'c'
+def _era(fx, clips, frames=(0, 12, 24, 30)):
+    ctx = Ctx(Cues.from_schedule("bpm 120 4/4\nevery 1 beat beat"), (24, 24), 40, 24.0)
+    for name, v in clips.items():
+        ctx.add_clip(name, frames=[np.full((24, 24, 3), v, np.uint8)] * 40)
+    out = []
+    for j in frames:
+        ctx.begin(j)
+        out.append(float(np.mean(fx(ctx, ctx.a.copy()))))
+        ctx.end(np.clip(np.zeros((24, 24, 3), np.float32), 0, 1))
+    return out
+
+
+try:
+    got = _era(E.Eras(bleed=0), {"a": 0, "b": 255})
+    ok(got[0] > .99 and got[1] < .01 and got[2] > .99 and got[3] > .99, "Eras: the default clips are the shot and the one other clip (b, a, b... a hit at a time)", got)
+except KeyError as e:
+    ok(False, "Eras: the default clips are the shot and the one other clip (a, b, a...)", repr(e))
+try:
+    got = _era(E.Eras(bleed=0), {"a": 0, "b": 128, "c": 255})
+    ok(abs(got[0] - .502) < .01 and got[1] > .99 and got[2] < .01 and got[3] < .01, "Eras: with three clips loaded the default cuts through all three (b, c, a)", got)
+    got = _era(E.Eras(bleed=0), {"a": 0})
+    ok(max(got) < .01, "Eras: with no other clip the shot plays on", got)
+except KeyError as e:
+    ok(False, "Eras: the default clips follow what is loaded", repr(e))
+try:
+    _era(E.Eras(clips=("a", "b", "c"), bleed=0), {"a": 0, "b": 255})
+    ok(False, "Eras: a clip it was told to use that isn't loaded is refused")
+except ValueError as e:
+    ok("'c'" in str(e) and "isn't loaded" in str(e), "Eras: a clip it was told to use that isn't loaded says which", e)
+except KeyError as e:
+    ok(False, "Eras: a clip it was told to use that isn't loaded says which", repr(e))
+
 # analysis cues land on the sound, not half a window (46 ms) before it: kicks, snares, hats, onsets and beats of synthetic
 # hits at known times are within a frame (42 ms; they were 54 to 63 ms early, about 1.5 frames)
 rg = np.random.default_rng(5)
