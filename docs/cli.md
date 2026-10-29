@@ -94,11 +94,11 @@ files written to `--out`.
 | Exit code | When |
 |---|---|
 | 0 | the job succeeded, or `help` was shown |
-| 1 | the job failed: stderr says `failed after <n>s:` and the failing node's class and message |
+| 1 | the job failed: stderr says `failed after <n>s:` and the failing node's class and message; or ComfyUI refused the graph before it ran (a model file that isn't there, a node it hasn't loaded): stderr says `ComfyUI refused the graph:` and then, a line each, the node, its class and what is wrong with the input |
 | 2 | a bad command line, caught before anything is uploaded or queued: an unknown command (the help follows), a required option missing (`--video is required for transform`), an option the command doesn't take, an option with no value, a stray word, an id a list doesn't have, a number that isn't one or is out of range, a plan file or workflow that can't be read, or a `--set` that has no value, isn't `node.input=value`, gives a value its input can't take or names a node the workflow doesn't have |
 
-Any other error (the server can't be reached, a film step fails) ends the process with a non-zero exit and Node's error
-message.
+A file of yours that can't be sent (`can't send pic.png to <server>: ...`) and a film step that fails (`the film failed: ...`) also exit 1
+with their message. Any other error (the server can't be reached) ends the process with a non-zero exit and Node's error message.
 
 ## Options in general
 

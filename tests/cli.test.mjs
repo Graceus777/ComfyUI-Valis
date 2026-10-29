@@ -5,6 +5,8 @@
 //     and the older ids (--move push, --grade teal) still work,
 //   - an unknown id, option or plan file is an error (exit 2) that says what it takes, before anything is sent,
 //   - film --plan keeps the plan's own genre unless --genre is given.
+//   - a graph ComfyUI turns down (a model file that isn't there, a node it hasn't loaded) is an error (exit 1) that names the node and
+//     the input, not a stack trace.
 //
 //   node tests/cli.test.mjs                 (exit code 1 on any failure)
 import fs from "node:fs";
@@ -227,6 +229,39 @@ const CREATE = {genre: "gothic", framing: "wide", focal: "auto", body: "auto", k
   ok(f.code === 0 && JSON.stringify(f.json).includes(`<asset ${vid}>`), "find --json · the same", f.err || f.out.slice(0, 200));
   const s = await cli(["shoot", "--image", pic, "--motion", "he raises the lantern", "--json"]);
   ok(s.code === 0 && JSON.stringify(s.json).includes(`<asset ${pic}>`), "shoot --json · the same", s.err || s.out.slice(0, 200));
+  fs.rmSync(dir, {recursive: true, force: true});
+}
+
+// ---- a graph ComfyUI turns down: the node and input it names, one line each, not the SDK's stack trace (a stand-in that answers
+// POST /api/v2/jobs with the 422 a real ComfyUI sends: a LoadImage with a file that isn't there, and a node it hasn't loaded)
+{
+  const refusal = (message, node_errors) => JSON.stringify({error: {code: "invalid_workflow", message, details: {node_errors}}});
+  const refuser = http.createServer((req, res) => {
+    const p = new URL(req.url, "http://x").pathname;
+    if (req.method === "GET" && p.startsWith("/object_info/")) { const n = decodeURIComponent(p.slice(13)); res.writeHead(200, {"Content-Type": "application/json"}); return res.end(JSON.stringify(OI[n] ? {[n]: OI[n]} : {})); }
+    let body = ""; req.on("data", d => body += d);
+    req.on("end", () => {
+      if (req.method !== "POST" || p !== "/api/v2/jobs") { res.writeHead(404); return res.end(); }
+      res.writeHead(422, {"Content-Type": "application/json"});
+      res.end(body.includes("NoSuchNodeXyz") ? refusal("Node 'NoSuchNodeXyz' not found. The custom node may not be installed.", {})
+        : refusal("Prompt outputs failed validation", {"1": {errors: [{type: "custom_validation_failed", message: "Custom validation failed for node", details: "image - Invalid image file: definitely_not_here.png", extra_info: {input_name: "image"}}],
+            dependent_outputs: ["2"], class_type: "LoadImage"}}));
+    });
+  });
+  await new Promise(r => refuser.listen(0, "127.0.0.1", r));
+  const url = `http://127.0.0.1:${refuser.address().port}`;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "valis-cli-")), wf = (nodes) => { const f = path.join(dir, `wf${Object.keys(nodes)[0]}${Date.now()}.json`); fs.writeFileSync(f, JSON.stringify(nodes)); return f; };
+  const bad = await cli(["run", wf({"1": {class_type: "LoadImage", inputs: {image: "definitely_not_here.png"}}, "2": {class_type: "SaveImage", inputs: {images: ["1", 0], filename_prefix: "x"}}}), "--out", dir], url);
+  ok(bad.code === 1 && /ComfyUI refused the graph: Prompt outputs failed validation/.test(bad.err), "run · a refused graph says so and exits 1", `${bad.code} ${bad.err}`);
+  ok(/node 1 \(LoadImage\): Custom validation failed for node: image - Invalid image file: definitely_not_here\.png/.test(bad.err), "run · a refused graph names the node, its type and what is wrong with the input", bad.err);
+  ok(!/\n\s+at .*\.js:\d+|node:internal/.test(bad.err) && !bad.out, "run · a refused graph is lines, not a stack trace", bad.err);
+  const none = await cli(["run", wf({"3": {class_type: "NoSuchNodeXyz", inputs: {}}}), "--out", dir], url);
+  ok(none.code === 1 && /ComfyUI refused the graph: Node 'NoSuchNodeXyz' not found/.test(none.err) && !/\n\s+at .*\.js:\d+/.test(none.err), "run · a node ComfyUI hasn't loaded is named, without a stack", `${none.code} ${none.err}`);
+  // a file of yours the server won't take: the file and the server are named, no stack
+  const pic = path.join(dir, "pic.png"); fs.writeFileSync(pic, Buffer.from("not really a picture"));
+  const up = await cli(["run", wf({"4": {class_type: "LoadImage", inputs: {image: "example.png"}}}), "--set", `4.image=${pic}`, "--out", dir], url);
+  ok(up.code === 1 && up.err.includes(`can't send ${pic} to ${url}:`) && !/\n\s+at .*\.js:\d+|node:internal/.test(up.err), "run · a file the server won't take is named, without a stack", `${up.code} ${up.err.slice(0, 400)}`);
+  refuser.close();
   fs.rmSync(dir, {recursive: true, force: true});
 }
 

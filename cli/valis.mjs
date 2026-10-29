@@ -192,6 +192,16 @@ function shotPanel() {
 process.env.COMFY_BASE_URL = (opt.api || process.env.COMFY_BASE_URL || "http://127.0.0.1:8188").replace(/\/+$/, "");
 const BASE = process.env.COMFY_BASE_URL;
 const {Comfy} = await import("../app/vendor/comfy-sdk.js");
+// ComfyUI turning a graph down (a model file that isn't there, a node it hasn't loaded) arrives as an SDK error whose message is
+// only "Prompt outputs failed validation"; which node and input it was is in its details. Say that, in lines, not a stack trace
+function explain(e) {
+  const ne = e?.details?.node_errors || e?.details?.errors, lines = [];
+  if (ne && typeof ne === "object") for (const [id, n] of Object.entries(ne))
+    for (const x of n?.errors || []) lines.push(`  node ${id} (${n.class_type || "?"}): ${[x.message, x.details].filter(Boolean).join(": ")}`.slice(0, 300));
+  const head = e?.message || String(e);
+  return lines.length ? `${head}\n${lines.slice(0, 6).join("\n")}${lines.length > 6 ? `\n  and ${lines.length - 6} more` : ""}` : head;
+}
+const guarded = async (what, fn) => { try { return await fn(); } catch (e) { console.error(`${what}: ${explain(e)}`); process.exit(1); } };
 const sdk = new Comfy({fetch: (...a) => globalThis.fetch(...a), ...(opt.key ? {apiKey: opt.key} : {})});
 // a node's /object_info: its entry, null when this ComfyUI hasn't loaded it, undefined when the server can't be read
 const INFO = {};
@@ -216,7 +226,7 @@ async function file(p) {                   // local file -> SDK asset (uploaded 
   if (opt.json) return `<asset ${p}>`;     // --json prints the graph and sends nothing, so nothing goes up either
   if (!uploads.has(p)) {
     const a = sdk.assets.fromBytes(new Uint8Array(fs.readFileSync(p)), {filename: path.basename(p), contentType: MIME[path.extname(p).toLowerCase()]});
-    await a.commit();
+    await guarded(`can't send ${p} to ${BASE}`, () => a.commit());
     uploads.set(p, a);
   }
   return uploads.get(p);
@@ -330,7 +340,7 @@ if (cmd === "film") {
   const view = (f) => `${BASE}/view?filename=${encodeURIComponent(f.filename)}&subfolder=${encodeURIComponent(f.subfolder || "")}&type=${f.type || "output"}`;
   const io = {
     run: async (graph, label) => {
-      const t = Date.now(), job = await sdk.submit(sdk.workflows.fromJson(await G.respell(graph, inputsOf)));
+      const t = Date.now(), job = await sdk.submit(sdk.workflows.fromJson(await G.respell(graph, inputsOf))).catch(e => { throw new Error(`${label}: ComfyUI refused the graph: ${explain(e)}`); });
       console.error(`${label}: job ${job.id}`);
       await job.wait();
       if (job.status !== "succeeded") { const e = job.error; throw new Error(`${label} failed: ${e ? `${e.class_type || ""} ${e.message || e.code}` : job.status}`); }
@@ -346,10 +356,10 @@ if (cmd === "film") {
     has: async (node) => !!(await nodeInfo(node)),
   };
   if (plan) plan.genre = genre.id;
-  else plan = await planFilm({idea: opt.idea, shots, genre}, io);
+  else plan = await guarded("the plan failed", () => planFilm({idea: opt.idea, shots, genre}, io));
   if (opt["plan-only"]) { console.log(JSON.stringify(plan, null, 2)); process.exit(0); }
   console.error(`plan: ${plan.title}, ${plan.shots.length} shot${plan.shots.length > 1 ? "s" : ""}, ${genre.name}`);
-  const r = await makeFilm(plan, io, {genre, onStage: (stage, msg) => console.error(`${stage}: ${msg}`)});
+  const r = await guarded("the film failed", () => makeFilm(plan, io, {genre, onStage: (stage, msg) => console.error(`${stage}: ${msg}`)}));
   const out = opt.out || "valis_out";
   fs.mkdirSync(out, {recursive: true});
   const dest = path.join(out, r.film.filename);
@@ -362,7 +372,7 @@ const graph = await build();
 if (opt.json) { console.log(JSON.stringify(graph, null, 2)); process.exit(0); }
 
 const t0 = Date.now();
-const job = await sdk.submit(sdk.workflows.fromJson(await G.respell(graph, inputsOf)));
+const job = await guarded("ComfyUI refused the graph", async () => sdk.submit(sdk.workflows.fromJson(await G.respell(graph, inputsOf))));
 console.error(`job ${job.id} queued on ${BASE}`);
 let last = "";
 for await (const ev of job.events()) {
