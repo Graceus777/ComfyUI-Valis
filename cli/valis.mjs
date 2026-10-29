@@ -317,7 +317,7 @@ if (cmd === "film") {
         .map(o => ({filename: o.name, subfolder: subs[o.nodeId] ?? "valis", type: "output", nodeId: o.nodeId, _o: o}))};
     },
     text: async (f) => f._o ? Buffer.from(await f._o.toBytes()).toString("utf8") : await fetch(view(f)).then(r => r.text()),
-    ref: (f) => `${f.subfolder ? f.subfolder + "/" : ""}${f.filename} [output]`,
+    ref: (f) => `${f.subfolder ? f.subfolder + "/" : ""}${f.filename} [${f.type === "input" ? "input" : "output"}]`,   // a reference dropped into ComfyUI's input folder is not an output
     exists: async (f) => (await fetch(view(f), {method: "HEAD"})).ok,
     free: () => fetch(`${BASE}/free`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({unload_models: true, free_memory: true})}),
     has: async (node) => !!(await nodeInfo(node)),

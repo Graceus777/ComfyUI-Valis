@@ -159,6 +159,33 @@ const CREATE = {genre: "gothic", framing: "wide", focal: "auto", body: "auto", k
   fs.rmSync(dir, {recursive: true, force: true});
 }
 
+// ---- film --plan: a picture in ComfyUI's input folder (a reference you dropped in) is passed on as an input file.
+// A stand-in of its own, so it can keep what the film command submits (it refuses it, which ends the run)
+{
+  const sent = [];
+  const rec = http.createServer((req, res) => {
+    const p = decodeURIComponent(new URL(req.url, "http://x").pathname);
+    if (req.method === "GET" && p.startsWith("/object_info/")) { const n = p.slice(13); res.writeHead(200, {"Content-Type": "application/json"}); return res.end(JSON.stringify(OI[n] ? {[n]: OI[n]} : {})); }
+    const chunks = []; req.on("data", c => chunks.push(c));
+    req.on("end", () => { sent.push(`${req.method} ${p} ${Buffer.concat(chunks).toString("utf8")}`); res.writeHead(404); res.end(); });
+  });
+  await new Promise(r => rec.listen(0, "127.0.0.1", r));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "valis-cli-"));
+  const planWith = (key) => ({title: "T", tag: "t2", genre: "noir", cast: [], place: "a pier", song: {style: "x", lyrics: "[Instrumental]"},
+    music: {audio: {filename: "song.flac", subfolder: "valis", type: "output"}, own: true, abc: "", bar: {bpm: 108, beats: 4, seconds: 2.2}, cut: {seconds: 2.2, bars: 1}},
+    shots: [{keyframe: "k", motion: "m", subject: "s", effect: "none", on: "beat", key}]});
+  const shoot = async (name, key) => {
+    const f = path.join(dir, name); fs.writeFileSync(f, JSON.stringify(planWith(key))); sent.length = 0;
+    const r = await cli(["film", "--plan", f], `http://127.0.0.1:${rec.address().port}`);
+    return {...r, sent: sent.join("\n")};
+  };
+  const inp = await shoot("in.json", {filename: "pic.png", subfolder: "valis_refs", type: "input"});
+  ok(/valis_refs\/pic\.png \[input\]/.test(inp.sent) && !/pic\.png \[output\]/.test(inp.sent), "film --plan · a still in the input folder is sent as an input file", inp.sent.slice(0, 300) || inp.err);
+  const out = await shoot("out.json", {filename: "k_00001_.png", subfolder: "valis", type: "output"});
+  ok(/valis\/k_00001_\.png \[output\]/.test(out.sent), "film --plan · a still ComfyUI made is sent as an output file", out.sent.slice(0, 300) || out.err);
+  fs.rmSync(dir, {recursive: true, force: true}); rec.close();
+}
+
 // ---- run: a switch never swallows the workflow's name
 {
   const r = await cli(["run", "--json", "workflows/03_shot_h3_i2v.json", "--set", "fa.image=valis/k.png", "--set", "8.noise_seed=7"]);
