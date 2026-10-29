@@ -11,7 +11,7 @@ import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from valis_fx.lib.cues import Cues  # noqa: E402
-from valis_fx.lib.abc import cues_from_abc  # noqa: E402
+from valis_fx.lib.abc import cues_from_abc, parse as abc_parse  # noqa: E402
 from valis_fx.lib.audio import analyse, key_of, SR  # noqa: E402
 from valis_fx.lib.sound import SoundDesign, Key  # noqa: E402
 from valis_fx.lib import effects as E  # noqa: E402
@@ -57,6 +57,49 @@ for sheet, want in (("bpm 120 4/4\nevery 1 beat from 7:1 to 3:1 pulse", "ends be
         ok(want in str(e) and "float" not in str(e), f"cue sheet {sheet!r} says what is wrong", e)
     except Exception as e:  # noqa: BLE001
         ok(False, f"cue sheet {sheet!r} is a ValueError", repr(e))
+
+# sheet music the parser used to read wrong, so every hit after it drifted: broken rhythm (A>B), tuplets ((3abc), and what takes
+# no time (a trailing % comment, !decorations!, {grace} notes, whose letters were read as notes)
+HEAD = "X:1\nT:t\nM:4/4\nL:1/8\nQ:1/4=120\nK:C\n"
+
+
+def tune(body, head=HEAD):
+    """[(start, length, MIDI pitch)] in eighths"""
+    return [(round(t * 8, 4), round(d * 8, 4), m) for t, d, m in abc_parse(head + body)["voices"]["1"]]
+
+
+def is_(got, want):
+    return len(got) == len(want) and all(abs(a - b) < 1e-3 for g, w in zip(got, want) for a, b in zip(g, w))
+
+
+T3 = 2 / 3
+for name, body, want in (
+        ("A>B dots the first note and halves the second", "A>B c2 d2 |", [(0, 1.5, 69), (1.5, .5, 71), (2, 2, 72), (4, 2, 74)]),
+        ("A<B halves the first and dots the second", "A<B c2 d2 |", [(0, .5, 69), (.5, 1.5, 71), (2, 2, 72), (4, 2, 74)]),
+        ("A>B with spaces round the sign", "A > B c2 |", [(0, 1.5, 69), (1.5, .5, 71), (2, 2, 72)]),
+        ("A>>B double-dots", "A>>B c2 |", [(0, 1.75, 69), (1.75, .25, 71), (2, 2, 72)]),
+        ("a chord takes the dot too", "[CE]>G c2 |", [(0, 1.5, 60), (0, 1.5, 64), (1.5, .5, 67), (2, 2, 72)]),
+        ("(3abc is three notes in the time of two", "(3abc d2 |", [(0, T3, 81), (T3, T3, 83), (2 * T3, T3, 72), (2, 2, 74)]),
+        ("(3:2:2 bends two notes only", "(3:2:2 ab c2 |", [(0, T3, 81), (T3, T3, 83), (2 * T3, 2, 72)]),
+        ("a rest is one of the tuplet's notes", "(3z2ab c2 |", [(2 * T3, T3, 81), (2, T3, 83), (4 * T3, 2, 72)]),
+        ("a quintuplet is five in the time of two", "(5abcde f2 |", [(0, .4, 81), (.4, .4, 83), (.8, .4, 72), (1.2, .4, 74), (1.6, .4, 76), (2, 2, 77)]),
+        ("a slur is not a tuplet", "(abc) d2 |", [(0, 1, 81), (1, 1, 83), (2, 1, 72), (3, 2, 74)]),
+        ("a trailing % comment is not notes", "A B c | d e f | % verse 1 coda", [(0, 1, 69), (1, 1, 71), (2, 1, 72), (3, 1, 74), (4, 1, 76), (5, 1, 77)]),
+        ("!decorations! are not notes", "!trill!A !fermata!B c2 |", [(0, 1, 69), (1, 1, 71), (2, 2, 72)]),
+        ("{grace} notes take no time and are not notes", "{gab}c d2 |", [(0, 1, 72), (1, 2, 74)]),
+        ("an acciaccatura {/g} too", "{/g}c d2 |", [(0, 1, 72), (1, 2, 74)]),
+        ("chord symbols are kept among them", '"Am"A !f!B {c}c |', [(0, 1, 69), (1, 1, 71), (2, 1, 72)])):
+    got = tune(body)
+    ok(is_(got, want), f"abc: {name}", got)
+ok(abc_parse(HEAD + '"Am"A B |')["chords"][0][1] == "Am", "abc: a chord symbol is still a chord")
+P = abc_parse(HEAD + "A B % x\n   % Chorus\nd e |")
+ok(len(P["voices"]["1"]) == 4 and [n for _, n in P["sections"]] == ["Chorus"], "abc: an indented % line is a section, a trailing one is not", P["sections"])
+P = abc_parse("X:1\nT:t\nM:4/4 % common\nL:1/8 % eighths\nQ:1/4=120 % allegro\nK:C % key\nA B c d e f g a |")
+ok(P["meter"] == (4, 4) and P["bpm"] == 120 and len(P["voices"]["1"]) == 8 and abs(P["voices"]["1"][1][0] - .125) < 1e-9, "abc: a % comment after a header field is not part of it", P["meter"])
+# the point of it: what follows still lands on its bar (2 s a bar at 120 bpm in 4/4), however much of it is in the one before
+c = cues_from_abc(HEAD + "!f!A>B {g}(3cde % a\nf2 g2 | a8 |")
+ok(np.allclose(c.times("bar"), [0, 2, 4]) and abs(c.times("note")[-1] - 2.0) < 1e-6 and len(c.times("note")) == 8,
+   "abc: bars and notes after all of them land where they are written", (list(c.times("bar")), list(c.times("note"))))
 
 # sheet music: a note's strength is 0.6 to 1, not its MIDI number; a chord change is a hit of 1
 ABC = """X:1

@@ -224,7 +224,8 @@ Every command and flag is in [docs/cli.md](docs/cli.md).
 - `node tests/jobs.test.mjs`: following a job on a stand-in for Comfy API v2: a job ComfyUI has forgotten (a restart) or that
   stopped answering is reported lost instead of polled for ever, and a poll that fails for a moment is retried.
 - `python tests/check_grade.py`: the browser's live colour grade against `palette.py`'s (within 0.2 levels on every look).
-- `python tests/check_cues.py`: cue-sheet errors, sheet-music strengths, one beat grid for a song with its sheet music,
+- `python tests/check_cues.py`: cue-sheet errors (capitals, empty ranges), sheet music (strengths; broken rhythm, tuplets, comments,
+  decorations and grace notes keep every later hit on its beat), one beat grid for a song with its sheet music,
   the key heard in a song, and the effects that should be heard (no ComfyUI, no GPU).
 - `python tests/check_stage.py`: a stage folder's files stay inside the folder (a crafted `stage.json` can't read or
   overwrite pictures elsewhere), the plate still paints a stage's own layers, an erased thing keeps its layer, and Stage Fill

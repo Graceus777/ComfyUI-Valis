@@ -2,7 +2,8 @@
 section comments) before it renders the audio, so Valis can fire effects on the notes the song was written with,
 not on a guess from the waveform. Handles what YuE2 writes: L/M/Q/K fields (also mid-tune, per voice), chord
 symbols, notes with accidentals and octave marks, lengths like 8, 3/2, /2, ties, rests z/x, multi-bar rests Z4,
-[chords], inline [M:..] and % section comments."""
+[chords], inline [M:..], % section comments, broken rhythm (A>B), tuplets ((3abc), and it leaves out what takes no time:
+trailing % comments, !decorations! and {grace} notes."""
 import re
 
 import numpy as np
@@ -41,9 +42,33 @@ def frac(s, default=1.0):
     return float(s)
 
 
-TOKEN = re.compile(r'"(?P<chord>[^"]*)"|\[(?P<field>[A-Za-z]):(?P<fval>[^\]]*)\]|(?P<multi>\[[^\]]+\])(?P<mlen>\d*/?\d*)'
+TOKEN = re.compile(r'"(?P<chord>[^"]*)"|\((?P<tup>[2-9])(?::(?P<tq>\d*))?(?::(?P<tr>\d*))?|\[(?P<field>[A-Za-z]):(?P<fval>[^\]]*)\]|(?P<multi>\[[^\]]+\])(?P<mlen>\d*/?\d*)'
                    r'|(?P<acc>\^\^|\^|__|_|=)?(?P<note>[A-Ga-g])(?P<oct>[,\']*)(?P<len>\d*/?\d*)(?P<tie>-?)'
                    r'|(?P<rest>[zx])(?P<rlen>\d*/?\d*)|Z(?P<bars>\d*)|(?P<bar>\|+\]?|:\||\|:)|(?P<broken>[<>]+)')
+
+
+TUPLET_Q = {2: 3, 3: 2, 4: 3, 5: 2, 6: 2, 7: 2, 8: 3, 9: 2}        # how many notes' time (p) notes take, in simple time
+
+
+def clean(line):
+    """A line of ABC as the notes it plays: a trailing % comment, !decorations! and {grace notes} take no time (their letters
+    are not notes), while a "chord symbol" is left as written."""
+    out, quoted, i = [], False, 0
+    while i < len(line):
+        ch = line[i]
+        if ch == '"':
+            quoted = not quoted
+        elif not quoted:
+            if ch == "%":
+                break
+            if ch in "!{":
+                j = line.find("!" if ch == "!" else "}", i + 1)
+                if j > 0:
+                    i = j + 1
+                    continue
+        out.append(ch)
+        i += 1
+    return "".join(out).rstrip()
 
 
 def parse(abc):
@@ -69,13 +94,16 @@ def parse(abc):
 
     pending_section = None
     for raw in abc.splitlines():
-        line = raw.rstrip()
+        line = raw.strip()
         if not line:
             continue
         if line.startswith("%"):
             name = line[1:].strip()
             if name:
                 pending_section = name
+            continue
+        line = clean(line)
+        if not line:
             continue
         m = re.match(r"^([A-Za-z]):\s*(.*)$", line)
         if m:
@@ -120,11 +148,28 @@ def parse(abc):
         if pending_section is not None:
             sections.append((s["t"], pending_section)); pending_section = None
         bar_acc = {}
-        broken = None
+        broken = None            # the time the next note takes (A>B: B's is halved), set by < or >
+        last = None              # the note or chord just played: (its first place in the voice, how many, its length)
+        tup = None               # [what each note's length is multiplied by, notes left] inside a tuplet
+
+        def tupled(d):
+            nonlocal tup
+            if tup:
+                d *= tup[0]
+                tup[1] -= 1
+                if tup[1] <= 0:
+                    tup = None
+            return d
+
         for mt in TOKEN.finditer(line):
             g = mt.groupdict()
             if g["chord"] is not None:
                 chords.append((s["t"], g["chord"])); continue
+            if g["tup"]:
+                p_ = int(g["tup"])
+                q_ = int(g["tq"]) if g["tq"] else TUPLET_Q[p_] + (1 if p_ in (5, 7, 9) and re.fullmatch(r"(6|9|12)/8", s["M"]) else 0)
+                r_ = int(g["tr"]) if g["tr"] else p_
+                tup = [q_ / p_, r_]; continue
             if g["field"]:
                 if g["field"] == "M":
                     s["M"] = g["fval"].strip()
@@ -135,34 +180,49 @@ def parse(abc):
                 continue
             if g["bar"]:
                 bar_acc = {}
+                broken = last = None
                 if cur == next(iter(voices)):
                     bars.append(s["t"])
                 continue
             if g["broken"]:
-                broken = g["broken"]; continue
+                # A>B: the note before is dotted and the one after halved (A<B the other way round); >> and << go further
+                b = g["broken"]
+                if last and len(set(b)) == 1 and len(b) < 4:
+                    n_ = len(b)
+                    short, long_ = 2.0 ** -n_, 2.0 - 2.0 ** -n_
+                    before, after = (long_, short) if b[0] == ">" else (short, long_)
+                    i0, cnt, d0 = last
+                    for k in range(i0, i0 + cnt):
+                        t_, dk, pk = voices[cur][k]; voices[cur][k] = (t_, dk * before, pk)
+                    s["t"] += d0 * (before - 1)
+                    broken = after
+                last = None
+                continue
             if g["bars"] is not None and mt.group(0).startswith("Z"):
                 n = int(g["bars"]) if g["bars"] else 1
                 if cur == next(iter(voices)):
                     for k in range(n):
                         bars.append(s["t"] + k * meter_len(s["M"]))
-                s["t"] += n * meter_len(s["M"]); s["tie"] = None; continue
+                s["t"] += n * meter_len(s["M"]); s["tie"] = None; broken = last = None; continue
             if g["rest"]:
-                s["t"] += frac(g["rlen"]) * s["L"]; s["tie"] = None; continue
+                s["t"] += tupled(frac(g["rlen"]) * s["L"]); s["tie"] = None; broken = last = None; continue
             if g["multi"]:
                 notes = re.findall(r"(\^\^|\^|__|_|=)?([A-Ga-g])([,']*)(\d*/?\d*)", g["multi"])
-                d = frac(g["mlen"]) * (frac(notes[0][3]) if notes else 1) * s["L"]
+                d = tupled(frac(g["mlen"]) * (frac(notes[0][3]) if notes else 1) * s["L"]) * (broken or 1); broken = None
+                i0 = len(voices[cur])
                 for acc, n, octs, _ in notes:
                     voices[cur].append((s["t"], d, _pitch(acc, n, octs, s["acc"], bar_acc)))
+                last = (i0, len(notes), d)
                 s["t"] += d; s["tie"] = None; continue
             if g["note"]:
-                d = frac(g["len"]) * s["L"]
-                if broken:
-                    d *= .5 if broken.startswith("<") else 1.5; broken = None
+                d = tupled(frac(g["len"]) * s["L"]) * (broken or 1); broken = None
                 p = _pitch(g["acc"], g["note"], g["oct"], s["acc"], bar_acc)
                 if s["tie"] == p and voices[cur]:
                     t0, d0, p0 = voices[cur][-1]; voices[cur][-1] = (t0, d0 + d, p0)
+                    last = None
                 else:
                     voices[cur].append((s["t"], d, p))
+                    last = (len(voices[cur]) - 1, 1, d)
                 s["tie"] = p if g["tie"] else None
                 s["t"] += d
     qb, qv = head["Q"].split("=") if "=" in head["Q"] else ("1/4", head["Q"])
