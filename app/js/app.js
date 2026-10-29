@@ -426,7 +426,7 @@ $("#g-run").addEventListener("click", async () => {
   const tag = Date.now().toString(36);
   const g = G.genjutsu({video: GJ.clip, refs: GJ.refs.map(r => r.ref), prompt: $("#g-prompt").value.trim(), mode: GJ.mode,
     seconds: GJ.window ? GJ.window.duration : GJ.seconds, start: GJ.window ? GJ.window.start : 0, megapixels: GJ.mp, aspect: GJ.aspect, keepAudio: $("#g-audio").checked, turbo: $("#g-turbo").checked,
-    target: $("#g-target").value.trim(), keepRest: $("#g-keep").checked, batchedCanny: await api.hasNode("ValisCanny"),
+    target: $("#g-target").value.trim(), keepRest: $("#g-keep").checked, batchedCanny: await api.hasNode("ValisCanny"), retime: await api.hasNode("ValisFrameRate"),
     ...(GJ.mode === "swap" ? {control: $("#g-edges").checked ? "canny" : "pose"} : {}), prefix: `valis/genjutsu_${GJ.mode}_${tag}`,
     // the swap's inpaint needs ControlNet Union 2.0 (holes at mid-grey); v1 paints the masked object black
     ...(GJ.mode === "swap" && await api.hasModelPatch(G.MODELS.funCN2) ? {cn: G.MODELS.funCN2} : {})});

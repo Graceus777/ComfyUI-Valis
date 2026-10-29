@@ -257,6 +257,20 @@ import * as F from "../app/js/film.js";
   const r = G.fx({...base, sound: true, start: 4.42});
   ok(r["85"]?.class_type === "ValisSoundDesign" && JSON.stringify(r["81"].inputs.audio) === '["85",0]' && "stack" in r["85"].inputs, "Score · with effect sounds the sound design mixes them under the song");
 }
+{ // Genjutsu counts its slice, control video and plate in frames at 24: a source at another rate is retimed first
+  for (const [mode, control] of [["motion", "pose"], ["swap", "canny"], ["swap", "pose"], ["restyle", "canny"]]) {
+    const g = G.genjutsu({video: "c.mp4", refs: ["a.png"], prompt: "x", mode, control, target: "a dress", retime: true});
+    const lnk = (x) => JSON.stringify(x);
+    ok(g.vcr?.class_type === "ValisFrameRate" && lnk(g.vcr.inputs.images) === '["vc",0]' && lnk(g.vcr.inputs.source_fps) === '["vc",2]' && g.vcr.inputs.fps === 24, `Genjutsu ${mode}/${control} · retime: the slice is retimed to 24`);
+    ok(lnk(g.sc.inputs.image) === '["vcr",0]', `Genjutsu ${mode}/${control} · retime: the frames the shot is scaled from are the retimed ones`);
+    if (control === "pose") ok(lnk(g.pr.inputs.input) === '["vcr",0]', `Genjutsu ${mode} · retime: the pose is read from the retimed frames`);
+    const links = Object.values(g).flatMap(n => Object.values(n.inputs)).filter(v => Array.isArray(v) && v[0] === "vc" && v[1] === 0);
+    ok(links.length === 1, `Genjutsu ${mode}/${control} · retime: only the retime reads the slice's frames`, String(links.length));
+    valid(`Genjutsu ${mode}/${control} · retimed`, g);
+    const plain = G.genjutsu({video: "c.mp4", refs: ["a.png"], prompt: "x", mode, control, target: "a dress"});
+    ok(!plain.vcr && lnk(plain.sc.inputs.image) === '["vc",0]', `Genjutsu ${mode}/${control} · no retime unless the studio has the node`);
+  }
+}
 { // a clip at another frame rate is retimed to 24 first (Wan 2.2's 16 fps camera moves came out 1.5x fast and a third short)
   const g = G.fx({clip: "c.mp4", layers: [{effect: "Flicker", on: "beat"}], retime: true, fit: true, seconds: 4.46});
   ok(g["17r"]?.class_type === "ValisFrameRate" && JSON.stringify(g["17r"].inputs.source_fps) === '["17",2]' && g["17r"].inputs.fps === 24

@@ -968,7 +968,7 @@ export function fx({clip, other = null, subject = "", source = "sheet", audio = 
 export function genjutsu({video, refs = [], prompt, mode = "motion", control = mode === "motion" ? "pose" : "canny", seconds = 5,
                           start = 0, megapixels = 0.4, aspect = "9:16 (Portrait Widescreen)", strength = 1.0, steps = 20, turbo = false,
                           keepAudio = true, target = "", keepRest = true, cn = MODELS.funCN, canny = {low: 0.25, high: 0.6}, batchedCanny = false,
-                          seed = 1086, prefix = "valis/genjutsu", engine}) {
+                          seed = 1086, prefix = "valis/genjutsu", engine, retime = false}) {
   const g = {
     "v": N("LoadVideo", {file: video}),
     "vs": N("Video Slice", {video: ["v", 0], start_time: start, duration: seconds, strict_duration: false}),
@@ -981,7 +981,12 @@ export function genjutsu({video, refs = [], prompt, mode = "motion", control = m
     "avae": N("VAELoader", {vae_name: MODELS.h3AVAE}),
     "cn": N("ModelPatchLoader", {name: cn}),
   };
-  if (control === "pose") Object.assign(g, poseNodes(["vc", 0]));
+  // retime (the studio sets it when Valis Frame Rate is loaded): a 30 fps source is played at 24 first. The slice, the
+  // control video and the swap's plate are counted in frames, the shot is 24 fps and `length` is frames24: a 30 fps source
+  // otherwise ran 25% slow, and a 16 fps one fast
+  let frames = ["vc", 0];
+  if (retime) { g["vcr"] = N("ValisFrameRate", {images: ["vc", 0], source_fps: ["vc", 2], fps: 24}); frames = ["vcr", 0]; g["sc"].inputs.image = frames; }
+  if (control === "pose") Object.assign(g, poseNodes(frames));
   // the core Canny node runs the whole clip on the GPU at once (out of memory at 576p x 9 s); Valis Canny batches it
   else g["ctl"] = batchedCanny ? N("ValisCanny", {image: ["sc", 0], low_threshold: canny.low, high_threshold: canny.high, batch: 8})
                                : N("Canny", {image: ["sc", 0], low_threshold: canny.low, high_threshold: canny.high});
