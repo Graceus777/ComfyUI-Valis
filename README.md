@@ -166,7 +166,7 @@ builds one sound design over the whole film. They are in `ComfyUI/output/finishe
 | **BURN SEASON** (44 s) | The film: double exposures of the two leads over the burning cane and the swamp, a photograph that burns through on the hits. |
 | **BLACK SUN** (43 s) | An eclipse over a desert procession: the gravity lens on the sun, shockwaves on the drops, the boy's eyes on the ring. YuE2 from Valis's sheet music. |
 | **THE UNDROWNED** (47 s) | *Wade in the Water* performed by YuE2: an underwater church, a ghost procession in the river, double exposures over the old photograph. |
-| **GLASS** (44 s) | YuE2 at 108 BPM. Glitch on the hats, datamosh on the kick, split time down the platform. |
+| **GLASS** (44 s) | YuE2 at 108 BPM. Glitch on the hats, datamosh on the kick, frost on the glass, echoes on the snare, a dolly zoom down the corridor, slit-scan on the tracks, a gravity lens on the eye. |
 | **LAST LIGHT OF ENROTH** (49 s) | A painted fantasy: light shafts, lightning and lantern glows fired by the track, a lich king and a bone dragon in oils. |
 | **SILENT** (44 s) | No music at all: a cue sheet is the score and every sound is synthesized by Valis. The keeper's logbook burns open onto 1843 and reality tears down the middle of the sea. |
 | **SILKSCREEN** (38 s) | A song YuE2 performed from Valis's own sheet music. Double exposures, burns and echoes fire on its melody and bass notes. |
