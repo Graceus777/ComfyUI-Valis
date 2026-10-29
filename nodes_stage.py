@@ -108,27 +108,10 @@ class ValisStageFill:
     CATEGORY = "Valis/stage"
 
     def fill(self, stage, fill_a=None, fill_b=None):
-        import cv2
         from .valis_fx.lib import stage as S
         folder, meta = _stage_folder(stage)
-        done = []
-        for slot, img in zip(meta.get("fill_slots", []), (fill_a, fill_b)):
-            if img is None:
-                continue
-            L = meta["layers"][slot]
-            if not L.get("hole"):
-                continue
-            path = S.stage_file(folder, L["image"])
-            rgba = cv2.imread(path, cv2.IMREAD_UNCHANGED)
-            hole = cv2.imread(S.stage_file(folder, L["hole"]), 0) > 127
-            new = (np.clip(_np(img)[0, ..., :3], 0, 1) * 255 + .5).astype(np.uint8)
-            new = cv2.resize(new, (rgba.shape[1], rgba.shape[0]), interpolation=cv2.INTER_AREA) if new.shape[:2] != rgba.shape[:2] else new
-            m = cv2.GaussianBlur(cv2.dilate(hole.astype(np.uint8) * 255, np.ones((5, 5), np.uint8)), (0, 0), 2).astype(np.float32)[..., None] / 255
-            bgr = cv2.cvtColor(new, cv2.COLOR_RGB2BGR).astype(np.float32)
-            rgba[..., :3] = np.clip(rgba[..., :3] * (1 - m) + bgr * m, 0, 255).astype(np.uint8)
-            cv2.imwrite(path, rgba)
-            L["painted"] = True
-            done.append(L["name"])
+        fills = [(slot, np.clip(_np(img)[0, ..., :3], 0, 1)) for slot, img in zip(meta.get("fill_slots", []), (fill_a, fill_b)) if img is not None]
+        done = S.apply_fill(folder, meta, fills)
         with open(os.path.join(folder, "stage.json"), "w") as f:
             json.dump(meta, f, indent=1)
         return {"ui": {"valis_stage_fill": [{"stage": stage, "painted": done}]}, "result": (stage,)}

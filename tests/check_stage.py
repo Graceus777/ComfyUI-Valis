@@ -130,5 +130,51 @@ for kind in ("far", "big"):
     ok(len(got) == 1 and not got[0].get("backdrop") and info.get("erased") == ["thing"], f"erase first: the {kind} erased thing keeps its layer, as an object", [(L["name"], L.get("backdrop")) for L in lay])
     ok(len(got) == 1 and float(got[0]["rgba"][..., 3].sum()) > 50, f"erase first: and it has its pixels ({kind})")
 
+# Stage Fill: the painted completion goes where a layer is hidden, and the first frame stays the still. The hole
+# includes the sky's own rim round the thing that covers it (so the painter has an edge to paint from); the paint over
+# that rim used to be written into the layer as it was, and every occluder edge came back as a magenta fringe in frame 1
+def _fill_stage():
+    Hf, Wf = 120, 160
+    g = np.random.default_rng(2)
+    skyl = np.dstack([np.clip(.45 + .1 * g.random((Hf, Wf, 3)), 0, 1).astype(np.float32), np.ones((Hf, Wf), np.float32)])
+    fr = np.zeros((Hf, Wf, 4), np.float32); fr[40:90, 60:110, :3] = [.8, .2, .2]; fr[40:90, 60:110, 3] = 1
+    box = np.zeros((Hf, Wf), np.uint8); box[40:90, 60:110] = 1
+    hl = cv2.dilate(box, np.ones((13, 13), np.uint8)) > 0                      # what's hidden, and a 6 px rim of the sky round it
+    ls = [dict(name="sky", rgba=skyl, z=np.full((Hf, Wf), 50., np.float32), z_med=50., area=1., bbox=[0, 0, Wf - 1, Hf - 1], backdrop=True, hole=hl),
+          dict(name="front", rgba=fr, z=np.full((Hf, Wf), 5., np.float32), z_med=5., area=.2, bbox=[60, 40, 109, 89], backdrop=False)]
+    fo = os.path.join(tempfile.mkdtemp(), "stage")
+    S.save(fo, ls, dict(far=100.0, width=Wf, height=Hf), source="t")
+    return fo, json.load(open(os.path.join(fo, "stage.json"))), skyl
+
+
+def _first_frame(fo, mt):
+    return S.composite([{"rgba": x} for x in S.load_layers(fo, mt)])
+
+
+magenta = np.zeros((120, 160, 3), np.float32); magenta[...] = [1, 0, 1]
+fo, mt, skyl = _fill_stage()
+before = _first_frame(fo, mt)
+names = S.apply_fill(fo, mt, [(0, magenta)])
+lay = S.load_layers(fo, mt)
+change = float(np.abs(_first_frame(fo, mt) - before).max() * 255)
+ok(names == ["sky"] and mt["layers"][0].get("painted"), "fill: the sky is painted", names)
+ok(change < 1.0, "fill: the first frame is still the still (changed by %.2f levels)" % change, change)
+ok(bool((lay[0][65, 85, :3] * 255 > [240, -1, 240]).all() and lay[0][65, 85, 1] * 255 < 15), "fill: the sky is painted where it is hidden", lay[0][65, 85] * 255)
+ok(float(np.abs(lay[0][65, 56, :3] - skyl[65, 56, :3]).max() * 255) < 1.0 and float(np.abs(lay[0][20, 20, :3] - skyl[20, 20, :3]).max() * 255) < 1.0,
+   "fill: and the sky that shows (its rim round the thing, and far from it) is as it was")
+fo2, mt2, _ = _fill_stage()
+rest = S.rest_exact
+S.rest_exact = lambda *a, **k: set()                    # the control: the same fill without putting the first frame back
+try:
+    b2 = _first_frame(fo2, mt2)
+    S.apply_fill(fo2, mt2, [(0, magenta)])
+    loose = float(np.abs(_first_frame(fo2, mt2) - b2).max() * 255)
+finally:
+    S.rest_exact = rest
+ok(loose > 20, "fill: (without it the same paint changes the first frame by %.0f levels along the thing's edge)" % loose, loose)
+fo3, mt3, _ = _fill_stage()
+half = cv2.resize(magenta, (80, 60), interpolation=cv2.INTER_AREA)
+ok(S.apply_fill(fo3, mt3, [(0, half), (1, half)]) == ["sky"], "fill: a picture of another size is fitted, and a layer without a hole is skipped")
+
 print(f"{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)

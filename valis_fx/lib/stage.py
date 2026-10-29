@@ -986,6 +986,39 @@ def apply_plate(folder, meta, rgba, plate, names, reach=0.015, keep_prev=False, 
 # back on top as cutouts from the still, with their soft edges solved against the real paint behind them. The far dome
 # is behind it all. At rest the picture is exactly the still; a move uncovers what the edit model painted.
 
+def apply_fill(folder, meta, fills):
+    """Painted completions put back into a stage's layers (Valis Stage Fill). `fills`: [(slot, picture)], each picture RGB
+    floats 0..1 of any size, which replaces the layer's colour inside its hole (and a few feathered pixels round it).
+    The hole takes in the layer's own rim along the edge of whatever covers it, so the painter has the edge to paint
+    from, and the paint is clean there. What shows at rest must still be the still: the first frame, as it was before
+    the paint, is put back exactly by rest_exact (the covering thing's soft edge takes the difference, as it does for every
+    edge of the stage), so only paint that is hidden at rest changes what the picture looks like. Writes the layers it
+    changed and marks the painted ones in meta (not saved); returns the names it painted."""
+    rgba = load_layers(folder, meta)
+    still = composite([{"rgba": x} for x in rgba])                 # the first frame, as it is now
+    painted = []
+    for slot, pic in fills:
+        L = meta["layers"][slot]
+        if not L.get("hole"):
+            continue
+        H, W = rgba[slot].shape[:2]
+        hole = cv2.imread(stage_file(folder, L["hole"]), 0) > 127
+        new = (np.clip(np.asarray(pic, np.float32)[..., :3], 0, 1) * 255 + .5).astype(np.uint8)
+        if new.shape[:2] != (H, W):
+            new = cv2.resize(new, (W, H), interpolation=cv2.INTER_AREA)
+        m = cv2.GaussianBlur(cv2.dilate(hole.astype(np.uint8) * 255, np.ones((5, 5), np.uint8)), (0, 0), 2).astype(np.float32)[..., None] / 255
+        rgba[slot][..., :3] = np.clip(rgba[slot][..., :3] * (1 - m) + new.astype(np.float32) / 255 * m, 0, 1)
+        painted.append(slot)
+    touched = rest_exact(rgba, still) if painted else set()
+    for i in sorted(set(painted) | set(touched)):
+        out = np.clip(rgba[i] * 255 + .5, 0, 255).astype(np.uint8)
+        out[out[..., 3] == 0, :3] = 0
+        cv2.imwrite(stage_file(folder, meta["layers"][i]["image"]), cv2.cvtColor(out, cv2.COLOR_RGBA2BGRA))
+    for i in painted:
+        meta["layers"][i]["painted"] = True
+    return [meta["layers"][i]["name"] for i in painted]
+
+
 def erase_plan(masks, names, w, h, threshold=0.5, min_area=0.0003, backdrop_area=0.35):
     """Which names are things standing in the scene, to erase and put back as cutouts: not a sky or a moon, not filling much of
     the frame, and not running out of the frame at the left, right or top (scenery: a sea, a ridge, a table; a
