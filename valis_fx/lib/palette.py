@@ -9,6 +9,7 @@ fade, bloom and halation, grain and vignette. Deterministic per pixel (no flicke
 Every look also carries `words`, the same look said in a prompt, so a keyframe can be generated in it and then graded
 to match exactly."""
 import math
+import re
 
 import cv2
 import numpy as np
@@ -45,8 +46,18 @@ class Look(dict):
 
 
 def _hex(c):
-    c = c.strip().lstrip("#")
-    return np.array([int(c[i:i + 2], 16) / 255 for i in (0, 2, 4)], np.float32)
+    """#rrggbb or #rgb (the # is optional) as three 0-1 floats; anything else is an error that says what was written."""
+    s = str(c).strip().lstrip("#")
+    if not re.fullmatch(r"[0-9a-fA-F]{3}|[0-9a-fA-F]{6}", s):
+        raise ValueError(f"{str(c).strip()!r} is not a HEX colour: write it as #rrggbb or #rgb")
+    if len(s) == 3:
+        s = "".join(ch * 2 for ch in s)
+    return np.array([int(s[i:i + 2], 16) / 255 for i in (0, 2, 4)], np.float32)
+
+
+def split_hex(text):
+    """The colours written in a text box: one or more, separated by commas, semicolons or spaces."""
+    return [c for c in re.split(r"[\s,;]+", text or "") if c]
 
 
 # your own colours over a named look: how much of the gradient map goes over it (app/js/grade.js OWN_AMOUNT). Nearly

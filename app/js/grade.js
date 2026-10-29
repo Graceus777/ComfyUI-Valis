@@ -9,7 +9,7 @@ const clamp01 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
 // mixing your own colours into a named look: how much of the gradient map goes over the look (palette.py OWN_AMOUNT): nearly all of it, so the colours you pick are the colours you get, with the look's contrast, grain and glow kept
 export const OWN_AMOUNT = 0.9;
 
-const hexRgb = (h) => { const c = h.trim().replace("#", ""); return [0, 2, 4].map(i => parseInt(c.slice(i, i + 2), 16) / 255); };
+const hexRgb = (h) => { let c = h.trim().replace("#", ""); if (c.length === 3) c = [...c].map(x => x + x).join(""); return [0, 2, 4].map(i => parseInt(c.slice(i, i + 2), 16) / 255); };   // #rrggbb or #rgb
 export const rgbHex = (c) => "#" + c.map(v => Math.round(clamp01(v) * 255).toString(16).padStart(2, "0")).join("");
 
 // the parameters for a look by id, optionally with your own colours: alone (id "custom", palette.py hex_look) or mapped

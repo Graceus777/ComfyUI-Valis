@@ -26,8 +26,10 @@ const px = new Float32Array(JSON.parse(require("fs").readFileSync(0, "utf8")));
 const out = {};
 for (const p of (await import(process.argv[2])).PALETTES) out[p.id] = Array.from(m.gradePixels(px, %d, %d, {...m.lookParams(p.id), grain: 0}, {scale: 1}));
 for (const c of [-.4, 0, .4]) out["soft_palette@" + c] = Array.from(m.gradePixels(px, %d, %d, {...m.lookParams("soft_palette"), grain: 0, contrast: c}, {scale: 1}));
+for (const [k, hex] of Object.entries({hex3: ["#fff", "#123", "#f80"], hex6: ["#ffffff", "#112233", "#ff8800"]}))
+  out[k] = Array.from(m.gradePixels(px, %d, %d, {...m.lookParams("custom", hex), grain: 0}, {scale: 1}));
 console.log(JSON.stringify(out));
-""" % (W, H, W, H)
+""" % (W, H, W, H, W, H)
 r = subprocess.run(["node", "--input-type=module", "-e", js, "file://" + os.path.join(ROOT, "app", "js", "grade.js").replace("\\", "/"),
                     "file://" + os.path.join(ROOT, "app", "js", "palettes.js").replace("\\", "/")],
                    input=json.dumps(img.reshape(-1).tolist()), capture_output=True, text=True)
@@ -59,4 +61,29 @@ for c in (-.4, .4):
         bad.append(f"palette.py and grade.js at contrast {c}")
 if bad:
     print("FAIL negative contrast must flatten and positive deepen:", ", ".join(bad))
-sys.exit(0 if worst < 3 and not bad else 1)
+
+# your own colours: #rgb is #rrggbb in both (it used to be a ValueError in palette.py, and NaN in grade.js), in any separator the node
+# takes, and anything that isn't a colour is an error that names it
+hexbad = []
+py3 = pal.grade(img, pal.hex_look(["#fff", "#123", "#f80"]))
+py6 = pal.grade(img, pal.hex_look(["#ffffff", "#112233", "#ff8800"]))
+if not np.array_equal(py3, py6):
+    hexbad.append("palette.py: #rgb is not #rrggbb")
+if not np.array_equal(np.asarray(jsout["hex3"], np.float32), np.asarray(jsout["hex6"], np.float32)) or not np.isfinite(np.asarray(jsout["hex3"])).all():
+    hexbad.append("grade.js: #rgb is not #rrggbb")
+d = np.abs(py3 - np.asarray(jsout["hex3"], np.float32).reshape(H, W, 3)).mean() * 255
+print(f"custom colours: palette.py and grade.js differ by {d:.2f} levels")
+if d > 3:
+    hexbad.append("palette.py and grade.js grade custom colours differently")
+if pal.split_hex("#fff, #000;#a30  #123") != ["#fff", "#000", "#a30", "#123"] or pal.split_hex("") != [] or pal.split_hex(None) != []:
+    hexbad.append("split_hex")
+for text in ("#ff", "red", "#12345", "#gggggg"):
+    try:
+        pal.hex_look(["#000000", text])
+        hexbad.append(f"{text!r} was taken as a colour")
+    except ValueError as e:
+        if repr(text) not in str(e):
+            hexbad.append(f"the error for {text!r} doesn't name it: {e}")
+if hexbad:
+    print("FAIL custom colours:", "; ".join(hexbad))
+sys.exit(0 if worst < 3 and not bad and not hexbad else 1)

@@ -250,7 +250,7 @@ class ValisColorPalette:
         from .valis_fx.lib.palette import LOOKS
         return {"required": {"images": ("IMAGE",), "look": (list(LOOKS) + ["custom"], {"default": "film_colors"}),
                              "strength": ("FLOAT", {"default": 1.0, "min": 0, "max": 1, "step": .05})},
-                "optional": {"hex": ("STRING", {"default": "", "tooltip": "2-6 colours, e.g. '#0b1d2a, #c8553d, #f2d0a4'. With look = custom: only these colours. With a named look: the look with these colours mapped through it (its contrast, glow and grain kept)"}),
+                "optional": {"hex": ("STRING", {"default": "", "tooltip": "2-6 colours, e.g. '#0b1d2a, #c8553d, #f2d0a4' (#rgb works too; commas, semicolons or spaces between them). With look = custom: only these colours. With a named look: the look with these colours mapped through it (its contrast, glow and grain kept)"}),
                              "grain": ("FLOAT", {"default": -1.0, "min": -1, "max": 1, "step": .05, "tooltip": "-1 keeps the look's own grain"}),
                              "seed": ("INT", {"default": 0, "min": 0, "max": 2 ** 31})}}
 
@@ -260,8 +260,8 @@ class ValisColorPalette:
 
     def apply(self, images, look, strength, hex="", grain=-1.0, seed=0):
         import torch
-        from .valis_fx.lib.palette import LOOKS, Look, grade, hex_look, own_look
-        cols = [c for c in hex.replace(";", ",").split(",") if c.strip()]
+        from .valis_fx.lib.palette import LOOKS, Look, grade, hex_look, own_look, split_hex
+        cols = split_hex(hex)
         if look == "custom":
             lk = hex_look(cols) if len(cols) >= 2 else LOOKS["natural"]
         elif len(cols) >= 2:

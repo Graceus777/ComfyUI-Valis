@@ -227,7 +227,7 @@ Every command and flag is in [docs/cli.md](docs/cli.md).
   A model download is followed the same way: to its end, and let go of when ComfyUI no longer has it.
   What is installed (a node, an input, a LoRA, a model patch) is asked again after a "no" and never remembered from an answer ComfyUI couldn't give.
 - `python tests/check_grade.py`: the browser's live colour grade against `palette.py`'s (within 0.2 levels on every look),
-  and a negative contrast flattens the picture in both.
+  a negative contrast flattens the picture in both, and your own colours (`#rgb` as well as `#rrggbb`) grade the same in both.
 - `python tests/check_cues.py`: cue-sheet errors (capitals, empty ranges), sheet music (strengths; broken rhythm, tuplets, comments,
   decorations and grace notes keep every later hit on its beat), one beat grid for a song with its sheet music,
   the key heard in a song, the effects that should be heard, and every classic Score engine mode on a score with no events
