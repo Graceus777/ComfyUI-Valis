@@ -149,27 +149,25 @@ Renders checks them. The full guide is in [Extras](docs/guides/extras.md#stage-e
 
 ## Films made with Valis
 
-Every one of these was made on the same 12 GB laptop with the tools above: Krea 2 keyframes, MiniMax H3 shots, SAM 3.1
-masks, a Valis score or a YuE2 song written from Valis's own sheet music, then a short spec per film that says which
-library effects each shot gets and which lane fires them. Valis cuts on the music's bars, renders every shot's stack and
-builds one sound design over the whole film. Several of them are in the demo.
+Every one of these was made on the same 12 GB laptop with the tools above. All fourteen are in the [Valis playlist](https://www.youtube.com/watch?v=yYGA8gZ5ips&list=PLVmeiiCmWJdk) on
+YouTube, newest first here; several are also in the demo.
 
 | Film | What drives it |
 |---|---|
-| **THE IRON SAINT** (61 s) | Made in the Film and Score tabs: a saint holds a broken bridge against an ash-wraith horde and a horned giant. Krea 2 stills that pin one set, MiniMax H3 shots chained in hard continuity (each starts on the last frame of the one before), scored on a composed piano score with light shafts on the beat and an end card. |
 | **SÉANCE** (43 s) | Made in the Film tab end to end, built from references: a sheet for each character, an empty plate per camera setup, frames seated with Qwen Image 2.1, every later moment one edit of its seated frame. 14 shots, one bar each at 85 BPM, under one red lamp. |
+| **THE IRON SAINT** (61 s) | Made in the Film and Score tabs: a saint holds a broken bridge against an ash-wraith horde and a horned giant. Krea 2 stills that pin one set, MiniMax H3 shots chained in hard continuity (each starts on the last frame of the one before), scored on a composed piano score with light shafts on the beat and an end card. |
+| **THE MAKING OF THE FOURTEENTH SHELL** (1:58) | A making-of featurette for THE FOURTEENTH SHELL, a film in a graphic-novel look (Krea 2 with a style LoRA). The people in it speak their lines in their own MiniMax H3 voices; `tools/asr.py` caught the takes that dropped or invented a line. |
 | **THE MAN IN THE SUIT** (2:05) | A straight-faced featurette about the people who say they were inside the 1966 rehearsal suit. Every person in it is invented and speaks in their own MiniMax H3 voice; the library's Projector turns the reel into worn 16 mm (flicker, gate weave, scratches, dust). A YuE2 instrumental score. |
 | **BLUE RIBBON** (53 s) | A 1960s Technicolor caper about a county-fair pie. Every line is spoken by H3 in the shot; trained moves, a dolly zoom, a Wan crash zoom, and a keyframe relit from the daytime fair to the barn at night. A YuE2 score with no lyrics. |
+| **BURN SEASON (TRAILER 3)** (79 s) | Built job by job with the studio's own graph builders: Krea 2 keyframes in 35 mm anamorphic with Super 8 inserts, MiniMax H3 shots with their own voices, trained moves, a dolly zoom and a Wan crash zoom, to a YuE2 score with no lyrics. |
 | **OCCUPIED** (61 s) | An animated comedy short: Krea 2 keyframes in a 3D-feature look, MiniMax H3 shots with their own voices, a YuE2 score with no lyrics. |
-| **DANSE MACABRE** (83 s) | A Valis score. The reveal burns across the dancers on the kicks; version 4 adds the ballroom of 1843, bleeding through on the strings and cutting in on every *oom* of the waltz. |
-| **BURN SEASON: trailer** (71 s) | Cinema Studio end to end: every trained move (crane, push-in, FPV, crash zoom, arc, bullet time), dolly zoom, whip pan, relight, object swap and extend, on Krea 2, MiniMax H3, Wan 2.2 and Qwen Image, to a YuE2 song from Valis's sheet music. |
-| **BURN SEASON** (44 s) | The film: double exposures of the two leads over the burning cane and the swamp, a photograph that burns through on the hits. |
+| **BURN SEASON (TRAILER 2)** (71 s) | Cinema Studio end to end: every trained move (crane, push-in, FPV, crash zoom, arc, bullet time), dolly zoom, whip pan, relight, object swap and extend, on Krea 2, MiniMax H3, Wan 2.2 and Qwen Image, to a YuE2 song from Valis's sheet music. |
+| **GLASS** (44 s) | YuE2 at 108 BPM. Glitch on the hats, datamosh on the kick, frost on the glass, echoes on the snare, a dolly zoom down the corridor, slit-scan on the tracks, a gravity lens on the eye. |
 | **BLACK SUN** (43 s) | An eclipse over a desert procession: the gravity lens on the sun, shockwaves on the drops, the boy's eyes on the ring. YuE2 from Valis's sheet music. |
 | **THE UNDROWNED** (47 s) | *Wade in the Water* performed by YuE2: an underwater church, a ghost procession in the river, double exposures over the old photograph. |
-| **GLASS** (44 s) | YuE2 at 108 BPM. Glitch on the hats, datamosh on the kick, frost on the glass, echoes on the snare, a dolly zoom down the corridor, slit-scan on the tracks, a gravity lens on the eye. |
+| **DANSE MACABRE** (83 s) | A Valis score. The reveal burns across the dancers on the kicks; version 4 adds the ballroom of 1843, bleeding through on the strings and cutting in on every *oom* of the waltz. |
 | **LAST LIGHT OF ENROTH** (49 s) | A painted fantasy: light shafts, lightning and lantern glows fired by the track, a lich king and a bone dragon in oils. |
-| **SILENT** (44 s) | No music at all: a cue sheet is the score and every sound is synthesized by Valis. The keeper's logbook burns open onto 1843 and reality tears down the middle of the sea. |
-| **SILKSCREEN** (38 s) | A song YuE2 performed from Valis's own sheet music. Double exposures, burns and echoes fire on its melody and bass notes. |
+| **BURN SEASON** (44 s) | The film: double exposures of the two leads over the burning cane and the swamp, a photograph that burns through on the hits. |
 
 ## Install
 
