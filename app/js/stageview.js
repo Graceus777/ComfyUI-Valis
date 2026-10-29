@@ -45,6 +45,7 @@ export class StageView {
     });
     $("#sg-make").addEventListener("click", () => this.make().catch(e => this.toast(e.message, true)));
     $("#st-reseed")?.addEventListener("click", () => {          // the same seed paints the same still; this one doesn't
+      if (this.making) return;
       $("#st-seed").value = 1 + Math.floor(Math.random() * 999998);
       this.make().catch(e => this.toast(e.message, true));
     });
@@ -76,6 +77,8 @@ export class StageView {
       const fd = new FormData(); fd.append("image", f, f.name); fd.append("subfolder", "valis/stage"); fd.append("type", "input");
       const up = await fetch("/upload/image", {method: "POST", body: fd}).then(r => r.json());
       if (!up.name) throw new Error("upload failed");
+      if (this.player) { this.player.pause(); this.S.playing = false; this.playBtn(); }     // the first song stops (nothing else holds it to stop it later)
+      if (this.S.audioUrl) URL.revokeObjectURL(this.S.audioUrl);
       this.S.audio = true; this.S.audioName = `${up.subfolder ? up.subfolder + "/" : ""}${up.name}`; this.S.audioUrl = URL.createObjectURL(f);
       $("#st-audio").replaceChildren(h("span", {}, f.name));
       this.player = new Audio(this.S.audioUrl);
@@ -248,10 +251,12 @@ export class StageView {
     if (!this.S.namesTouched) this.$("#sg-names").value = suggestNames(prompt).join("\n");
     const names = this.names();
     if (!names.length) throw new Error("Name at least one thing in the picture");
+    if (this.making) throw new Error("A set is being made: wait for it before making another");
     const name = `stage_${new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14)}`;
     const sharpen = this.$("#sg-sharp")?.checked !== false ? SHARP_TO : 0;
-    const btn = this.$("#sg-make"), label = btn.innerHTML;
-    btn.disabled = true; btn.textContent = "Making the set…";
+    const btn = this.$("#sg-make"), again = this.$("#st-reseed"), label = btn.innerHTML;
+    this.making = true;                                       // (Try another seed pressed now would start a second make, and put the busy words back as the button's own)
+    btn.disabled = true; btn.textContent = "Making the set…"; if (again) again.disabled = true;
     try {
       // the seed field decides the still: the same seed paints the same still (ComfyUI then reuses it, so a changed
       // name or setting re-splits in ~30 s); "Try another seed" picks a new one
@@ -265,7 +270,7 @@ export class StageView {
       const sub = `valis/stage/${name}`;
       await this.listStages(sub);
       await this.open(sub);
-    } finally { btn.disabled = false; btn.innerHTML = label; }
+    } finally { this.making = false; btn.disabled = false; btn.innerHTML = label; if (again) again.disabled = false; }
   }
 
   until(job) {
@@ -388,7 +393,10 @@ export class StageView {
     const {h, $} = this;
     if (!$("#sg-then")) return;
     const layers = this.stage ? this.stage.layers.map(l => l.name) : [];
-    $("#sg-then").replaceChildren(...this.S.then.map((t, i) => h("div", {class: "maprow rule" + (this.S.active === i + 1 ? " on" : ""), onclick: () => { this.S.active = i + 1; this.drawThen(); this.drawWave(); }},
+    $("#sg-then").replaceChildren(...this.S.then.map((t, i) => h("div", {class: "maprow rule" + (this.S.active === i + 1 ? " on" : ""), onclick: () => {
+      if (this.S.active === i + 1) return;                  // (rebuilding the row under the click took the focus out of its own start box, slider and menus)
+      this.S.active = i + 1; [...$("#sg-then").children].forEach((r, j) => r.classList.toggle("on", j === i)); this.drawWave();
+    }},
       h("select", {onchange: (e) => { t.move = e.target.value; this.refit(); }}, ...Object.entries(MOVES).filter(([k]) => k !== "show_layers").map(([k, n]) => h("option", {value: k, selected: k === t.move}, `then ${n.toLowerCase()}`))),
       h("select", {onchange: (e) => { t.focus = e.target.value; this.refit(); }}, ...layers.map(n => h("option", {value: n, selected: n === t.focus}, n))),
       h("input", {type: "number", min: 0, step: 0.05, value: t.start.toFixed(2), title: "starts at (s)", onchange: (e) => { t.start = Math.max(0, +e.target.value || 0); this.refit(); }}),
@@ -433,7 +441,9 @@ export class StageView {
     if ((this.S.T ?? 0) >= this.S.sec - 1e-3) this.S.T = 0;
     const t0 = performance.now(), T0 = this.S.T ?? 0;
     if (this.player) { this.player.currentTime = T0; this.player.play().catch(() => {}); }
+    const run = this._run = (this._run || 0) + 1;              // one loop at a time: a play() while playing (a move chosen) takes over from the one before
     const tick = (now) => {
+      if (run !== this._run) return;
       if (!this.S.playing) { this.player?.pause(); return; }
       this.S.T = this.player && !this.player.paused ? this.player.currentTime : T0 + (now - t0) / 1000;
       if (this.S.T >= this.S.sec) { this.S.T = this.S.sec; this.draw(); this.S.playing = false; this.player?.pause(); this.playBtn(); return; }

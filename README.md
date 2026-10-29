@@ -256,6 +256,9 @@ Every command and flag is in [docs/cli.md](docs/cli.md).
 - `node tests/ui/score_open.test.mjs`: a Valis score you open is shown as text, whatever its title, bars or names hold.
 - `node tests/ui/stage_export.test.mjs`: Stage's MP4 export on a stand-in server: a frame that fails to upload gets the export
   dropped, and two stages opened at once, or one opened during an export, never mix their layers.
+- `node tests/ui/stage_ui.test.mjs`: Stage's controls under a click: a "then" move's start box keeps the focus when clicked, Try
+  another seed during a Make starts no second set and leaves the button as it was, a second dropped song stops the first, and
+  choosing a move while it plays starts no second play loop.
 - **Renders → End-to-end test** (or `(await import("/valis/app/js/selftest.js")).run()` in the browser console): short,
   low-resolution renders on the GPU through the studio's own code. 15 Create combinations (IMAX 65mm + fisheye + 1950s
   + noir, Super 8, VHS, trained moves, Wan, custom palettes, an end frame, a loop, relight, a cast character), then the
