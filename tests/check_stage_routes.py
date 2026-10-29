@@ -39,9 +39,21 @@ def ok(cond, name, detail=""):
 
 OUT = tempfile.mkdtemp()
 IN = tempfile.mkdtemp()
+TMP = tempfile.mkdtemp()
 fp = types.ModuleType("folder_paths")
 fp.get_output_directory = lambda: OUT
-fp.get_annotated_filepath = lambda name: os.path.join(IN, name)
+fp.get_input_directory = lambda: IN
+fp.get_temp_directory = lambda: TMP
+
+
+def _annotated(name):                      # as ComfyUI's: "x [output]" / "x [temp]" name another folder, and the join confines nothing
+    for tag, base in (("[output]", OUT), ("[input]", IN), ("[temp]", TMP)):
+        if name.endswith(tag):
+            return os.path.join(base, name[:-len(tag)].rstrip())
+    return os.path.join(IN, name)
+
+
+fp.get_annotated_filepath = _annotated
 sys.modules["folder_paths"] = fp
 
 # ---- a stand-in PyAV: files appear and close, and every call that would block says which thread made it
@@ -85,15 +97,42 @@ class Container:
         self.close()
 
 
+OPENED = []                        # every path the audio decoder was asked to open
+
+
+class Audio:
+    def __init__(self, path):
+        self.f = open(path, "rb")                                     # a missing file raises, as PyAV's does
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        self.f.close()
+
+    def decode(self, audio=0):
+        return [object()]
+
+
+class Resampler:
+    def __init__(self, format=None, layout=None, rate=None):
+        pass
+
+    def resample(self, frame):
+        return [types.SimpleNamespace(to_ndarray=lambda: np.zeros((1, 100), np.float32))] if frame is not None else []
+
+
 def av_open(path, mode="r"):
     if mode == "r":
         THREADS.append(("open audio", threading.get_ident()))
-        return open(path, "rb")                                       # a missing file raises, as PyAV's does
+        OPENED.append(os.path.realpath(path))
+        return Audio(path)
     return Container(path)
 
 
 av = types.ModuleType("av")
 av.open = av_open
+av.AudioResampler = Resampler
 av.VideoFrame = types.SimpleNamespace(from_ndarray=lambda im, format=None: im)
 sys.modules["av"] = av
 
@@ -222,6 +261,43 @@ async def main():
         BREAK["encode"] = False
         ok(st == 500 and ct.closed and "broken.mp4" not in mp4s(), "raw: a frame that won't encode closes the export and deletes its file", (st, mp4s()))
         ok((await raw("h"))[0] == 404, "raw: and the job is gone")
+
+        # an audio name stays inside ComfyUI's folders: "../x" and "/x" would otherwise reach any file the server can read
+        outside = tempfile.mkdtemp()
+        secret = os.path.join(outside, "secret.wav")
+        open(secret, "wb").write(b"RIFF")
+        os.makedirs(os.path.join(IN, "sub"), exist_ok=True)
+        os.makedirs(os.path.join(OUT, "valis"), exist_ok=True)
+        os.makedirs(os.path.join(TMP, "t"), exist_ok=True)
+        for p in (os.path.join(IN, "sub", "ok.wav"), os.path.join(OUT, "valis", "made.wav"), os.path.join(TMP, "t", "tmp.wav")):
+            open(p, "wb").write(b"RIFF")
+        n_open = len(OPENED)
+        await post("/valis/stage/frame?job=audj&i=0", data=jpeg())
+        reach = {"a relative path out of input": os.path.relpath(secret, IN), "an absolute path": secret,
+                 "a path out of input through a subfolder": "sub/../../" + os.path.relpath(secret, os.path.dirname(IN)),
+                 "an absolute path with [output]": secret + " [output]", "an empty name": "  ", "a name with NUL": "a\0.wav", "input itself": "."}
+        link = os.path.join(IN, "link.wav")
+        try:
+            os.symlink(secret, link)
+            reach["a symlink in input to a file outside"] = "link.wav"
+        except (OSError, NotImplementedError):
+            pass
+        for what, name in reach.items():
+            st, _ = await post("/valis/stage/cues", json={"audio": name, "kind": "none"})
+            ok(st == 400, f"audio name: {what} is refused (cues)", (st, name))
+            before = list(mp4s())
+            st, _ = await begin("aud", name="audbad", audio=name)
+            ok(st == 400 and mp4s() == before, f"audio name: {what} is refused (begin), with no video left", (st, mp4s()))
+            st, _ = await post("/valis/stage/encode", json={"job": "audj", "fps": 24, "name": "audbad", "audio": name})
+            ok(st == 400 and "audbad.mp4" not in mp4s(), f"audio name: {what} is refused (encode), with no video left", (st, mp4s()))
+        ok(len(OPENED) == n_open, "audio name: nothing outside ComfyUI's folders was opened", OPENED[n_open:])
+        for what, name in {"a file in input": "sub/ok.wav", "a file in input, tagged": "sub/ok.wav [input]", "a file in output": "valis/made.wav [output]",
+                           "a file in temp": "t/tmp.wav [temp]"}.items():
+            st, r = await post("/valis/stage/cues", json={"audio": name, "kind": "none"})
+            ok(st == 200 and abs(r["duration"] - 100 / 44100) < 1e-9, f"audio name: {what} is read", (st, r))
+        st, _ = await begin("audok", name="audok", audio="sub/ok.wav")
+        ok(st == 200 and OPENED[-1] == os.path.realpath(os.path.join(IN, "sub", "ok.wav")), "audio name: a begin with a good name opens it", (st, OPENED[-1:]))
+        await post("/valis/stage/abort", json={"job": "audok"})
 
         # the other blocking routes: cue analysis and the jpeg encode
         mark = len(THREADS)

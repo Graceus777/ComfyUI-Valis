@@ -225,11 +225,27 @@ def register(routes):
             f.write(body)
         return web.json_response({"ok": True})
 
+    def audio_path(name):
+        """The file a request names, if ComfyUI would hold it: in input (the default), output or temp, as a LoadAudio's
+        names are ("clip.wav", "valis/clip.flac [output]"). get_annotated_filepath joins whatever it is given, so "../x"
+        and "/etc/x" reach any file the server can read; this stays inside those three folders, symlinks followed."""
+        if not isinstance(name, str) or not name.strip() or "\0" in name:
+            raise web.HTTPBadRequest(text="bad audio name")
+        try:
+            path = os.path.realpath(folder_paths.get_annotated_filepath(name))
+            for root in (folder_paths.get_input_directory(), folder_paths.get_output_directory(), folder_paths.get_temp_directory()):
+                root = os.path.realpath(root)
+                if os.path.normcase(os.path.commonpath([path, root])) == os.path.normcase(root) and path != root:
+                    return path
+        except (ValueError, OSError):                      # another drive, or a name the OS won't take
+            pass
+        raise web.HTTPBadRequest(text="the audio has to be in ComfyUI's input, output or temp folder")
+
     def read_audio(name):
         """An uploaded input file -> mono float32 at 44.1 kHz (PyAV, as ComfyUI loads audio)."""
         import av
         import numpy as np
-        path = folder_paths.get_annotated_filepath(name)
+        path = audio_path(name)
         out = []
         with av.open(path) as c:
             rs = av.AudioResampler(format="flt", layout="mono", rate=44100)
