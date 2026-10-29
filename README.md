@@ -152,7 +152,7 @@ Renders checks them. The full guide is in [Extras](docs/guides/extras.md#stage-e
 Every one of these was made on the same 12 GB laptop with the tools above: Krea 2 keyframes, MiniMax H3 shots, SAM 3.1
 masks, a Valis score or a YuE2 song written from Valis's own sheet music, then a short spec per film that says which
 library effects each shot gets and which lane fires them. Valis cuts on the music's bars, renders every shot's stack and
-builds one sound design over the whole film. They are in `ComfyUI/output/finished` on the author's machine and in the demo.
+builds one sound design over the whole film. Several of them are in the demo.
 
 | Film | What drives it |
 |---|---|
@@ -238,7 +238,7 @@ Every command and flag is in [docs/cli.md](docs/cli.md).
   library (cues, layers, render, sound design, swap check and match, voice turn, colour palette, trim hold, dolly zoom,
   whip pan, batched Canny, pose check). `nodes_stereo.py` hides pictures in noise: SAM 3 masks, Depth Anything 3 or
   spinning solids become a magic-eye stereogram or a kinetogram (motion-only), drawn in a static you choose (squares,
-  halftone or the v1 ASCII sets; noise colours; RGB, colour-TV or the v1 palettes), with a decoder that checks the depth
+  halftone, or characters such as ASCII ramps, a 10 PRINT maze or katakana; noise colours; RGB, colour-TV or Valis's own palettes), with a decoder that checks the depth
   survives H.264 (`workflows/32`). `model_routes.py` fetches a missing model file from Hugging Face when you ask.
 - **The studio:** plain ES modules under `app/`, with no build step. `api.js` is the SDK client. `film.js` is the film
   chain, run by the Film tab and by `valis film` through the same SDK. `graphs.js` has every workflow as an API-format

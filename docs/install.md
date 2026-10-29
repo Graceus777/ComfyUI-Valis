@@ -154,7 +154,7 @@ LoRA isn't installed.
 
 Every model and LoRA keeps its own licence. Read each model card before you use its output, in particular for
 commercial work and for where you live: several of these (the MiniMax H3 family and LoRAs built on it, Krea 2 and
-its LoRAs, Qwen Image's research licence, the Wan 2.2 camera LoRAs and the YuE2 instrumental LoRA) carry their own
+its LoRAs, Qwen Image's research licence, SAM 3.1 under Meta's SAM License, the Wan 2.2 camera LoRAs and the YuE2 instrumental LoRA) carry their own
 terms, and some are non-commercial. Valis's own code is GPL-3.0.
 
 ## 6. Check it works
