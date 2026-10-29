@@ -995,7 +995,8 @@ async function setup() {
   pill.className = "pill link"; pill.textContent = "checking setup";
   let res;
   try { res = await checkSetup(); } catch (e) { pill.textContent = "setup ?"; return; }
-  const names = Object.keys(res).sort((a, b) => !res[a].length - !res[b].length), good = names.filter(n => !res[n].length);
+  // an extra (OPTIONAL) whose model file isn't on this machine was never asked for: it isn't listed, nor held against "setup ready"
+  const names = Object.keys(res).filter(n => !(OPTIONAL.has(n) && res[n].some(i => i.kind === "model"))).sort((a, b) => !res[a].length - !res[b].length), good = names.filter(n => !res[n].length);
   const bad = names.filter(n => res[n].length && !OPTIONAL.has(n)), opt = names.filter(n => res[n].length && OPTIONAL.has(n));
   const row = (n) => {
     const issues = res[n], ok = !issues.length;
@@ -1014,10 +1015,23 @@ async function setup() {
   pill.className = "pill link " + (bad.length ? "bad" : "ok");
   pill.textContent = bad.length ? `setup: ${bad.length} to fix` : "setup ready";
   pill.dataset.tip = bad.length ? `${bad.join(", ")}: missing pieces on this ComfyUI. Click for details.`
-    : opt.length ? `Ready. Optional, not installed: ${opt.join(", ")}. Click for details.` : `All ${names.length} workflows check out against this ComfyUI. Click for details.`;
+    : opt.length ? `Ready. ${opt.join(", ")}: its model is here but something else is missing. Click for details.` : `All ${names.length} workflows check out against this ComfyUI. Click for details.`;
   if (bad.length) toast(`${bad.join(", ")}: missing pieces on this ComfyUI. See Renders, Setup.`, true);
 }
 $("#setupPill").addEventListener("click", () => { show("renders"); $("#r-setup").scrollIntoView({block: "start", behavior: "smooth"}); });
+// A shot's "full quality" box: the 30-step recipe has a model of its own (a separate download), so the box is greyed, with the
+// file it needs in its tip, until that file is on this machine. A shot already set to it keeps a box you can untick.
+const FULL_TIP = "The full 30-step recipe instead of 8 steps: slower, for a shot whose motion came apart";
+function fullQuality(sh, save) {
+  const box = h("input", {type: "checkbox", checked: !!sh.full, onchange: (e) => { sh.full = e.target.checked || undefined; save(); }});
+  const label = h("label", {class: "bkind", tip: FULL_TIP}, box, " full quality (30 steps)");
+  if (!sh.full) api.hasUnetSoon(G.MODELS.h3i2vFull).then((have) => {
+    if (have) return;
+    box.disabled = true; label.style.opacity = ".55";
+    label.dataset.tip = `${FULL_TIP}. Needs ${G.MODELS.h3i2vFull} in models/diffusion_models (a separate download); reload the page after adding it`;
+  });
+  return label;
+}
 // a model from Hugging Face into ComfyUI's models folder, through the pack's own route (resumable, sha256-checked)
 async function fetchModel(name, src, btn) {
   btn.disabled = true;
@@ -1350,8 +1364,7 @@ function fdraw() {
       h("div", {class: "fmedia"}, thumb(sh.key, "keyframe", "no still yet"), thumb(sh.clip, sh.clipSeconds && Math.abs(sh.clipSeconds - shotLen(M.plan)) > .01 ? `shot at ${sh.clipSeconds.toFixed(1)} s: shoot again` : "shot", "not shot"), thumb(sh.fx, "with effects", "no effects")),
       ...shotStill(p, sh),
       h("input", {type: "text", value: sh.motion, placeholder: "what moves", tip: "What moves in the shot (H3)", oninput: (e) => { sh.motion = e.target.value; fsave(); }}),
-      h("label", {class: "bkind", tip: "The full 30-step recipe instead of 8 steps: slower, for a shot whose motion came apart"},
-        h("input", {type: "checkbox", checked: !!sh.full, onchange: (e) => { sh.full = e.target.checked || undefined; fsave(); }}), " full quality (30 steps)"),
+      fullQuality(sh, fsave),
       h("label", {class: "bkind", tip: "Matches every frame's colours to the keyframe. Untick it for light that should change"},
         h("input", {type: "checkbox", checked: sh.holdColour !== false, onchange: (e) => { sh.holdColour = e.target.checked ? undefined : false; sh.fx = null; fsave(); fsteps(); }}), " keep the keyframe's colours"),
       h("div", {class: "frow"},

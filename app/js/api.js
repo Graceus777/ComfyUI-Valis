@@ -294,6 +294,8 @@ export const hasModelPatch = (name) => listed("ModelPatchLoader", "name", name);
 export async function hasUnet(name) {
   try { return choicesOf((await infoOf("UNETLoader"))?.UNETLoader?.input?.required?.unet_name).includes(name); } catch { return false; }
 }
+// the same for a card that is drawn often: one /object_info call per STALE.ms at most, a "yes" kept
+export const hasUnetSoon = (name) => listed("UNETLoader", "unet_name", name);
 // is this node installed and loaded? (a new Valis node needs a ComfyUI restart before it shows up)
 export const hasNode = (node) => installed(node, async () => !!(await infoOf(node))?.[node]);
 

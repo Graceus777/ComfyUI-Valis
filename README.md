@@ -261,6 +261,9 @@ Every command and flag is in [docs/cli.md](docs/cli.md).
 - `node tests/ui/score_open.test.mjs`: a Valis score you open is shown as text, whatever its title, bars or names hold.
 - `node tests/ui/stage_export.test.mjs`: Stage's MP4 export on a stand-in server: a frame that fails to upload gets the export
   dropped, and two stages opened at once, or one opened during an export, never mix their layers.
+- `node tests/ui/setup_optional.test.mjs`: the full-quality (30-step) shot is offered only where its model file is: without it, Setup
+  doesn't list it and the shot card's box is greyed with the file's name in its tip; with it, the row is checked and the box works,
+  and a shot already saved as full quality keeps a box you can untick.
 - `node tests/ui/stage_ui.test.mjs`: Stage's controls under a click: a "then" move's start box keeps the focus when clicked, Try
   another seed during a Make starts no second set and leaves the button as it was, a second dropped song stops the first, and
   choosing a move while it plays starts no second play loop.

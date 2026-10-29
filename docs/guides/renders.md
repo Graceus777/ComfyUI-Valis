@@ -132,8 +132,12 @@ checks that Comfy API v2 answers on this server:
 | Extras | Stereogram, Loop (draft and final), Stage (split a still, a set from words, and painting past the frame with Krea 2 AnyPaint or with Qwen Image 2.1) |
 | Finish | Upscale |
 
-**Film · a shot at full quality (H3 int8, 30 steps)** is optional. A film is shot without it, so when its model file
-is missing the row reads *optional* with a grey dot, is listed last, and doesn't count against `setup ready`.
+**Film · a shot at full quality (H3 int8, 30 steps)** is an extra with a model of its own
+(`minimax_h3_fl2va_pruned_int8_convrot`, a separate download). A film is shot without it, on H3 with the 8-step
+acceleration, so Setup leaves the row out until that file is in `models/diffusion_models`, and the shot card's **full
+quality (30 steps)** box stays greyed, its tip naming the file. With the file there, the row is checked like any other.
+If it is there but something else it needs is missing, the row reads *optional* with a grey dot, is listed last, and
+doesn't count against `setup ready`.
 
 Each feature lists what's wrong with it:
 
