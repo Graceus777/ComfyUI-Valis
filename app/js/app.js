@@ -1038,8 +1038,9 @@ async function fetchModel(name, src, btn) {
   btn.disabled = true;
   const r = await fetch("/valis/models/fetch", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(src)});
   if (!r.ok) { toast(`Download refused: ${await r.text()}`, true); btn.disabled = false; return; }
+  const key = `${src.folder}/${name}`;                  // the route keys a download by folder and name
   const poll = setInterval(async () => {
-    const j = (await fetch("/valis/models/fetch").then(x => x.json()).catch(() => ({})))[name];
+    const j = (await fetch("/valis/models/fetch").then(x => x.json()).catch(() => ({})))[key];
     if (!j) return;
     if (j.state === "downloading") btn.textContent = `${SZ(j.done)} of ${SZ(j.size || src.size)}`;
     else if (j.state === "verifying") btn.textContent = "checking sha256";
@@ -1080,9 +1081,9 @@ $("#r-engine-get").addEventListener("click", async () => {
   get.disabled = true;
   const r = await fetch("/valis/models/fetch", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(src)});
   if (!r.ok) { toast(`Download refused: ${await r.text()}`, true); get.disabled = false; return; }
-  const name = R.FAST_REF;
+  const key = `${src.folder}/${R.FAST_REF}`;            // the route keys a download by folder and name
   const poll = setInterval(async () => {
-    const j = (await fetch("/valis/models/fetch").then(x => x.json()).catch(() => ({})))[name];
+    const j = (await fetch("/valis/models/fetch").then(x => x.json()).catch(() => ({})))[key];
     if (!j) return;
     if (j.state === "downloading") note.textContent = `Downloading ${GB(j.done)} of ${GB(j.size || src.size)} GB` + (j.rate ? ` at ${(j.rate / 1e6).toFixed(0)} MB/s` : "");
     else if (j.state === "verifying") note.textContent = `Checking the file (sha256): ${GB(j.verified)} of ${GB(j.size)} GB`;

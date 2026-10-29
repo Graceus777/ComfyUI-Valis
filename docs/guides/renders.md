@@ -167,10 +167,17 @@ the file is in place.
 The download goes through the pack's own route, `/valis/models/fetch`:
 
 - `POST /valis/models/fetch` with `{repo, path, folder, name?, size?, sha256?, revision?}` starts or resumes a
-  download. `GET` returns every download's state (`downloading`, `verifying`, `done`, `error`, `cancelled`), and
-  `POST /valis/models/fetch/cancel` with `{name}` stops one.
-- It only fetches from `huggingface.co`, only into one of ComfyUI's model folders, and only model file types
-  (`.safetensors`, `.gguf`, `.sft`, `.pt`, `.pth`, `.bin`, `.ckpt`, `.onnx`).
+  download. `GET` returns every download's state (`downloading`, `verifying`, `done`, `error`, `cancelled`), keyed by
+  `<folder>/<name>`, so one file name in two folders is two downloads. `POST /valis/models/fetch/cancel` with
+  `{folder, name}` (or `{key}`) stops one.
+- It only fetches from `huggingface.co`, only into one of ComfyUI's model folders (not `custom_nodes` or `configs`), and
+  only model file types (`.safetensors`, `.gguf`, `.sft`, `.pt`, `.pth`, `.bin`, `.ckpt`, `.onnx`).
+- A download may not be larger than the `size` it was asked with, or 100 GB when none is given (set `VALIS_FETCH_MAX_GB`
+  to change that), and it has to fit on the disk with 1 GB to spare; one that would not is refused before it starts or
+  stopped, and its part file removed, as soon as more arrives than that.
+- It answers this machine's own browser tabs only. A request from another address (ComfyUI run with `--listen`) or
+  from a page of another site gets a 403. If you do open the studio from another machine, start ComfyUI with the
+  environment variable `VALIS_ALLOW_REMOTE_FETCH=1` to let it download for you.
 - The file is written as `<name>.valis-part` and resumed with HTTP ranges after a network error (up to 30 retries).
 - It is checked against the expected size and sha256. A file that fails the hash is kept as `<name>.valis-bad`. Only a
   file that passes is renamed to its real name, so ComfyUI never lists a half-written model.
