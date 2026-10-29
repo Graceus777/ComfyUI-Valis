@@ -1,4 +1,4 @@
-// Following a job: one ComfyUI has forgotten (it restarted, and its job list is in memory) or that has stopped answering is
+// Following a job (and a download), and asking what is installed: one ComfyUI has forgotten (it restarted, and its job list is in memory) or that has stopped answering is
 // reported as lost, not polled for ever as "queued" (the Film buttons stayed disabled until a reload); a poll that fails
 // for a moment is retried. api.js on a stand-in for Comfy API v2, in Node (no browser, no ComfyUI).
 import http from "node:http";
@@ -97,6 +97,60 @@ try {
   ev = await follow(K, {progress: () => { down = true; }});
   ok(ev.lost, "a server that stays away loses the download after a while", JSON.stringify(ev));
   globalThis.fetch = realFetch; down = false;
+
+  // ---- what is installed: "no" is asked again, "yes" is kept, and an answer ComfyUI couldn't give is not kept at all
+  api.STALE.ms = 150;                                               // (10 s in the studio)
+  const oi = {};                                                    // node -> its object_info entry; a node not in it answers {}
+  let status = 200, calls = [];
+  globalThis.fetch = async (url) => {
+    const m = /^\/object_info\/(.+)$/.exec(String(url));
+    if (!m) return realFetch(url);
+    const node = decodeURIComponent(m[1]); calls.push(node);
+    if (status === "drop") throw new TypeError("fetch failed");
+    const body = status === 200 ? JSON.stringify(oi[node] ? {[node]: oi[node]} : {}) : "Bad Gateway";
+    return {ok: status === 200, status, text: async () => body};
+  };
+  const wait = (ms) => new Promise(r => setTimeout(r, ms));
+  const lora = (...names) => ({input: {required: {lora_name: [names]}}});
+  // a node that wasn't there is found once ComfyUI has it
+  ok(await api.hasNode("ValisX") === false, "hasNode · not installed");
+  oi.ValisX = {input: {required: {a: ["INT"]}}};
+  calls = []; ok(await api.hasNode("ValisX") === false && !calls.length, "hasNode · the no is kept for a moment (not asked on every call)", calls.join());
+  await wait(200);
+  ok(await api.hasNode("ValisX") === true, "hasNode · and asked again after a while: a restarted ComfyUI has it, the page needn't be reloaded");
+  delete oi.ValisX; calls = []; await wait(200);
+  ok(await api.hasNode("ValisX") === true && !calls.length, "hasNode · a yes is kept for the session", calls.join());
+  // an input, the same
+  oi.ValisY = {input: {required: {a: ["INT"]}}};
+  ok(await api.hasInput("ValisY", "b") === false, "hasInput · not there");
+  oi.ValisY = {input: {required: {a: ["INT"]}, optional: {b: ["INT"]}}}; await wait(200);
+  ok(await api.hasInput("ValisY", "b") === true, "hasInput · there once the node takes it");
+  // a LoRA put in the folder is listed at once; the first list isn't kept for ever
+  oi.LoraLoaderModelOnly = lora("a.safetensors");
+  ok(await api.hasLora("a.safetensors") === true && await api.hasLora("b.safetensors") === false, "hasLora · yes and no");
+  oi.LoraLoaderModelOnly = lora("a.safetensors", "b.safetensors");
+  calls = []; ok(await api.hasLora("b.safetensors") === false && !calls.length, "hasLora · the no is kept for a moment", calls.join());
+  await wait(200);
+  ok(await api.hasLora("b.safetensors") === true, "hasLora · a LoRA added while the page is open is found");
+  oi.LoraLoaderModelOnly = lora(); calls = []; await wait(200);
+  ok(await api.hasLora("a.safetensors") === true && !calls.length, "hasLora · what was found is kept", calls.join());
+  oi.ModelPatchLoader = {input: {required: {name: [[]]}}};
+  ok(await api.hasModelPatch("fun.safetensors") === false, "hasModelPatch · not there");
+  oi.ModelPatchLoader = {input: {required: {name: [["fun.safetensors"]]}}}; await wait(200);
+  ok(await api.hasModelPatch("fun.safetensors") === true, "hasModelPatch · found when it is");
+  // the newer combo spelling
+  oi.LoraLoaderModelOnly = {input: {required: {lora_name: ["COMBO", {options: ["c.safetensors"]}]}}};
+  ok(await api.hasLora("c.safetensors") === true, "hasLora · a COMBO-spelled list is read as a list", "");
+  // ComfyUI that can't answer is not "nothing installed": the next ask goes to the server again at once
+  delete oi.ValisZ; status = 502;
+  ok(await api.hasNode("ValisZ") === false, "hasNode · a 502 is a no");
+  status = 200; oi.ValisZ = {input: {}};
+  ok(await api.hasNode("ValisZ") === true, "hasNode · and is not remembered as one");
+  await wait(200); status = "drop"; oi.LoraLoaderModelOnly = lora("d.safetensors");
+  ok(await api.hasLora("d.safetensors") === false, "hasLora · a ComfyUI that doesn't answer has no LoRAs, for now");
+  status = 200;
+  ok(await api.hasLora("d.safetensors") === true, "hasLora · and the list that couldn't be read isn't kept as empty");
+  globalThis.fetch = realFetch;
 } finally {
   console.warn = warn; srv.close();
 }

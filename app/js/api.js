@@ -258,35 +258,50 @@ export async function free() {
 export async function interrupt() { return fetch("/interrupt", {method: "POST"}); }
 export async function systemStats() { return json(await fetch("/system_stats")); }
 export async function objectInfo(node) { return json(await fetch(`/object_info/${encodeURIComponent(node)}`)); }
+// What ComfyUI has installed changes while the page is open: a LoRA put in models/loras is listed at once, a node once ComfyUI
+// is restarted. A "yes" is kept for the session; a "no" is asked again after STALE.ms, and an answer ComfyUI could not give
+// (it was restarting, a proxy said 502) is never kept, so "not installed" does not stay on screen until the page is reloaded.
+export const STALE = {ms: 10000};
+async function infoOf(node) {                           // objectInfo, but a ComfyUI that can't answer throws instead of "has nothing"
+  const r = await fetch(`/object_info/${encodeURIComponent(node)}`);
+  if (!r.ok) throw new Error(`ComfyUI answered ${r.status} for /object_info/${node}`);
+  return json(r);
+}
+const choicesOf = (def) => Array.isArray(def?.[0]) ? def[0] : def?.[0] === "COMBO" && Array.isArray(def[1]?.options) ? def[1].options : [];
 const HAVE = {};
-let LORAS = null;
-// is this LoRA in models/loras? (one /object_info call, cached for the session)
-export async function hasLora(name) {
-  if (!LORAS) { try { LORAS = new Set((await objectInfo("LoraLoaderModelOnly"))?.LoraLoaderModelOnly?.input?.required?.lora_name?.[0] || []); } catch { LORAS = new Set(); } }
-  return LORAS.has(name);
+async function installed(key, ask) {                    // ask() -> true | false, or throws when ComfyUI can't be read
+  let e = HAVE[key];
+  if (!e || (!e.yes && Date.now() - e.at >= STALE.ms)) {
+    try { e = HAVE[key] = {yes: !!(await ask()), at: Date.now()}; } catch { return false; }
+  }
+  return e.yes;
 }
-let PATCHES = null;
-// is this model patch (Fun ControlNet...) in models/model_patches? (cached for the session)
-export async function hasModelPatch(name) {
-  if (!PATCHES) { try { PATCHES = new Set((await objectInfo("ModelPatchLoader"))?.ModelPatchLoader?.input?.required?.name?.[0] || []); } catch { PATCHES = new Set(); } }
-  return PATCHES.has(name);
+const LISTS = {};
+async function listed(node, input, name) {            // is this name among the choices of node.input? (one /object_info call per STALE.ms at most)
+  const k = `${node}.${input}`;
+  let e = LISTS[k];
+  if (e?.set.has(name)) return true;
+  if (!e || Date.now() - e.at >= STALE.ms) {
+    try { e = LISTS[k] = {set: new Set(choicesOf((await infoOf(node))?.[node]?.input?.required?.[input])), at: Date.now()}; } catch { return false; }
+  }
+  return e.set.has(name);
 }
+// is this LoRA in models/loras?
+export const hasLora = (name) => listed("LoraLoaderModelOnly", "lora_name", name);
+// is this model patch (Fun ControlNet...) in models/model_patches?
+export const hasModelPatch = (name) => listed("ModelPatchLoader", "name", name);
 // is this file in models/diffusion_models (or unet)? (asked fresh each time: a download can add it mid-session)
 export async function hasUnet(name) {
-  try { return ((await objectInfo("UNETLoader"))?.UNETLoader?.input?.required?.unet_name?.[0] || []).includes(name); } catch { return false; }
+  try { return choicesOf((await infoOf("UNETLoader"))?.UNETLoader?.input?.required?.unet_name).includes(name); } catch { return false; }
 }
 // is this node installed and loaded? (a new Valis node needs a ComfyUI restart before it shows up)
-export async function hasNode(node) {
-  if (!(node in HAVE)) { try { HAVE[node] = !!(await objectInfo(node))?.[node]; } catch { return false; } }
-  return HAVE[node];
-}
+export const hasNode = (node) => installed(node, async () => !!(await infoOf(node))?.[node]);
 
 // does this loaded node take this input? (a new input, like a new node, needs a ComfyUI restart)
-export async function hasInput(node, input) {
-  const k = `${node}.${input}`;
-  if (!(k in HAVE)) { try { const i = (await objectInfo(node))?.[node]?.input || {}; HAVE[k] = input in (i.required || {}) || input in (i.optional || {}); } catch { return false; } }
-  return HAVE[k];
-}
+export const hasInput = (node, input) => installed(`${node}.${input}`, async () => {
+  const i = (await infoOf(node))?.[node]?.input || {};
+  return input in (i.required || {}) || input in (i.optional || {});
+});
 
 export function outputsOf(entry) {
   const out = [];
