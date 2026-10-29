@@ -29,6 +29,7 @@ EXTS = (".safetensors", ".gguf", ".sft", ".pt", ".pth", ".bin", ".ckpt", ".onnx"
 BLOCKED_FOLDERS = ("custom_nodes", "configs")           # folders ComfyUI keeps in folder_paths that hold code and settings, not weights
 MAX_BYTES = int(float(os.environ.get("VALIS_FETCH_MAX_GB") or 100) * (1 << 30))
 SPARE = 1 << 30                                          # free disk left over after a download
+REPO_PART = r"[A-Za-z0-9_][A-Za-z0-9_.-]*"              # owner or repo name: Hugging Face's never start with "." or "-" and never hold "..", so no part is ./..
 ACTIVE = ("downloading", "verifying")
 JOBS = {}
 LOCK = threading.Lock()
@@ -173,9 +174,9 @@ def register(routes):
         guard(request)
         q = await body(request)
         repo, path = q.get("repo", ""), q.get("path", "")
-        if not isinstance(repo, str) or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+        if not isinstance(repo, str) or not re.fullmatch(f"{REPO_PART}/{REPO_PART}", repo) or ".." in repo:
             raise web.HTTPBadRequest(text="bad repo")
-        if not isinstance(path, str) or not path or ".." in path.split("/") or path.startswith("/"):
+        if not isinstance(path, str) or any(step in ("", ".", "..") for step in path.split("/")):
             raise web.HTTPBadRequest(text="bad path")
         name = q.get("name") or path.rsplit("/", 1)[-1]
         if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9_.+-]{1,200}", name) or not name.lower().endswith(EXTS):

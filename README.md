@@ -241,7 +241,7 @@ Every command and flag is in [docs/cli.md](docs/cli.md).
   video deleted, and an audio name that points outside ComfyUI's input, output and temp folders (`../x`, `/x`, a symlink) is
   refused (needs `pip install aiohttp`; no ComfyUI, no GPU).
 - `python tests/check_model_routes.py`: the model download routes on a real aiohttp server with a stand-in for Hugging Face: code
-  folders and cross-site or remote requests are refused, a download can't outgrow its size or the disk, one file name in two
+  folders, a repo or path with a `.` or `..` step, and cross-site or remote requests are refused, a download can't outgrow its size or the disk, one file name in two
   folders is two downloads, and a file is hash-checked before it is put in place (needs `pip install aiohttp`; no network).
 - `python tests/check_match.py`: Swap Check and Swap Match read the grain there is (white grain of σ 8 reads as 8, not 3), and a swap
   given the plate's grain ends with it, and the light wrap stays on the subject's rim (no halo in the backdrop)

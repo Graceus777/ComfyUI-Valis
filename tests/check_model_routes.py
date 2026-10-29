@@ -154,7 +154,10 @@ async def main():
         ok(st == 400, "a folder that isn't a string is a 400, not a 500", (st, r))
 
         # ---- the other arguments
-        for what, kw in {"a repo that isn't a repo": {"repo": "a/b/c"}, "a path out of the repo": {"path": "../x.safetensors"}, "an absolute path": {"path": "/x.safetensors"},
+        for what, kw in {"a repo that isn't a repo": {"repo": "a/b/c"}, "a repo that walks out of its owner (..)": {"repo": "../etc"}, "a repo that is its own folder (.)": {"repo": "a/."},
+                         "a repo named ..": {"repo": "a/.."}, "an owner named .": {"repo": "./b"}, "a repo that starts with a dot": {"repo": "a/.hidden"},
+                         "a name with two dots in it": {"repo": "a/b..c"}, "a path out of the repo": {"path": "../x.safetensors"}, "an absolute path": {"path": "/x.safetensors"},
+                         "a path with a . step": {"path": "x/./y.safetensors"}, "a path with an empty step": {"path": "x//y.safetensors"},
                          "a file type that isn't a model": {"path": "x.py"}, "a size that isn't a number": {"size": "big"}, "a negative size": {"size": -1},
                          "a size over the limit": {"size": mr.MAX_BYTES + 1}, "a name with a slash": {"name": "a/x.safetensors"}}.items():
             q = {"repo": "a/b", "path": "x.safetensors", "folder": "loras", "size": 10, **kw}
