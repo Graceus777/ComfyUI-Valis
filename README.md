@@ -220,6 +220,8 @@ Every command and flag is in [docs/cli.md](docs/cli.md).
   option, built with the same planner the buttons use and checked against a ComfyUI node list (40,000+ checks, no GPU).
 - `node tests/cli.test.mjs`: the CLI against a stand-in ComfyUI, with nothing uploaded or queued: `frame` and `shoot`
   build what Create's buttons build, and bad ids, options and plan files exit with code 2.
+- `node tests/jobs.test.mjs`: following a job on a stand-in for Comfy API v2: a job ComfyUI has forgotten (a restart) or that
+  stopped answering is reported lost instead of polled for ever, and a poll that fails for a moment is retried.
 - `python tests/check_grade.py`: the browser's live colour grade against `palette.py`'s (within 0.2 levels on every look).
 - `python tests/check_cues.py`: cue-sheet errors, sheet-music strengths, one beat grid for a song with its sheet music,
   the key heard in a song, and the effects that should be heard (no ComfyUI, no GPU).

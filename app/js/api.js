@@ -100,9 +100,20 @@ const TERMINAL = new Set(["succeeded", "failed", "canceled", "expired"]);
 // A page keeps at most ~6 connections open to one host, and an event stream holds one for as long as its job lives:
 // with six jobs queued every other request (the next submit, /view, the queue pill) waited forever. A queued job is
 // polled instead, and its stream opens only when it starts running (ComfyUI runs one job at a time).
+// A job ComfyUI has forgotten (it restarted: the job list lives in memory) answers 404 for ever, and a server that stays
+// down is no different to the page: such a job is lost, not queued. Polls that fail for a while are retried first.
+export const POLL = {first: 1000, lostAfter: 45000};
+const LOST = "ComfyUI no longer has this job (it was restarted, or stopped answering): run it again";
 async function untilRunning(j) {
-  for (let wait = 1000; ; wait = Math.min(wait * 1.5, 4000)) {
-    try { await j.refresh(); } catch (e) { console.warn(e); }
+  let failing = 0;
+  for (let wait = POLL.first; ; wait = Math.min(wait * 1.5, 4000)) {
+    try { await j.refresh(); failing = 0; }
+    catch (e) {
+      if (e?.httpStatus === 404 || e?.code === "not_found") throw new Error(LOST);
+      failing ||= Date.now();
+      if (Date.now() - failing > POLL.lostAfter) throw new Error(LOST);
+      console.warn(e);
+    }
     if (j.status !== "queued" && j.status !== "pending") return;
     await new Promise(r => setTimeout(r, wait));
   }
@@ -110,7 +121,8 @@ async function untilRunning(j) {
 async function follow(job) {
   const j = job.sdkJob;
   const done = new Set(), total = Object.values(job.w).reduce((a, b) => a + b, 0) || 1;
-  await untilRunning(j);
+  try { await untilRunning(j); }
+  catch (e) { job.status = "error"; job.error = e.message; emit({type: "job", job}); return; }
   if (TERMINAL.has(j.status)) { await finish(job); return; }
   try {
     for await (const raw of low.getJobEvents(j.urls?.events || j.id)) {
@@ -149,7 +161,7 @@ async function finish(job) {
   } else {
     job.status = "error";
     const er = j.error;
-    job.error = er ? `${er.class_type ? er.class_type + ": " : ""}${er.message || er.code}` : j.status;
+    job.error = er ? `${er.class_type ? er.class_type + ": " : ""}${er.message || er.code}` : TERMINAL.has(j.status) ? j.status : LOST;
   }
   emit({type: "job", job});
 }
