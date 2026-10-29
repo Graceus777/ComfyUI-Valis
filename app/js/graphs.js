@@ -915,7 +915,7 @@ export function fx({clip, other = null, subject = "", source = "sheet", audio = 
   g["50"] = N("ValisCues", cues);
   let prev = null;
   layers.forEach((l, k) => {
-    const id = String(60 + k);
+    const id = k < 10 ? String(60 + k) : `L${k}`;                  // 60-69, then clear of the score loader (70), the render (80...) and the sound (85)
     g[id] = N("ValisLayer", {effect: l.effect, on: l.on || "", by: l.by || "", params: JSON.stringify(l.params || {}), ...(prev ? {stack: [prev, 0]} : {})});
     prev = id;
   });

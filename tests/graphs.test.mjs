@@ -257,6 +257,19 @@ import * as F from "../app/js/film.js";
   const r = G.fx({...base, sound: true, start: 4.42});
   ok(r["85"]?.class_type === "ValisSoundDesign" && JSON.stringify(r["81"].inputs.audio) === '["85",0]' && "stack" in r["85"].inputs, "Score · with effect sounds the sound design mixes them under the song");
 }
+{ // a stack of any depth is a chain of its own nodes: the layers' ids stay clear of the score loader, the render and the sound
+  for (const [n, extra] of [[10, {}], [11, {source: "score", score: "s.json", audio: "a.flac"}], [12, {source: "score", score: "s.json", audio: "a.flac"}], [22, {}], [25, {sound: false}]]) {
+    const layers = Array.from({length: n}, (_, k) => ({effect: ["Punch", "Flicker", "Tear"][k % 3], on: "beat"}));
+    const g = G.fx({clip: "x.mp4", layers, ...extra});
+    const ls = Object.entries(g).filter(([, v]) => v.class_type === "ValisLayer");
+    ok(ls.length === n, `FX · ${n} layers${extra.source ? " on a score" : ""} are ${n} nodes`, String(ls.length));
+    let at = g["80"].inputs.stack[0], chain = 0;
+    while (at && g[at]?.class_type === "ValisLayer") { chain++; at = g[at].inputs.stack?.[0]; }
+    ok(chain === n && g["80"].class_type === "ValisRender", `FX · ${n} layers: the render's stack runs through all of them`, `${chain}, ${g["80"].class_type}`);
+    if (extra.source) ok(g["70"]?.class_type === "ValisScoreLoad" && g["50"].inputs.score[0] === "70", `FX · ${n} layers: the score is still loaded by its own node`, g["70"]?.class_type);
+    valid(`FX · ${n} layers`, g);
+  }
+}
 { // Genjutsu counts its slice, control video and plate in frames at 24: a source at another rate is retimed first
   for (const [mode, control] of [["motion", "pose"], ["swap", "canny"], ["swap", "pose"], ["restyle", "canny"]]) {
     const g = G.genjutsu({video: "c.mp4", refs: ["a.png"], prompt: "x", mode, control, target: "a dress", retime: true});
