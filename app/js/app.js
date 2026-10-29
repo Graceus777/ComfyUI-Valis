@@ -16,7 +16,7 @@ import * as R from "./refengine.js";
 import {Bin} from "./bin.js";
 import * as MC from "./machine.js";
 import {showHelp} from "./help.js";
-import {$, $$, h, esc, toast, chips, cards, seg, slider, section, dropzone, fillDrop, media, initTips, wireSections, ASSETS, VID} from "./ui.js";
+import {$, $$, h, esc, toast, chips, cards, seg, slider, section, dropzone, fillDrop, media, initTips, wireSections, compare, ASSETS, VID} from "./ui.js";
 export {toast};
 
 initTips();
@@ -706,21 +706,6 @@ $("#e-render").addEventListener("click", async () => {
     $("#e-strip").replaceChildren(...[...extra, ...(v ? [v] : [])].map(f => h("div", {class: "thumb"}, media(f, {controls: false}), h("div", {class: "meta"}, name(f)))));
   }});
 });
-function compare(a, b) {
-  const wrap = h("div", {class: "compare"});
-  const va = h("video", {src: a, autoplay: true, loop: true, muted: true, playsinline: true});
-  const vb = h("video", {src: b, autoplay: true, loop: true, muted: true, playsinline: true, class: "after"});
-  const bar = h("div", {class: "bar"});
-  wrap.append(va, vb, bar, h("span", {class: "tag", style: "left:10px"}, "before"), h("span", {class: "tag", style: "right:10px"}, "after"));
-  vb.addEventListener("loadedmetadata", () => wrap.style.setProperty("--ar", `${vb.videoWidth}/${vb.videoHeight}`));
-  vb.addEventListener("play", () => { va.currentTime = vb.currentTime; va.play(); });
-  const set = (x) => { const r = wrap.getBoundingClientRect(); wrap.style.setProperty("--cut", `${Math.max(0, Math.min(100, 100 * (x - r.left) / r.width))}%`); };
-  let drag = false;
-  wrap.addEventListener("pointerdown", (e) => { drag = true; set(e.clientX); });
-  addEventListener("pointermove", (e) => drag && set(e.clientX));
-  addEventListener("pointerup", () => drag = false);
-  return wrap;
-}
 
 // ------------------------------------------------------------------ SCORE
 const Score = new ScoreView({run, onFilm: async (sv) => {

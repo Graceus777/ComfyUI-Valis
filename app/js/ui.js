@@ -160,3 +160,24 @@ export function wireSections() {
     d.addEventListener("toggle", () => { try { localStorage.setItem(key, d.open ? "1" : "0"); } catch { /* */ } });
   }
 }
+
+// Before and after, one on the other with a divider to drag. The drag is kept on the divider's own element by pointer
+// capture (not window listeners: each compare made two that were never removed, one pair for every result shown).
+export function compare(a, b) {
+  const wrap = h("div", {class: "compare"});
+  const va = h("video", {src: a, autoplay: true, loop: true, muted: true, playsinline: true});
+  const vb = h("video", {src: b, autoplay: true, loop: true, muted: true, playsinline: true, class: "after"});
+  const bar = h("div", {class: "bar"});
+  wrap.append(va, vb, bar, h("span", {class: "tag", style: "left:10px"}, "before"), h("span", {class: "tag", style: "right:10px"}, "after"));
+  vb.addEventListener("loadedmetadata", () => wrap.style.setProperty("--ar", `${vb.videoWidth}/${vb.videoHeight}`));
+  vb.addEventListener("play", () => { va.currentTime = vb.currentTime; va.play(); });
+  const set = (x) => { const r = wrap.getBoundingClientRect(); wrap.style.setProperty("--cut", `${Math.max(0, Math.min(100, 100 * (x - r.left) / r.width))}%`); };
+  let drag = false;
+  wrap.addEventListener("pointerdown", (e) => {
+    drag = true; set(e.clientX);
+    try { wrap.setPointerCapture(e.pointerId); } catch { /* no such pointer (a synthetic event): the drag ends inside the element */ }
+  });
+  wrap.addEventListener("pointermove", (e) => drag && set(e.clientX));
+  for (const end of ["pointerup", "pointercancel", "lostpointercapture"]) wrap.addEventListener(end, () => { drag = false; });
+  return wrap;
+}
