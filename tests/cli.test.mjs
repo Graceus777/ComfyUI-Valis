@@ -133,6 +133,13 @@ const CREATE = {genre: "gothic", framing: "wide", focal: "auto", body: "auto", k
     [["run", "--json", "workflows/nope.json"], /can't read the workflow .*nope\.json: no such file/],
     [["run", "workflows/03_shot_h3_i2v.json", "--set", "fa=valis/k.png", "--json"], /--set fa=valis\/k\.png: write it as node\.input=value/],
     [["run", "workflows/03_shot_h3_i2v.json", "--set", "zz.image=valis/k.png", "--json"], /no node zz in the workflow/],
+    [["run", "workflows/03_shot_h3_i2v.json", "--set", "--json"], /--set needs a value: write it as node\.input=value/],
+    [["run", "workflows/03_shot_h3_i2v.json", "--set"], /--set needs a value: write it as node\.input=value/],
+    [["run", "workflows/03_shot_h3_i2v.json", "--set", "10.steps=many", "--json"], /--set 10\.steps=many: steps takes a whole number/],
+    [["run", "workflows/03_shot_h3_i2v.json", "--set", "10.steps=2.5", "--json"], /--set 10\.steps=2\.5: steps takes a whole number/],
+    [["run", "workflows/03_shot_h3_i2v.json", "--set", "10.denoise=a bit", "--json"], /--set 10\.denoise=a bit: denoise takes a number/],
+    [["run", "workflows/03_shot_h3_i2v.json", "--set", "acc.enabled=maybe", "--json"], /--set acc\.enabled=maybe: enabled is true or false/],
+    [["frame", "--prompt", "x", "--set", "a.b=1"], /frame has no option --set/],
     [["nope"], /unknown command: nope/],
   ];
   const runs = await Promise.all(bad.map(([args]) => cli(args)));
@@ -191,6 +198,36 @@ const CREATE = {genre: "gothic", framing: "wide", focal: "auto", body: "auto", k
   const r = await cli(["run", "--json", "workflows/03_shot_h3_i2v.json", "--set", "fa.image=valis/k.png", "--set", "8.noise_seed=7"]);
   const wf = JSON.parse(fs.readFileSync(path.join(repo, "workflows", "03_shot_h3_i2v.json"), "utf8"));
   ok(r.code === 0 && r.json?.fa?.inputs.image === "valis/k.png" && r.json?.["8"]?.inputs.noise_seed === 7 && Object.keys(r.json).length === Object.keys(wf).length, "run --json workflow.json --set", r.err);
+}
+
+// ---- run --set: a value takes the type its input declares
+{
+  const wf = "workflows/03_shot_h3_i2v.json";
+  const r = await cli(["run", "--json", wf, "--set", "acc.enabled=false", "--set", "acc.nfe=4", "--set", "14.filename_prefix=2025", "--set", "10.steps=4",
+    "--set", "10.denoise=0.5", "--set", "10.scheduler=karras", "--set", "acc.enabled=No", "--set", "9.sampler_name=heun"]);
+  const g = r.json;
+  ok(r.code === 0 && g?.acc?.inputs.enabled === false, "run --set · a BOOLEAN input takes false as false, not as the text that ComfyUI reads as true", `${r.err} ${JSON.stringify(g?.acc?.inputs.enabled)}`);
+  ok(g?.acc?.inputs.nfe === "4", "run --set · a choice is spelled as its list spells it (\"4\", not 4)", JSON.stringify(g?.acc?.inputs.nfe));
+  ok(g?.["14"]?.inputs.filename_prefix === "2025", "run --set · a number in a text input stays text", JSON.stringify(g?.["14"]?.inputs.filename_prefix));
+  ok(g?.["10"]?.inputs.steps === 4 && g?.["10"]?.inputs.denoise === 0.5 && g?.["10"]?.inputs.scheduler === "karras" && g?.["9"]?.inputs.sampler_name === "heun", "run --set · numbers and choices as before");
+  const t = await cli(["run", "--json", wf, "--set", "acc.enabled=TRUE", "--set", "8.noise_seed=0"]);
+  ok(t.code === 0 && t.json?.acc?.inputs.enabled === true && t.json?.["8"]?.inputs.noise_seed === 0, "run --set · true in any case; zero is a number", t.err);
+  // a server that can't be read: the value is guessed from its text
+  const u = await cli(["run", "--json", wf, "--set", "acc.enabled=false", "--set", "10.steps=4", "--set", "14.filename_prefix=clip"], closed);
+  ok(u.code === 0 && u.json?.acc?.inputs.enabled === false && u.json?.["10"]?.inputs.steps === 4 && u.json?.["14"]?.inputs.filename_prefix === "clip", "run --set · with no server, false is false and 4 is a number", u.err);
+}
+
+// ---- --json sends nothing: a file of yours is named in the graph, not uploaded
+{
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "valis-cli-")), pic = path.join(dir, "pic.png"), vid = path.join(dir, "clip.mp4");
+  fs.writeFileSync(pic, Buffer.from("not really a picture")); fs.writeFileSync(vid, Buffer.from("not really a video"));
+  const r = await cli(["run", "--json", "workflows/03_shot_h3_i2v.json", "--set", `fa.image=${pic}`]);
+  ok(r.code === 0 && r.json?.fa?.inputs.image === `<asset ${pic}>`, "run --json · a file of yours is named, not uploaded", r.err || JSON.stringify(r.json?.fa));
+  const f = await cli(["find", "--video", vid, "--target", "the keeper", "--json"]);
+  ok(f.code === 0 && JSON.stringify(f.json).includes(`<asset ${vid}>`), "find --json · the same", f.err || f.out.slice(0, 200));
+  const s = await cli(["shoot", "--image", pic, "--motion", "he raises the lantern", "--json"]);
+  ok(s.code === 0 && JSON.stringify(s.json).includes(`<asset ${pic}>`), "shoot --json · the same", s.err || s.out.slice(0, 200));
+  fs.rmSync(dir, {recursive: true, force: true});
 }
 
 ok(!asked.length, "nothing was uploaded or queued", asked.join(", "));

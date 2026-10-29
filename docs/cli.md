@@ -70,7 +70,7 @@ copies under `ComfyUI/output/valis/`, named after the command and a time stamp (
 | Option | What it does |
 |---|---|
 | `--out DIR` | where results are written (default `./valis_out`) |
-| `--json` | print the graph the command would queue, then stop. Uploaded files appear as `<asset path>`. Local files are still uploaded, because the graph refers to them. Every command but `film` takes it; on `film` it is an error, and `--plan-only` prints the plan instead. |
+| `--json` | print the graph the command would queue, then stop. A file on this disk appears as `<asset path>` and is not uploaded: nothing is sent to ComfyUI but the questions the graph needs answered. Every command but `film` takes it; on `film` it is an error, and `--plan-only` prints the plan instead. |
 
 ## What it prints
 
@@ -95,7 +95,7 @@ files written to `--out`.
 |---|---|
 | 0 | the job succeeded, or `help` was shown |
 | 1 | the job failed: stderr says `failed after <n>s:` and the failing node's class and message |
-| 2 | a bad command line, caught before anything is uploaded or queued: an unknown command (the help follows), a required option missing (`--video is required for transform`), an option the command doesn't take, an option with no value, a stray word, an id a list doesn't have, a number that isn't one or is out of range, a plan file or workflow that can't be read, or a `--set` that isn't `node.input=value` or names a node the workflow doesn't have |
+| 2 | a bad command line, caught before anything is uploaded or queued: an unknown command (the help follows), a required option missing (`--video is required for transform`), an option the command doesn't take, an option with no value, a stray word, an id a list doesn't have, a number that isn't one or is out of range, a plan file or workflow that can't be read, or a `--set` that has no value, isn't `node.input=value`, gives a value its input can't take or names a node the workflow doesn't have |
 
 Any other error (the server can't be reached, a film step fails) ends the process with a non-zero exit and Node's error
 message.
@@ -367,12 +367,16 @@ node cli/valis.mjs run workflows/05_transform_vampire.json --set 16.file=clip.mp
 ```
 
 `--set node.input=value` can repeat. `node` is the node's id in the file (`16`, `v`, `ref0`); everything after the
-first dot is the input name, so dotted input names work. A value that is a number is sent as a number. Any other value
-is treated as a file path: a file on this disk is uploaded, and anything else is sent as text, such as a path in
-`ComfyUI/input` or a prompt. [The workflows README](../workflows/README.md) lists each file's inputs to replace.
+first dot is the input name, so dotted input names work. A value takes the type its input declares on your ComfyUI:
+a yes/no input takes `true` or `false` (also `yes`, `no`, `on`, `off`, `1`, `0`), a number input takes a number (a whole
+number for a whole-number input), a text input keeps its text as it is (`2025` is the text "2025"), and a choice is sent
+spelled as the list spells it. A choice that isn't in the list, and an input whose type can't be read (no server, a node
+ComfyUI doesn't have), is guessed from the text: `true` and `false`, a number, else a file path, where a file on this
+disk is uploaded and anything else is sent as text, such as a path in `ComfyUI/input`.
+[The workflows README](../workflows/README.md) lists each file's inputs to replace.
 
-A workflow file that can't be read or isn't JSON, a `--set` that isn't written as `node.input=value`, and a node id the
-workflow doesn't have are errors, found before anything is uploaded.
+A workflow file that can't be read or isn't JSON, a `--set` with no value or that isn't written as `node.input=value`, a value
+the input can't take (`--set 10.steps=many`), and a node id the workflow doesn't have are errors, found before anything is uploaded.
 
 ## For agents
 

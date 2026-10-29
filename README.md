@@ -220,7 +220,8 @@ Every command and flag is in [docs/cli.md](docs/cli.md).
   option, built with the same planner the buttons use and checked against a ComfyUI node list (40,000+ checks, no GPU).
 - `node tests/cli.test.mjs`: the CLI against a stand-in ComfyUI, with nothing uploaded or queued: `frame` and `shoot`
   build what Create's buttons build, bad ids, options and plan files exit with code 2, and `film --plan` sends a picture
-  in ComfyUI's input folder as an input file.
+  in ComfyUI's input folder as an input file; `run --set` gives a value the type its input declares (`false` is false, `2025` in
+  a text input stays text, a bare `--set` is a usage error), and `--json` names a file of yours instead of uploading it.
 - `node tests/jobs.test.mjs`: following a job on a stand-in for Comfy API v2: a job ComfyUI has forgotten (a restart) or that
   stopped answering is reported lost instead of polled for ever, and a poll that fails for a moment is retried.
   A model download is followed the same way: to its end, and let go of when ComfyUI no longer has it.

@@ -124,6 +124,7 @@ function parse(argv) {
     const a = argv[i];
     if (!a.startsWith("--")) { o._.push(a); continue; }
     const k = a.slice(2), v = argv[i + 1];
+    if (k === "set" && (v === undefined || v.startsWith("--"))) { o.set.push(true); continue; }   // a --set with nothing after it: told when run reads them
     if (SWITCHES.has(k) || v === undefined || v.startsWith("--")) { o[k] = true; continue; }       // a switch never takes the next word
     if (k === "set") o.set.push(v); else o[k] = v;
     i++;
@@ -212,12 +213,33 @@ const uploads = new Map();
 async function file(p) {                   // local file -> SDK asset (uploaded once); anything else -> a ComfyUI input path
   if (p == null || p === true) return null;
   if (!fs.existsSync(p) || fs.statSync(p).isDirectory()) return p;
+  if (opt.json) return `<asset ${p}>`;     // --json prints the graph and sends nothing, so nothing goes up either
   if (!uploads.has(p)) {
     const a = sdk.assets.fromBytes(new Uint8Array(fs.readFileSync(p)), {filename: path.basename(p), contentType: MIME[path.extname(p).toLowerCase()]});
     await a.commit();
     uploads.set(p, a);
   }
   return uploads.get(p);
+}
+
+// A --set value takes the type its input declares on this ComfyUI (a text "false" is true to ComfyUI, a number in a text input
+// is not a number, and a choice is spelled as its list spells it). Where that can't be read (no server, a node it doesn't have,
+// a template type) it is guessed from the text: true/false, a number, else a picture, video or sound of yours, else the text.
+const YES = ["true", "yes", "on", "1"], NO = ["false", "no", "off", "0"];
+async function typed(cls, id, key, v) {
+  const info = await inputsOf(cls), def = info.required?.[key] ?? info.optional?.[key], t = def?.[0], at = `--set ${id}.${key}=${v}`;
+  const l = v.trim().toLowerCase();
+  if (t === "BOOLEAN") { if (!YES.includes(l) && !NO.includes(l)) usage(`${at}: ${key} is true or false`); return YES.includes(l); }
+  if (t === "INT" || t === "FLOAT") {
+    const n = l === "" ? NaN : Number(l);
+    if (!Number.isFinite(n) || (t === "INT" && !Number.isInteger(n))) usage(`${at}: ${key} takes ${t === "INT" ? "a whole number" : "a number"}`);
+    return n;
+  }
+  if (t === "STRING") return v;
+  const choices = Array.isArray(t) ? t : t === "COMBO" && Array.isArray(def[1]?.options) ? def[1].options : null;
+  if (choices) { const c = choices.find(x => String(x) === v); return c !== undefined ? c : await file(v); }   // a choice, or a file of yours to send
+  if (l === "true" || l === "false") return l === "true";
+  return /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : await file(v);
 }
 
 const REQUIRED = {frame: ["prompt"], cast: ["keyframe", "character"], shoot: ["image", "motion"], find: ["video", "target"], transform: ["video", "target"],
@@ -273,13 +295,14 @@ async function build() {
       let g;
       try { g = JSON.parse(fs.readFileSync(wf, "utf8")); } catch (e) { usage(`can't read the workflow ${path.resolve(wf)}: ${e.code === "ENOENT" ? "no such file" : e.message}`); }
       const sets = opt.set.map(s => {
+        if (s === true) usage("--set needs a value: write it as node.input=value");
         const eq = s.indexOf("="), lhs = eq < 0 ? s : s.slice(0, eq), dot = lhs.indexOf(".");
         if (eq < 0 || dot <= 0 || dot === lhs.length - 1) usage(`--set ${s}: write it as node.input=value`);
         const id = lhs.slice(0, dot), key = lhs.slice(dot + 1);
         if (!g[id]?.inputs) usage(`no node ${id} in the workflow`);
         return [id, key, s.slice(eq + 1)];
       });
-      for (const [id, key, v] of sets) g[id].inputs[key] = /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : await file(v);
+      for (const [id, key, v] of sets) g[id].inputs[key] = await typed(g[id].class_type, id, key, v);
       return g;
     }
   }
@@ -336,7 +359,7 @@ if (cmd === "film") {
 }
 
 const graph = await build();
-if (opt.json) { console.log(JSON.stringify(graph, (k, v) => (v && v.filePath !== undefined && v.commit ? `<asset ${v.filePath}>` : v), 2)); process.exit(0); }
+if (opt.json) { console.log(JSON.stringify(graph, null, 2)); process.exit(0); }
 
 const t0 = Date.now();
 const job = await sdk.submit(sdk.workflows.fromJson(await G.respell(graph, inputsOf)));
