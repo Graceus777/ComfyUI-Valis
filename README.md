@@ -76,6 +76,8 @@ on top as cutouts, so a camera that moves finds real paint where a thing stood i
 it, every move plays live in the browser at the still's own resolution, and changing the move, its amount or its length costs
 no render at all. You can also *make the set from words*: Krea 2 paints a 16:9 still and the split runs, in one job.
 
+![Extras · Stage: a still of THE IRON SAINT split into depth layers (the castle, the demon, the knight and the plates behind them), a dolly zoom out paused mid-move, the camera moves and the subject to build the move around on the left](docs/stage.jpg)
+
 **The camera.** Fourteen moves: locked off, push in, pull back, truck left and right, crane up and down, arc left and right,
 dolly zoom in and out, zoom in (lens), drift (a handheld breath) and *show the layers* (the set pulled apart so you can see how
 it was built). A move is built around a layer you pick: a dolly zoom holds it at one size while the room stretches behind it,
