@@ -378,7 +378,7 @@ def run_shot(frames, depth=None, masks=None, fx=None, C=None, t0=0.0, k=0, progr
         if mode == 'dawn':
             warm = smooth((t - EV['final_hit'][0]) / 2.5) if len(EV['final_hit']) else 1
             img = img * (1 + warm * np.array([.18, .06, -.10], np.float32)) + warm * .04
-        if mode == 'call':
+        if mode == 'call' and len(EV['heartbeat']):          # (a score with no heartbeat lane has nothing to dim the frame to)
             img *= 1 - .22 * (1 - min(env(t, EV['heartbeat'], .35) * 1.5, 1)) * smooth((t - EV['heartbeat'][0]) / .5)
         if mode == 'reveal':          # the room holds its breath: the frame closes in on every heartbeat
             img *= 1 - .3 * (1 - min(env(t, EV['heartbeat'], .4) * 1.4, 1))

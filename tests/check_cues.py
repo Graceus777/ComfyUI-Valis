@@ -268,6 +268,18 @@ try:
 except ValueError as e:
     ok(False, "loop: lightning from a negative event time", e)
 
+# the classic Score engine on a score with none of the lanes a mode listens to (no heartbeat, no final hit...): every mode renders
+# (call mode indexed the first heartbeat and raised IndexError)
+from valis_fx import engine as classic  # noqa: E402
+classic.configure({"bar_seconds": 2.0, "beat_seconds": .5, "events": {}, "sections": []})
+plate = [np.random.default_rng(1).integers(0, 255, (48, 64, 3), dtype=np.uint8) for _ in range(2)]
+for mode in ("midnight", "call", "waltz", "build", "drop", "breakdown", "finale", "dawn", "prologue", "reveal"):
+    try:
+        out = classic.run_shot(plate, C={"mode": mode}, t0=0.0)
+        ok(len(out) == 2 and out[0].shape == (48, 64, 3) and out[0].dtype == np.uint8, f"engine: {mode} renders a score with no events")
+    except Exception as e:  # noqa: BLE001
+        ok(False, f"engine: {mode} renders a score with no events", repr(e))
+
 # sheet music: a bar is as long as its meter and its Q: tempo say (the tempo counts the Q: note, not the meter's own):
 # 6/8 at Q:1/4=100 is six eighths, 1.8 s, not six beats of .6 s (3.6 s), so the shots, two bars each, start in the right place
 def _abc(m, unit, q, bars):
