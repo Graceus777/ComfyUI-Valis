@@ -11,7 +11,6 @@ import os
 import sys
 import tempfile
 import threading
-import time
 import types
 
 import numpy as np

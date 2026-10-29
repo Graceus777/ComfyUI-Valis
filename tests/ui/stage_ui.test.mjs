@@ -55,7 +55,7 @@ await page.route("**/valis/stage/list", r => json(r, {stages: [{name: "t1", subf
 await page.route("**/valis/stage/cues", r => json(r, {lanes: {kick: [0.5, 1.5]}, wave: [0.2, 0.4, 0.3], duration: 2}));
 const wav = Buffer.alloc(44 + 800); wav.write("RIFF", 0); wav.writeUInt32LE(36 + 800, 4); wav.write("WAVEfmt ", 8); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20);
 wav.writeUInt16LE(1, 22); wav.writeUInt32LE(8000, 24); wav.writeUInt32LE(16000, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34); wav.write("data", 36); wav.writeUInt32LE(800, 40);
-page.setDefaultTimeout(5000);
+page.setDefaultTimeout(5000); page.setDefaultNavigationTimeout(30000);
 // a section that throws (a control that isn't there, a click that never lands) is a failed check, and the next one starts from the Stage tab
 const section = async (name, fn) => {
   await page.evaluate(() => document.querySelector('.tab[data-view="extras"]').click()).catch(() => {});

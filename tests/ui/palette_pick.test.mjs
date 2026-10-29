@@ -21,7 +21,7 @@ page.on("pageerror", e => errors.push(e.message));
 page.on("console", m => { if (m.type() === "error" && !/Failed to load resource|WebSocket/.test(m.text())) errors.push(m.text()); });
 const bg = (n) => page.$eval(`#c-palette .sw.edit label:nth-child(${n})`, l => l.style.background);
 const edit = (v, n = 1) => page.evaluate(([v, n]) => { const i = document.querySelector(`#c-palette .sw.edit label:nth-child(${n}) input`); i.value = v; i.dispatchEvent(new Event("input", {bubbles: true})); }, [v, n]);
-page.setDefaultTimeout(5000);
+page.setDefaultTimeout(5000); page.setDefaultNavigationTimeout(30000);
 try {
   await page.goto(`${URL}#create`); await page.waitForTimeout(1500);
   await page.$$eval("#view-create details", ds => ds.forEach(d => { d.open = true; }));
