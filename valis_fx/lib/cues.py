@@ -220,31 +220,42 @@ class Cues:
             if not line:
                 continue
             tok = line.split()
-            if tok[0] == "bpm":
-                c.bpm = float(tok[1])
-                if len(tok) > 2:
-                    c.meter = int(tok[2].split("/")[0])
-                continue
-            if tok[0] == "offset":
-                c.offset = float(tok[1]); continue
-            if tok[0] == "ramp":
-                name, t0, v0, t1, v1 = tok[1], tparse(tok[2]), float(tok[3]), tparse(tok[4]), float(tok[5])
-                ramps.setdefault(name, []).append((t0, v0, t1, v1)); continue
-            if tok[0] == "every":
-                m = re.match(r"every\s+([\d./]+)\s*(s|beat|beats|bar|bars)?\s+(?:from\s+(\S+)\s+)?(?:to\s+(\S+)\s+)?(\S+)(?:\s+([\d.]+))?$", line)
-                if not m:
-                    raise ValueError(f"cue sheet: can't read '{raw}'")
-                step = step_parse(m.group(1), m.group(2) or "s")
-                t0 = tparse(m.group(3)) if m.group(3) else 0.0
-                t1 = tparse(m.group(4)) if m.group(4) else (duration or t0 + 8)
-                v = float(m.group(6)) if m.group(6) else 1.0
-                tt = np.arange(t0, t1 - 1e-6, step)
-                lanes.setdefault(m.group(5), []).extend(tt.tolist()); vals.setdefault(m.group(5), []).extend([v] * len(tt))
-                continue
-            t = tparse(tok[0]); lane = tok[1]
-            v = float(tok[2]) if len(tok) > 2 else 1.0
+            word = tok[0].lower()                          # the words of the sheet are not case-sensitive ("BPM 120"); lane names are
+            try:
+                if word == "bpm":
+                    c.bpm = float(tok[1])
+                    if len(tok) > 2:
+                        c.meter = int(tok[2].split("/")[0])
+                    continue
+                if word == "offset":
+                    c.offset = float(tok[1]); continue
+                if word == "ramp":
+                    name, t0, v0, t1, v1 = tok[1], tparse(tok[2]), float(tok[3]), tparse(tok[4]), float(tok[5])
+                    ramps.setdefault(name, []).append((t0, v0, t1, v1)); continue
+                if word == "every":
+                    m = re.match(r"every\s+([\d./]+)\s*(s|beat|beats|bar|bars)?\s+(?:from\s+(\S+)\s+)?(?:to\s+(\S+)\s+)?(\S+)(?:\s+([\d.]+))?$", line, re.I)
+                    if not m:
+                        raise ValueError(f"cue sheet: can't read '{raw}'")
+                    step = step_parse(m.group(1), (m.group(2) or "s").lower())
+                    if not step > 0:
+                        raise ValueError(f"cue sheet: '{raw.strip()}' steps by nothing")
+                    t0 = tparse(m.group(3)) if m.group(3) else 0.0
+                    t1 = tparse(m.group(4)) if m.group(4) else (duration or t0 + 8)
+                    if m.group(4) and t1 < t0 - 1e-6:
+                        raise ValueError(f"cue sheet: '{raw.strip()}' ends before it starts")
+                    v = float(m.group(6)) if m.group(6) else 1.0
+                    tt = np.arange(t0, t1 - 1e-6, step)       # (a range of no length, or a shot shorter than its start, is no hits)
+                    lanes.setdefault(m.group(5), []).extend(tt.tolist()); vals.setdefault(m.group(5), []).extend([v] * len(tt))
+                    continue
+                t = tparse(tok[0]); lane = tok[1]
+                v = float(tok[2]) if len(tok) > 2 else 1.0
+            except (ValueError, IndexError) as e:
+                if str(e).startswith("cue sheet:"):
+                    raise
+                raise ValueError(f"cue sheet: can't read '{raw.strip()}': a line is a time (seconds, or bar:beat) and a lane name, "
+                                 "or bpm, offset, ramp or every") from None
             lanes.setdefault(lane, []).append(t); vals.setdefault(lane, []).append(v)
-        end = duration or max([max(v) for v in lanes.values()] + [r[2] for rs in ramps.values() for r in rs] + [1.0]) + 1.0
+        end = duration or max([max(v) for v in lanes.values() if len(v)] + [r[2] for rs in ramps.values() for r in rs] + [1.0]) + 1.0
         n = int(math.ceil(end * fps)) + 1
         curves = {}
         for name, rs in ramps.items():

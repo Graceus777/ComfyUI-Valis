@@ -40,6 +40,24 @@ for sheet in ("every 1 beat from 0 to 4 kick", "every 1 bar kick", "2:1 kick"):
         ok(False, f"cue sheet '{sheet}' without bpm is a ValueError", repr(e))
 ok(len(Cues.from_schedule("bpm 120 4/4\nevery 1 beat from 1:1 to 2:1 kick").times("kick")) == 4, "cue sheet: a beat grid with a bpm line")
 
+# the words of a sheet are not case-sensitive ("BPM 120" was a float error); lane names are
+c = Cues.from_schedule("BPM 120 4/4\nOffset 0.5\nEvery 1 Beat From 1:1 To 2:1 Kick\nevery 1/2 BEAT from 2:1 to 3:1 Tick 0.5")
+ok(c.bpm == 120 and c.meter == 4 and c.offset == 0.5 and len(c.times("Kick")) == 4 and len(c.times("Tick")) == 8 and "kick" not in c.lanes, "cue sheet: BPM, Offset and Every in capitals", {k: len(v) for k, v in c.lanes.items()})
+ok(c.vals["Tick"][0] == 0.5, "cue sheet: (and the velocity after a capital Every)")
+# an every range with no length is no hits, not a crash (max() of an empty lane); one that runs backwards, or steps by nothing, says so
+c = Cues.from_schedule("bpm 120 4/4\nevery 1 beat from 3:1 to 3:1 pulse\n1.0 hit")
+ok(len(c.times("pulse")) == 0 and len(c.times("hit")) == 1 and c.duration > 1.0, "cue sheet: an every range of no length is no hits", {k: len(v) for k, v in c.lanes.items()})
+ok(len(Cues.from_schedule("bpm 120 4/4\nevery 1 beat from 9:1 shock", duration=4.0).times("shock")) == 0, "cue sheet: an every line that starts after a short shot's end is no hits")
+for sheet, want in (("bpm 120 4/4\nevery 1 beat from 7:1 to 3:1 pulse", "ends before it starts"), ("every 0s x", "steps by nothing"), ("every 0 s from 1 to 3 x", "steps by nothing"),
+                    ("bpm", "can't read 'bpm'"), ("wobble 2", "can't read 'wobble 2'"), ("1.0 kick\nramp op 0 1", "can't read 'ramp op 0 1'"), ("2", "can't read '2'")):
+    try:
+        Cues.from_schedule(sheet)
+        ok(False, f"cue sheet {sheet!r} is refused")
+    except ValueError as e:
+        ok(want in str(e) and "float" not in str(e), f"cue sheet {sheet!r} says what is wrong", e)
+    except Exception as e:  # noqa: BLE001
+        ok(False, f"cue sheet {sheet!r} is a ValueError", repr(e))
+
 # sheet music: a note's strength is 0.6 to 1, not its MIDI number; a chord change is a hit of 1
 ABC = """X:1
 T:t
