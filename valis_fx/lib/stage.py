@@ -974,8 +974,11 @@ def apply_plate(folder, meta, rgba, plate, names, reach=0.015, keep_prev=False, 
         out[out[..., 3] == 0, :3] = 0
         cv2.imwrite(stage_file(folder, L["image"]), cv2.cvtColor(out, cv2.COLOR_RGBA2BGRA))
     prev = meta.get("plate") if keep_prev else None
-    meta["plate"] = {"image": (prev or {}).get("image", image), **({"image_main": image} if prev else {}), "removed": sorted(set(names) | set((prev or {}).get("removed", []))),
-                     "not_removed": [n for n in failed if n not in (prev or {}).get("removed", [])],
+    removed = sorted(set(names) | set((prev or {}).get("removed", [])))
+    # what an earlier pass found standing stays standing unless this pass took it out (a second pass only looks at the biggest thing)
+    standing = [n for n in dict.fromkeys([*(prev or {}).get("not_removed", []), *failed]) if n not in removed]
+    meta["plate"] = {"image": (prev or {}).get("image", image), **({"image_main": image} if prev else {}), "removed": removed,
+                     "not_removed": standing,
                      "painted": sorted(set(changed) | set((prev or {}).get("painted", []))),
                      "lights": sorted(set(lights) | set((prev or {}).get("lights", [])))}
     return names

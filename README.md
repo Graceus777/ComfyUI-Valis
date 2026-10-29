@@ -233,7 +233,8 @@ Every command and flag is in [docs/cli.md](docs/cli.md).
   the key heard in a song, the effects that should be heard, and every classic Score engine mode on a score with no events
   (no ComfyUI, no GPU).
 - `python tests/check_stage.py`: a stage folder's files stay inside the folder (a crafted `stage.json` can't read or
-  overwrite pictures elsewhere), the plate still paints a stage's own layers, an erased thing keeps its layer, and Stage Fill
+  overwrite pictures elsewhere), the plate still paints a stage's own layers, a second pass at the plate keeps what the first
+  left standing, an erased thing keeps its layer, and Stage Fill
   paints only what is hidden (the first frame stays the still) (no ComfyUI, no GPU).
 - `python tests/check_stage_routes.py`: the Stage export routes on a real aiohttp server with a stand-in for PyAV: encoding runs
   off the server's loop, and an export that fails, repeats its id, is aborted or goes quiet is closed and its half-written

@@ -94,6 +94,30 @@ ok(raises(S.apply_plate, folder, json.loads(json.dumps(meta)), [x.copy() for x i
 names = S.apply_plate(folder, meta, [x.copy() for x in rgba], plate, ["front"])
 ok(names == ["front"] and os.path.exists(os.path.join(folder, "plate.png")) and meta["plate"]["painted"] == ["sky"], "stage: apply_plate still paints a stage's own layers", (names, meta.get("plate")))
 
+# a second pass at the plate (the biggest thing alone, when the first plate left it standing) keeps what the first pass found:
+# the other thing that plate left standing is still not removed
+folder2 = os.path.join(root, "stage2")
+rng2 = np.random.default_rng(5)
+def _thing(y0, y1, x0, x1, z):
+    a = np.zeros((H, W, 4), np.float32)
+    a[y0:y1, x0:x1, :3] = rng2.uniform(.1, .9, (y1 - y0, x1 - x0, 3)); a[y0:y1, x0:x1, 3] = 1       # textured, so a plate either has it or doesn't
+    return a
+big, small = _thing(20, 70, 10, 60, 5.), _thing(30, 46, 90, 106, 6.)
+hole2 = np.zeros((H, W), bool); hole2[20:70, 10:60] = True; hole2[30:46, 90:106] = True
+layers2 = [dict(name="sky", rgba=sky, z=np.full((H, W), 50., np.float32), z_med=50., area=1., bbox=[0, 0, W - 1, H - 1], backdrop=True, hole=hole2),
+           dict(name="small", rgba=small, z=np.full((H, W), 6., np.float32), z_med=6., area=.05, bbox=[90, 30, 105, 45], backdrop=False),
+           dict(name="big", rgba=big, z=np.full((H, W), 5., np.float32), z_med=5., area=.3, bbox=[10, 20, 59, 69], backdrop=False)]
+S.save(folder2, layers2, dict(far=100.0, width=W, height=H), source="t")
+meta2 = json.load(open(os.path.join(folder2, "stage.json")))
+rgba2 = S.load_layers(folder2, meta2)
+still2 = S.composite([{"rgba": x} for x in rgba2])
+empty = np.clip(np.full((H, W, 3), .5, np.float32) + rng2.normal(0, .02, (H, W, 3)).astype(np.float32), 0, 1)
+S.apply_plate(folder2, meta2, [x.copy() for x in rgba2], still2.copy(), ["big", "small"])                    # the first plate removed nothing
+ok(meta2["plate"]["removed"] == [] and sorted(meta2["plate"]["not_removed"]) == ["big", "small"], "stage: a plate that removed nothing says so", meta2.get("plate"))
+S.apply_plate(folder2, meta2, [x.copy() for x in rgba2], empty, ["big"], keep_prev=True, image="plate_main.png")   # the main plate removed the big one
+ok(meta2["plate"]["removed"] == ["big"], "stage: the second pass removed the biggest", meta2.get("plate"))
+ok(meta2["plate"]["not_removed"] == ["small"], "stage: and the thing the first plate left standing is still not removed", meta2.get("plate"))
+
 # erase first: a thing that was erased keeps its layer wherever it stands in the depth order and however big it is. The
 # farthest of the things came out as the farthest layer, which is a backdrop, and a backdrop there was thrown away (no layer,
 # so no parallax, and the checks still passed)
