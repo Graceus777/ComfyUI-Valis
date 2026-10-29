@@ -84,7 +84,7 @@ export function gradePixels(px, W, H, lk, {strength = 1, scale = 1, seed = 0, t 
     if (doGam) { r = r ** gam[0]; g = g ** gam[1]; bl = bl ** gam[2]; }
     if (doGain) { r *= gain[0]; g *= gain[1]; bl *= gain[2]; }
     if (c) {
-      const sc = (v) => { let s = 1 / (1 + Math.exp(-k * (v - p))); s = (s - s0) / (s1 - s0); return c > 0 ? v + (s - v) * c : v + (v - s) * c * .5; };
+      const sc = (v) => { let s = 1 / (1 + Math.exp(-k * (v - p))); s = (s - s0) / (s1 - s0); return c > 0 ? v + (s - v) * c : v - (v - s) * c * .5; };
       r = sc(r); g = sc(g); bl = sc(bl);
     }
     let L = r * LUMA[0] + g * LUMA[1] + bl * LUMA[2];

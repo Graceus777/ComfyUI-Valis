@@ -25,8 +25,9 @@ const m = await import(process.argv[1]);
 const px = new Float32Array(JSON.parse(require("fs").readFileSync(0, "utf8")));
 const out = {};
 for (const p of (await import(process.argv[2])).PALETTES) out[p.id] = Array.from(m.gradePixels(px, %d, %d, {...m.lookParams(p.id), grain: 0}, {scale: 1}));
+for (const c of [-.4, 0, .4]) out["soft_palette@" + c] = Array.from(m.gradePixels(px, %d, %d, {...m.lookParams("soft_palette"), grain: 0, contrast: c}, {scale: 1}));
 console.log(JSON.stringify(out));
-""" % (W, H)
+""" % (W, H, W, H)
 r = subprocess.run(["node", "--input-type=module", "-e", js, "file://" + os.path.join(ROOT, "app", "js", "grade.js").replace("\\", "/"),
                     "file://" + os.path.join(ROOT, "app", "js", "palettes.js").replace("\\", "/")],
                    input=json.dumps(img.reshape(-1).tolist()), capture_output=True, text=True)
@@ -41,4 +42,21 @@ for k in pal.LOOKS:
     worst = max(worst, d.mean())
     print(f"{k:16s} mean {d.mean():5.2f}  p99 {np.percentile(d, 99):6.2f} levels")
 print("worst mean difference:", round(worst, 2), "levels")
-sys.exit(0 if worst < 3 else 1)
+
+# contrast below 0 flattens the picture, above 0 deepens it, in both (a negative one used to deepen it, half as much)
+spread = lambda a: float(np.std(np.asarray(a, np.float32).reshape(-1, 3).mean(-1)))
+py_s = {c: spread(pal.grade(img, pal.Look(pal.LOOKS["soft_palette"], grain=0, contrast=c))) for c in (-.4, 0, .4)}
+js_s = {c: spread(jsout[f"soft_palette@{c}"]) for c in (-.4, 0, .4)}
+bad = []
+for name, s_ in (("palette.py", py_s), ("grade.js", js_s)):
+    print(f"{name} contrast -.4 / 0 / +.4: spread {s_[-.4]:.4f} / {s_[0]:.4f} / {s_[.4]:.4f}")
+    if not s_[-.4] < s_[0] < s_[.4]:
+        bad.append(name)
+for c in (-.4, .4):
+    d = np.abs(pal.grade(img, pal.Look(pal.LOOKS["soft_palette"], grain=0, contrast=c)) - np.asarray(jsout[f"soft_palette@{c}"], np.float32).reshape(H, W, 3)).mean() * 255
+    print(f"contrast {c}: palette.py and grade.js differ by {d:.2f} levels")
+    if d > 3:
+        bad.append(f"palette.py and grade.js at contrast {c}")
+if bad:
+    print("FAIL negative contrast must flatten and positive deepen:", ", ".join(bad))
+sys.exit(0 if worst < 3 and not bad else 1)

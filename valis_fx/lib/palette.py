@@ -104,7 +104,7 @@ def grade(img, look, strength=1.0, t=0, seed=0):
         s = 1 / (1 + np.exp(np.float32(-k) * (x - np.float32(p))))
         s0, s1 = 1 / (1 + math.exp(k * p)), 1 / (1 + math.exp(-k * (1 - p)))
         s = (s - s0) / (s1 - s0)
-        x = x + (s - x) * c if c > 0 else x + (x - s) * c * .5
+        x = x + (s - x) * c if c > 0 else x - (x - s) * c * .5        # (c < 0 flattens: away from the S-curve, half as far)
     # saturation and vibrance
     L = _luma(x)[..., None]
     x = L + (x - L) * lk.sat
