@@ -21,7 +21,7 @@ const STATS = {system: {os: "nt", ram_total: 31.9e9, ram_free: 9.9e9, comfyui_ve
   devices: [{name: "cuda:0 NVIDIA GeForce RTX 4080 Laptop GPU : cudaMallocAsync", type: "cuda", index: 0, vram_total: 12878086144, vram_free: 9589650372}]};
 const TYPES = {".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg",
   ".webm": "video/webm", ".mp4": "video/mp4", ".mp3": "audio/mpeg", ".wav": "audio/wav", ".woff2": "font/woff2", ".ttf": "font/ttf", ".svg": "image/svg+xml", ".gif": "image/gif"};
-const UPLOADS = [];
+const UPLOADS = [], IMAGES = [];
 const send = (res, code, body, type = "application/json") => { res.writeHead(code, {"Content-Type": type, "Cache-Control": "no-cache"}); res.end(typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body)); };
 function file(res, p, head = false) {
   if (!fs.existsSync(p) || !fs.statSync(p).isFile()) return send(res, 404, "not found", "text/plain");
@@ -65,6 +65,16 @@ const server = http.createServer((req, res) => {
     }
     return send(res, 404, {error: {code: "not_found", message: "no"}});
   }
+  // ComfyUI's /upload/image (the picture a Film plan holds as one of its input files): kept in a list, answered as ComfyUI does
+  if (p === "/upload/image" && req.method === "POST") {
+    const chunks = []; req.on("data", c => chunks.push(c)); req.on("end", () => {
+      const body = Buffer.concat(chunks).toString("latin1"), field = (n) => (new RegExp(`name="${n}"\\r\\n\\r\\n([^\\r]*)`).exec(body) || [])[1];
+      const name = (/name="image"; filename="([^"]*)"/.exec(body) || [])[1] || "image.png";
+      IMAGES.push({name, subfolder: field("subfolder") || "", type: field("type") || "input", bytes: body.length});
+      send(res, 200, {name, subfolder: field("subfolder") || "", type: field("type") || "input"});
+    }); return;
+  }
+  if (p === "/__images") return send(res, 200, IMAGES);
   if (p === "/__uploads") return send(res, 200, UPLOADS);
   if (p === "/free" || p === "/interrupt") return send(res, 200, {});
   send(res, 404, "not found", "text/plain");

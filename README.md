@@ -237,6 +237,8 @@ Every command and flag is in [docs/cli.md](docs/cli.md).
   (`tests/ui/mock_server.mjs`), with a screenshot of every screen.
 - `node tests/ui/film_save.test.mjs`: the Film tab's saves: a reopened film keeps its shot length, your own song survives a
   reload, and a save waiting when you switch films lands in its own film.
+- `node tests/ui/film_still.test.mjs`: a still dropped on Create from disk and sent to a Film shot is kept as one of ComfyUI's
+  input files, once, never as a blob: URL.
 - `node tests/ui/score_open.test.mjs`: a Valis score you open is shown as text, whatever its title, bars or names hold.
 - `node tests/ui/stage_export.test.mjs`: Stage's MP4 export on a stand-in server: a frame that fails to upload gets the export
   dropped, and two stages opened at once, or one opened during an export, never mix their layers.

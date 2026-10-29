@@ -11,7 +11,7 @@ import {FxView} from "./fx.js";
 import {checkSetup, OPTIONAL} from "./check.js";
 import {planFilm, makeFilm, makeSong, frameShots, shootShots, chainShot, effectShots, cutFilm, SHOT_SECONDS, shotLen, songSeconds, songShort, cutOf, lookOf,
         makeRefs, makeSetups, makeFrames, byName, keyStale, sheetPrompt, filmLanes, laneOf, useOwnSong} from "./film.js";
-import {drawBuild, cropEditor} from "./filmbuild.js";
+import {drawBuild, cropEditor, uploadImage} from "./filmbuild.js";
 import * as R from "./refengine.js";
 import {Bin} from "./bin.js";
 import * as MC from "./machine.js";
@@ -223,7 +223,7 @@ function buildCreate() {
   dropzone($("#c-viewer"), "image/*", async (f) => {
     const u = await api.upload(f), ref = api.inputRef(u), url = URL.createObjectURL(f);
     const t = h("div", {class: "thumb"}, h("img", {src: url}), h("div", {class: "meta"}, "your still"));
-    const it = {ref, url, filename: f.name};
+    const it = {ref, url, filename: f.name, file: f};
     t.onclick = () => pickKey(it, t); $("#c-strip").prepend(t); pickKey(it, t);
   });
 }
@@ -1432,9 +1432,21 @@ function filmReturnBar() {
   if (!FILM_RETURN || FILM_RETURN.tag !== M.plan?.tag) { bar?.remove(); return; }
   const k = FILM_RETURN.k, el = bar || h("div", {id: "c-film-return", class: "filmret"});
   el.replaceChildren(h("span", {}, `Working on ${M.plan.title}, shot ${k + 1}`),
-    h("button", {class: "btn small", type: "button", tip: "The keyframe picked here becomes the film's still for this shot", onclick: () => {
-      if (!C.picked?.filename) return toast("Pick a keyframe first", true);
-      toShot(k, {kind: "still", file: C.picked}); show("film"); }}, "Use the picked still"),
+    h("button", {class: "btn small", type: "button", tip: "The keyframe picked here becomes the film's still for this shot", onclick: async (e) => {
+      const p = C.picked, tag = M.plan.tag;
+      if (!p?.filename) return toast("Pick a keyframe first", true);
+      const b = e.currentTarget;
+      let file = p;
+      // a picture dropped from disk is an upload handle and a blob: URL, which a plan can't hold: put it into ComfyUI's
+      // input folder, once, and the plan holds that file like any result
+      if (p.ref) {
+        b.disabled = true;
+        try { file = p.planFile ||= await uploadImage(p.file); }
+        catch (er) { return toast(`Couldn't send the still to the film: ${er.message}`, true); }
+        finally { b.disabled = false; }
+        if (M.plan?.tag !== tag) return toast("The film changed while the still was uploading: pick it again", true);
+      }
+      toShot(k, {kind: "still", file}); show("film"); }}, "Use the picked still"),
     h("button", {class: "btn small", type: "button", tip: "The last shot made here becomes the film's shot", onclick: () => {
       const v = Bin.items.find(i => i.kind === "clip" && i.from === "Create");
       if (!v) return toast("Shoot it here first", true);
