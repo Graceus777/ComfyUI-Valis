@@ -253,6 +253,8 @@ Every command and flag is in [docs/cli.md](docs/cli.md).
   no window listeners.
 - `node tests/ui/film_build.test.mjs`: the Film tab's reference, set and frame cards: renaming a character follows into every
   frame's "gone" list, and a setup or frame named with a colon can be picked.
+- `node tests/ui/palette_pick.test.mjs`: Create's colour picker keeps the swatch's input through every change made in it (the
+  browser's picker is open on that input), and the name and reset button follow the edit.
 - `node tests/ui/film_still.test.mjs`: a still dropped on Create from disk and sent to a Film shot is kept as one of ComfyUI's
   input files, once, never as a blob: URL.
 - `node tests/ui/score_open.test.mjs`: a Valis score you open is shown as text, whatever its title, bars or names hold.

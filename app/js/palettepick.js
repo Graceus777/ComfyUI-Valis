@@ -22,19 +22,33 @@ export function palettePicker(el, opts) {
   const head = h("div", {class: "pp-head"});
   const menu = h("div", {class: "pp-menu"});
   // ---- the chosen look: name, editable swatches, reset
+  // The swatches are inputs the picker is open on: they are built once per look and left alone while one is dragged (replacing
+  // the input under the picker ended it after its first change); only the name and the buttons beside them follow an edit.
+  let nameEl = null, btnsEl = null;
+  const colsOf = () => cur.hex || (cur.id === "auto" || cur.id === "natural" ? null : swOf(cur.id));
+  function drawLabels() {
+    const edited = !!cur.hex, base = cur.id, cols = colsOf();
+    nameEl.textContent = edited ? `${base === "custom" ? "Your colours" : name(base) + " · your colours"}` : name(base);
+    btnsEl.replaceChildren(
+      ...(edited ? [h("button", {class: "linkbtn", type: "button", tip: "Back to the look's own colours", onclick: () => set({id: base === "custom" ? "natural" : base})}, "reset")] : []),
+      h("button", {class: "linkbtn", type: "button", tip: "Start from any colours you like: 2 to 5, darkest to lightest",
+        onclick: () => set({id: "custom", hex: cur.hex || (cols && cols.length ? cols : ["#14141c", "#5a6a7a", "#d8c8a8"])})}, cur.id === "custom" ? "" : "custom"));
+  }
   function drawHead() {
-    const edited = !!cur.hex, base = cur.id;
-    const cols = cur.hex || (base === "auto" || base === "natural" ? null : swOf(base));
+    const base = cur.id, cols = colsOf();
     const sw = cols ? h("span", {class: "sw edit"}, ...cols.map((c, i) => {
       const inp = h("input", {type: "color", value: c, tip: "Change this colour. Left to right: the shot's shadows to its highlights."});
-      inp.addEventListener("input", () => { const hex = [...(cur.hex || cols)]; hex[i] = inp.value; set({id: base, hex}, {keepMenu: true}); });
-      return h("label", {style: `background:${c}`}, inp);
+      const lab = h("label", {style: `background:${c}`}, inp);
+      inp.addEventListener("input", () => {
+        lab.style.background = inp.value;
+        const hex = [...(cur.hex || cols)]; hex[i] = inp.value;
+        set({id: base, hex}, {keepMenu: true, keepSwatches: true});
+      });
+      return lab;
     })) : h("span", {class: "pp-none"}, base === "auto" ? "the genre's colours" : "no grade");
-    head.replaceChildren(
-      h("div", {class: "pp-cur"}, h("b", {}, edited ? `${base === "custom" ? "Your colours" : name(base) + " · your colours"}` : name(base)), sw,
-        edited ? h("button", {class: "linkbtn", type: "button", tip: "Back to the look's own colours", onclick: () => set({id: base === "custom" ? "natural" : base})}, "reset") : null,
-        h("button", {class: "linkbtn", type: "button", tip: "Start from any colours you like: 2 to 5, darkest to lightest",
-          onclick: () => set({id: "custom", hex: cur.hex || (cols && cols.length ? cols : ["#14141c", "#5a6a7a", "#d8c8a8"])})}, cur.id === "custom" ? "" : "custom")));
+    nameEl = h("b", {}); btnsEl = h("span", {style: "display:contents"});
+    head.replaceChildren(h("div", {class: "pp-cur"}, nameEl, sw, btnsEl));
+    drawLabels();
   }
   // ---- the menu: one row per kind, collapsed; each look with its colours
   const item = (p) => {
@@ -77,9 +91,9 @@ export function palettePicker(el, opts) {
     }
     prevLbl.textContent = look === cur ? `${name(look.id)}${look.hex ? " · your colours" : ""}` : `hover: ${name(look.id)}`;
   }
-  function set(look, {keepMenu = false, quiet = false} = {}) {
+  function set(look, {keepMenu = false, keepSwatches = false, quiet = false} = {}) {
     cur = {...look};
-    drawHead();
+    if (keepSwatches && nameEl) drawLabels(); else drawHead();
     if (!keepMenu) $$(".pp-item", menu).forEach(b => b.classList.toggle("on", b.dataset.id === cur.id && !cur.hex));
     drawPreview(cur);
     if (!quiet) opts.onChange?.(cur);
