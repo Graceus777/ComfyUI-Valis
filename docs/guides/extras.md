@@ -302,7 +302,7 @@ before you look:
 | No ghost outlines | hiding each thing leaves no edge along its outline on what's behind it |
 | Names found one thing each | no name was dropped (SAM 3 found nothing) or read as much more than one thing |
 | The things were erased | every thing to erase really went (erase-first stages only) |
-| Few torn triangles | under 1% of what shows at rest sits on a depth jump the renderer tears |
+| Few torn triangles | under 0.2% of what shows at rest sits on a depth jump the renderer tears (the split makes each layer's depth gentle enough that it is none: a torn triangle at rest is a dash or a hairline in the first frame) |
 | Real paint behind the things | under half of the paint a move uncovers next to the things is guessed (smeared) rather than real |
 
 A broad name is one that took more than 35% of the frame or runs through half the scene's depth, unless it names

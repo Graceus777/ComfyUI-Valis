@@ -200,5 +200,65 @@ fo3, mt3, _ = _fill_stage()
 half = cv2.resize(magenta, (80, 60), interpolation=cv2.INTER_AREA)
 ok(S.apply_fill(fo3, mt3, [(0, half), (1, half)]) == ["sky"], "fill: a picture of another size is fitted, and a layer without a hole is skipped")
 
+# ---- no tear at rest: the studio drops a triangle where fwidth(z) / z passes 0.08, and a layer's depth map has steps
+# that do it in the very first frame (dashes and hairlines the still never had); and a mask leaves crumbs that float
+def worst_tear(zd, out_h, step=4):
+    """the studio's measure, over every phase of the mesh and both triangles of a cell"""
+    cell, worst = step * out_h / zd.shape[0], 0.0
+    for oy in range(step):
+        for ox in range(step):
+            g = zd[oy::step, ox::step]
+            a, b, c, d = g[:-1, :-1], g[:-1, 1:], g[1:, :-1], g[1:, 1:]
+            worst = max(worst, float(np.maximum((abs(b - a) + abs(c - a)) / a, (abs(d - c) + abs(d - b)) / d).max() / cell))
+    return worst
+
+
+H2, W2 = 360, 480
+zs = np.full((H2, W2), 1.2, np.float32); zs[:, 240:] = 3.0           # a depth edge
+zs[100, 20:200] = 0.6                                                 # a one-pixel crease
+for oh in (720, 1080):
+    ok(worst_tear(zs, oh) > 0.08, f"tame: the control depth tears at {oh} px", worst_tear(zs, oh))
+    ok(worst_tear(S._tame_depth(zs, out_h=oh), oh) <= 0.08, f"tame: and is gentle enough after (worst {worst_tear(S._tame_depth(zs, out_h=oh), oh):.3f}) at {oh} px")
+zt = S._tame_depth(zs)
+ok(worst_tear(zt, 720) <= 0.08 and worst_tear(zt, 1080) <= 0.08, "tame: made for the 720 px preview it holds at 1080 too")
+ok(float(np.abs(zt[200:, :20] - 1.2).max()) < 1e-4 and float(np.abs(zt[:, -20:] - 3.0).max()) < 1e-4, "tame: far from the edge and the crease the depth is as it was")
+ok(float(zt[:, 239].mean()) > 1.2 and float(zt[:, 240].mean()) < 3.0, "tame: the edge became a ramp centred on it", (float(zt[:, 239].mean()), float(zt[:, 240].mean())))
+ramp = np.tile(np.linspace(1.0, 1.6, W2, dtype=np.float32), (H2, 1))
+ok(float(np.abs(S._tame_depth(ramp) - ramp).max()) < 1e-4, "tame: a depth that is already gentle (a floor receding) is left alone")
+ok(float(np.abs(S._tame_depth(zt) - zt).max()) < 2e-3, "tame: taming twice changes nothing more")
+own = np.zeros((100, 120), np.int32)
+own[:, 60:] = 1
+own[10:15, 10:15] = 1            # a crumb of layer 1 in layer 0
+own[50:52, 80:82] = 0            # a crumb of layer 0 in layer 1
+own[80:84, 5:9] = 2              # layer 2 is only a small thing: it stays
+own[40:70, 20:50] = 1            # layer 1 has a real piece inside layer 0 (900 px): it stays
+dd = S._despeckle(own, 64)
+ok(bool((dd[10:15, 10:15] == 0).all()) and bool((dd[50:52, 80:82] == 1).all()), "despeckle: a crumb goes to the layer round it")
+ok(bool((dd[80:84, 5:9] == 2).all()), "despeckle: a layer's biggest piece stays, small as it is")
+ok(bool((dd[40:70, 20:50] == 1).all()) and int((dd != own).sum()) == 25 + 4, "despeckle: a real piece stays and nothing else changes", int((dd != own).sum()))
+# the whole build: thin creases in a layer's depth (no layer of their own: a layer is cut at a big jump, not at a line)
+# come out with no tear at rest
+rng = np.random.default_rng(3)
+im = np.clip(np.linspace(.2, .8, 540)[None, :, None] * np.ones((720, 1, 3)) + rng.normal(0, .02, (720, 540, 3)), 0, 1).astype(np.float32)
+near = np.full((720, 540), .5, np.float32); near[:, 200:202] = .05; near[300:302, :] = .05
+near += np.linspace(0, .1, 720)[:, None].astype(np.float32)
+mk = np.zeros((720, 540), np.float32); mk[216:504, 324:486] = 1                           # one thing
+
+
+def tears_of():
+    ly, inf = S.build(im, near, [mk], ["the thing"], far=6.0)
+    return next(c for c in inf["checks"] if c["id"] == "tears")
+
+
+tc = tears_of()
+ok(tc["ok"] and tc["value"] == 0, "build: no depth step tears at rest", tc)
+keep = S._tame_depth
+S._tame_depth = lambda zd, **k: zd                      # the control: the same build without the fix
+try:
+    tc0 = tears_of()
+finally:
+    S._tame_depth = keep
+ok(tc0["value"] > 0.01 and not tc0["ok"], "build: (without it the same picture tears %.1f%% of what shows at rest)" % (100 * tc0["value"]), tc0["value"])
+
 print(f"{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)

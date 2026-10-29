@@ -381,6 +381,7 @@ def build(image, nearness, masks, names, far=6.0, threshold=0.5, edge=1.5, min_a
     # the rest is one more layer with per-pixel depth; it slots into the order by its median
     plate_i = len(cand)
     owner[rest] = plate_i
+    owner = _despeckle(owner, max(64, int(round(0.0002 * h * w))))
     allnames = [c[0] for c in cand] + [PLATE]
     zmed = meds + [float(np.median(z[rest])) if rest.any() else far]
     pos = 0
@@ -458,6 +459,11 @@ def build(image, nearness, masks, names, far=6.0, threshold=0.5, edge=1.5, min_a
             parts = _part_depths(zl, own, own | ext, li, owner, z_drawn, zmed, is_bd, lum, cores[li] if li < len(cores) else None)
             if parts is not None:
                 zl, relief = parts
+        # no triangle of this layer may tear at rest (see _tame_depth): the depth as the studio draws it, made gentle
+        rel = 1.0 if backdrop else (relief if relief is not None else 0.35)       # 0.35: the studio's default for a thing
+        if rel > 1e-3:
+            zd = _tame_depth(zmed[li] + (zl - zmed[li]) * rel)
+            zl = (zmed[li] + (zd - zmed[li]) / rel).astype(np.float32)
         # alpha: soft at the outer edge of the support only
         a = support.astype(np.float32)
         if edge > 0:
@@ -528,6 +534,65 @@ def _rest_far(z, rest, w, jump=0.08, min_part=0.02):
     if np.median(z[farm]) < np.median(z[nearm]) * (1 + jump):
         return None
     return farm
+
+
+def _despeckle(owner, min_px):
+    """A layer's pixels come from a mask (SAM's, or what no mask claimed), and a mask leaves crumbs: a few dozen pixels
+    of the rest inside the farther plate, a flake of an object's edge out in the sky. Each is a card of its own at its
+    own depth, so on a move it floats off the paint around it as a dash or a pale blob. An island smaller than `min_px`
+    goes to the layer all round it (a layer's biggest piece always stays: a thing that is small is still a thing).
+    At rest nothing changes: the paint under it is the still's, whichever layer holds it."""
+    out = owner.copy()
+    h, w = owner.shape
+    eight = np.ones((3, 3), np.uint8)
+    for li in np.unique(owner):
+        lab, n = ndi.label(owner == li, structure=eight)
+        if n <= 1:
+            continue
+        size = np.bincount(lab.ravel())[1:]
+        big = int(np.argmax(size)) + 1
+        for j, sl in enumerate(ndi.find_objects(lab), 1):
+            if j == big or size[j - 1] >= min_px:
+                continue
+            y0, y1, x0, x1 = max(sl[0].start - 2, 0), min(sl[0].stop + 2, h), max(sl[1].start - 2, 0), min(sl[1].stop + 2, w)
+            m = lab[y0:y1, x0:x1] == j
+            ring = (cv2.dilate(m.astype(np.uint8), eight) > 0) & ~m
+            around = owner[y0:y1, x0:x1][ring]
+            if around.size:
+                out[y0:y1, x0:x1][m] = np.bincount(around).argmax()
+    return out
+
+
+def _lower_envelope(f, a):
+    """min over q of f(q) + a * |p - q|_1: the largest function under f that changes by at most `a` per pixel along each
+    axis. The city-block metric separates, so it is two scans per axis."""
+    g = np.array(f, np.float32, copy=True)
+    for _ in (0, 1):
+        for i in range(1, g.shape[0]):
+            np.minimum(g[i], g[i - 1] + a, out=g[i])
+        for i in range(g.shape[0] - 2, -1, -1):
+            np.minimum(g[i], g[i + 1] + a, out=g[i])
+        g = np.ascontiguousarray(g.T)
+    return g
+
+
+def _tame_depth(zd, out_h=720, step=4, tear=0.08, margin=0.9):
+    """The studio drops a triangle where fwidth(z) / z passes `tear` (u_tear in stage3d.js), so the layer behind shows
+    through it. The mesh has a vertex every `step` px, so a depth that changes by more than about tear * step * out_h / h
+    between two neighbours is dropped, and that happens at rest, in the very first frame, wherever the depth map has a
+    steep step inside one layer (a castle's roofline, a crease in the mist): the exported move showed it as dashes and
+    hairlines the still never had. Here the depth is made to change by at most that much per vertex step, in every
+    direction, and no more: the mean of the lower and the upper envelope of its log, which leaves a depth that is already
+    gentle alone and turns a steep step into a ramp centred on it (a rubber sheet, as moves show it, instead of a hole).
+    `zd` is the depth as drawn (z_med + (z - z_med) * relief). `out_h` is the preview's height: smaller than an
+    export, so a depth tame for the preview is tame for every size.
+    Returns zd, changed only where it was steeper than that."""
+    h = zd.shape[0]
+    lz = np.log(np.maximum(zd, 1e-3)).astype(np.float32)
+    a = np.float32(tear * margin * out_h / (2.0 * h))             # per px, along each axis: step px later it is at most half a triangle's allowance
+    lo = _lower_envelope(lz, a)
+    hi = -_lower_envelope(-lz, a)
+    return np.exp((lo + hi) * 0.5).astype(np.float32)
 
 
 def _near01(nearness, w, h):
@@ -1685,7 +1750,7 @@ def scorecard(layers, still, info, step=4, out_h=1080, tear=0.08):
             if sp > 0 and tp / sp > 0.01:
                 per.append({"layer": L["name"], "share": round(tp / sp, 3)})
         share = torn_px / max(1.0, shown_px)
-        out.append({"id": "tears", "name": "Few torn triangles", "ok": share < 0.01, "value": round(share, 4), "layers": per,
+        out.append({"id": "tears", "name": "Few torn triangles", "ok": share < 0.002, "value": round(share, 4), "layers": per,
                     "note": f"{100 * share:.2f}% of what shows at rest sits on a depth jump the renderer tears" +
                             (" (" + ", ".join(f"{p['layer']} {100 * p['share']:.1f}%" for p in per) + ")" if per else "")})
     except Exception as e:
