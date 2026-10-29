@@ -72,5 +72,22 @@ ok(abs(r["take"]["grain"] / 8 - 1) < .08 and abs(r["reference"]["grain"] / 2 - 1
 r = M.preflight(take, [ONE] * 3, noisy(8))
 ok(not any(w.startswith("grain") for w in r["warnings"]), "swap check: the same grain on both is not a warning", r["warnings"])
 
+# the light wrap puts the backdrop's light on the subject's rim, not a halo in the backdrop round it
+import cv2  # noqa: E402
+bright = np.where(np.arange(W)[None, :, None] < W // 2, .1, .9).astype(np.float32) * np.ones((H, 1, 3), np.float32)
+subject = np.zeros((H, W), np.float32)
+subject[50:130, 70:170] = 1
+swap = np.full((H, W, 3), .5, np.float32)
+kw = dict(color=0.0, grain=False, soften=False)
+base = M.postmatch([bright], [swap], [subject], wrap=0, **kw)[0]
+wrapped = M.postmatch([bright], [swap], [subject], wrap=.5, **kw)[0]
+dist = cv2.distanceTransform((1 - subject).astype(np.uint8), cv2.DIST_L2, 5)
+halo = (dist >= 6) & (dist <= 12)
+rim = (subject > .5) & (cv2.distanceTransform(subject.astype(np.uint8), cv2.DIST_L2, 5) <= 4)
+delta = np.abs(wrapped - base).max(-1)
+ok(delta[halo].max() < .002, "light wrap: nothing is added to the backdrop round the subject (largest change %.4f)" % delta[halo].max(), delta[halo].max())
+ok(delta[rim].max() > .03 and (wrapped - base)[rim].mean() > 0, "light wrap: the subject's rim takes the backdrop's light (largest change %.3f)" % delta[rim].max(), delta[rim].max())
+ok(delta[(subject > .5) & ~rim].max() < .002, "light wrap: and only the rim (the middle of the subject is as it was)", delta[(subject > .5) & ~rim].max())
+
 print(f"{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)

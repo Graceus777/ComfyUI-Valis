@@ -196,7 +196,9 @@ def postmatch(plate, swapped, mask, color=1.0, grain=True, soften=True, wrap=.25
         mm = cv2.GaussianBlur(ms.astype(np.float32), (0, 0), 1.5)[..., None]
         comp = base * (1 - mm) + res * mm
         if wrap:
-            edge = np.clip(cv2.GaussianBlur(ms.astype(np.float32), (0, 0), 6) - cv2.erode(ms.astype(np.float32), np.ones((9, 9), np.uint8)), 0, 1)
+            # the backdrop's light spilling onto the subject's rim: the blur of the mask reaches past its edge, so the band is
+            # cut to the subject (mm), or the light wrap is a halo in the backdrop
+            edge = np.clip(cv2.GaussianBlur(ms.astype(np.float32), (0, 0), 6) - cv2.erode(ms.astype(np.float32), np.ones((9, 9), np.uint8)), 0, 1) * mm[..., 0]
             bgl = cv2.GaussianBlur(base * (1 - ms[..., None]), (0, 0), 12)
             comp = comp + bgl * edge[..., None] * wrap
         out.append(np.clip(comp, 0, 1))

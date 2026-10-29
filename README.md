@@ -240,7 +240,8 @@ Every command and flag is in [docs/cli.md](docs/cli.md).
   folders and cross-site or remote requests are refused, a download can't outgrow its size or the disk, one file name in two
   folders is two downloads, and a file is hash-checked before it is put in place (needs `pip install aiohttp`; no network).
 - `python tests/check_match.py`: Swap Check and Swap Match read the grain there is (white grain of σ 8 reads as 8, not 3), and a swap
-  given the plate's grain ends with it (no ComfyUI, no GPU).
+  given the plate's grain ends with it, and the light wrap stays on the subject's rim (no halo in the backdrop)
+  (no ComfyUI, no GPU).
 - `node tests/ui/run.mjs`: the studio clicked through in a headless browser against a stand-in ComfyUI
   (`tests/ui/mock_server.mjs`), with a screenshot of every screen.
 - `node tests/ui/film_save.test.mjs`: the Film tab's saves: a reopened film keeps its shot length, your own song survives a
