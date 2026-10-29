@@ -40,6 +40,16 @@ for sheet in ("every 1 beat from 0 to 4 kick", "every 1 bar kick", "2:1 kick"):
         ok(False, f"cue sheet '{sheet}' without bpm is a ValueError", repr(e))
 ok(len(Cues.from_schedule("bpm 120 4/4\nevery 1 beat from 1:1 to 2:1 kick").times("kick")) == 4, "cue sheet: a beat grid with a bpm line")
 
+# merging cues made at another frame rate keeps the other's curves in seconds (a 30 fps curve read as 24 ran 25% slow)
+slow = Cues({"kick": [0.5]}, None, {}, 2.0, 24.0)
+at30 = Cues({"snare": [1.0]}, None, {"ramp": np.linspace(0, 1, 61)}, 2.0, 30.0)         # 0 to 1 over its 2 seconds
+mg = slow.merge(at30)
+ok(abs(mg.curve("ramp", 1.0) - .5) < 1e-3 and abs(mg.curve("ramp", 0.5) - .25) < 1e-3 and abs(mg.curve("ramp", 2.0) - 1.0) < 1e-3 and mg.fps == 24.0,
+   "cues: a 30 fps curve merged into 24 fps cues still takes the same seconds", [mg.curve("ramp", t_) for t_ in (.5, 1.0, 2.0)])
+ok(abs(at30.merge(slow).curve("ramp", 1.0) - .5) < 1e-3 and abs(slow.merge(slow, prefix="x_").fps - 24.0) < 1e-9, "cues: (its own curves stay as they were)")
+same = Cues({}, None, {"c": np.linspace(0, 1, 49)}, 2.0, 24.0)
+ok(np.array_equal(slow.merge(same).curves["c"], same.curves["c"]), "cues: curves at the same rate are not touched")
+
 # the words of a sheet are not case-sensitive ("BPM 120" was a float error); lane names are
 c = Cues.from_schedule("BPM 120 4/4\nOffset 0.5\nEvery 1 Beat From 1:1 To 2:1 Kick\nevery 1/2 BEAT from 2:1 to 3:1 Tick 0.5")
 ok(c.bpm == 120 and c.meter == 4 and c.offset == 0.5 and len(c.times("Kick")) == 4 and len(c.times("Tick")) == 8 and "kick" not in c.lanes, "cue sheet: BPM, Offset and Every in capitals", {k: len(v) for k, v in c.lanes.items()})

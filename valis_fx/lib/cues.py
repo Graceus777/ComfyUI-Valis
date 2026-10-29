@@ -16,6 +16,15 @@ import re
 import numpy as np
 
 
+def _resample(v, src_fps, dst_fps):
+    """A per-frame curve at src_fps as one at dst_fps (the same seconds), linearly."""
+    v = np.asarray(v, np.float32)
+    if abs(src_fps - dst_fps) < 1e-6 or len(v) < 2:
+        return v
+    n = max(2, int(round((len(v) - 1) * dst_fps / src_fps)) + 1)
+    return np.interp(np.arange(n) / dst_fps, np.arange(len(v)) / src_fps, v).astype(np.float32)
+
+
 class Cues:
     def __init__(self, lanes=None, vals=None, curves=None, duration=0.0, fps=24.0, bpm=None, meter=4, offset=0.0, meta=None):
         self.lanes = {k: np.asarray(sorted(v), np.float64) for k, v in (lanes or {}).items()}
@@ -106,8 +115,8 @@ class Cues:
                 out.lanes[kk] = v
                 if k in other.vals:
                     out.vals[kk] = other.vals[k]
-        for k, v in other.curves.items():
-            out.curves[prefix + k] = v
+        for k, v in other.curves.items():          # (a curve is a value per frame: at the other cues' rate, not these)
+            out.curves[prefix + k] = _resample(v, other.fps, self.fps)
         return out
 
     def with_sheet(self, ab, heard=True):
