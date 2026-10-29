@@ -610,7 +610,7 @@ class ValisVoiceTurn:
         from .valis_fx.lib import voice
         x, sr = _audio_np(audio)
         if turn_at < 0:
-            turn_at = float((score or {}).get("events", {}).get("impact", [0.0])[0]) if score else 0.0
+            turn_at = voice.turn_time(score)
         out = np.stack([voice.turn(x[:, c], sr, turn_at, pitch=pitch, formant=formant, sub=sub, growl=growl) for c in range(x.shape[1])], 0)
         return ({"waveform": torch.from_numpy(out[None].astype(np.float32)), "sample_rate": sr},)
 

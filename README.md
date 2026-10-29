@@ -230,7 +230,7 @@ Every command and flag is in [docs/cli.md](docs/cli.md).
   a negative contrast flattens the picture in both, and your own colours (`#rgb` as well as `#rrggbb`) grade the same in both.
 - `python tests/check_cues.py`: cue-sheet errors (capitals, empty ranges), sheet music (strengths; broken rhythm, tuplets, comments,
   decorations and grace notes keep every later hit on its beat), one beat grid for a song with its sheet music,
-  the key heard in a song, the effects that should be heard, and every classic Score engine mode on a score with no events
+  the key heard in a song, where the voice turns (a score with no impact in it turns it at the start), the effects that should be heard, and every classic Score engine mode on a score with no events
   (no ComfyUI, no GPU).
 - `python tests/check_stage.py`: a stage folder's files stay inside the folder (a crafted `stage.json` can't read or
   overwrite pictures elsewhere), the plate still paints a stage's own layers, a second pass at the plate keeps what the first

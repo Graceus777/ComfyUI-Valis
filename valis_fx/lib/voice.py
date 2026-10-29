@@ -99,6 +99,13 @@ def monster(x, sr, pitch=.74, formant=.86, sub=.5, growl=.12, room=.3):
     return v
 
 
+def turn_time(score, default=0.0):
+    """Where the voice turns when nothing says: the score's first impact, else `default`. (A score whose impact lane
+    is empty has the lane and no hit in it.)"""
+    hits = ((score or {}).get("events") or {}).get("impact")
+    return float(hits[0]) if hits is not None and len(hits) else float(default)
+
+
 def turn(x, sr, at, xfade=.04, **kw):
     """The original until `at` seconds, the monster after it."""
     x = x.astype(np.float32)

@@ -359,5 +359,17 @@ odd = Cues.from_score({**score, "velocities": {**score["velocities"], "kick": [.
 ok(len(odd.vel("kick")) == 4 and bool((odd.vel("kick") == 1).all()), "score: strengths that don't match the hits are ignored")
 ok(abs(back.env("kick", 1.0 + .02) - sv.env("kick", 1.0 + .02)) < .01 and back.env("kick", 1.02) < 1, "score: a soft hit drives an effect softly after the round trip", back.env("kick", 1.02))
 
+# the voice turns on the score's first impact; a score whose impact lane is empty (the node used to stop with an IndexError) or
+# that has no events turns it at the start, and a hit that is there is where it turns
+from valis_fx.lib import voice  # noqa: E402
+for label, sc, want in (("no score", None, 0.0), ("an empty score", {}, 0.0), ("no events", {"events": None}, 0.0), ("no impact lane", {"events": {"kick": [1.0]}}, 0.0),
+                        ("an empty impact lane", {"events": {"impact": []}}, 0.0), ("an empty impact array", {"events": {"impact": np.array([])}}, 0.0),
+                        ("an impact", {"events": {"impact": [1.5, 3.0]}}, 1.5), ("an impact array", {"events": {"impact": np.array([2.25])}}, 2.25)):
+    try:
+        got = voice.turn_time(sc)
+    except Exception as e:  # noqa: BLE001
+        got = repr(e)
+    ok(got == want, f"voice turn: {label} turns at {want}", got)
+
 print(f"{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)
