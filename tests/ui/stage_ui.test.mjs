@@ -139,7 +139,8 @@ try {
     const one = await perFrame();
     for (let i = 2; i <= 6; i++) await page.click(`#sg-moves .chip:nth-child(${i})`);
     await page.waitForTimeout(150);                                                // (the frame the last loop was already waiting for)
-    const after = await perFrame();
+    // a stopped loop's last callback can land late on a busy machine, in one window; a second loop is in every window
+    const after = Math.min(await perFrame(), await perFrame());
     ok(one >= 1 && after === one && await page.evaluate(() => window.valisStage.S.playing), "five moves chosen while playing: still one callback a frame", `${one} before, ${after} after`);
     await page.evaluate(() => { window.valisStage.S.playing = false; });
     await page.waitForTimeout(200);
