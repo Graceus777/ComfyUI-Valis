@@ -94,6 +94,29 @@ function weights(graph) {
   return w;
 }
 
+// A model download (/valis/models/fetch) lives in ComfyUI's memory like a job does: after a restart the route answers
+// {} for a download that was running, and a page that only waited for its entry polled for ever with the button dead.
+// Follows one download by its key ("<folder>/<name>"): progress(j) on every poll while it runs, done(j) when it ends one
+// way or another, lost() when the server has not had it (or has not answered) for `lostAfter` ms. Returns a stop().
+export function followDownload(key, {progress = () => {}, done, lost, every = 2000, lostAfter = 45000}) {
+  let seen = Date.now(), stopped = false, busy = false;
+  const stop = () => { stopped = true; clearInterval(timer); };
+  const timer = setInterval(async () => {
+    if (busy) return; busy = true;                      // a slow answer is not asked again on top of itself
+    try {
+      let list = null;
+      try { const r = await fetch("/valis/models/fetch"); if (r.ok) list = await r.json(); } catch { /* server away: not seen */ }
+      if (stopped) return;
+      const j = list && list[key];
+      if (!j) { if (Date.now() - seen > lostAfter) { stop(); lost(); } return; }
+      seen = Date.now();
+      if (j.state === "downloading" || j.state === "verifying") progress(j);
+      else { stop(); done(j); }
+    } finally { busy = false; }
+  }, every);
+  return stop;
+}
+
 // Live progress from the job's event stream (the SDK's raw SSE layer: its high-level events() keeps progress
 // monotonic, which on a self-hosted ComfyUI swallows the sampler's step frames). The job's own state is the final word.
 const TERMINAL = new Set(["succeeded", "failed", "canceled", "expired"]);

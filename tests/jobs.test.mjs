@@ -53,6 +53,50 @@ try {
   script = ["queued", "500", "drop", "500", "queued", "failed"];
   job = await api.submit(graph, "blip");
   ok(await settled(job) === "error" && job.error === "KSampler: out of memory", "a poll that fails for a moment is retried, and the job goes on", `${job.status} ${job.error}`);
+
+  // ---- a model download: followed to its end, and let go of when ComfyUI no longer has it
+  const realFetch = globalThis.fetch;
+  let table = [], asked = 0, down = false;                          // what GET /valis/models/fetch answers, in turn; the last repeats
+  globalThis.fetch = async (url, opts) => {
+    if (String(url) !== "/valis/models/fetch") return realFetch(url, opts);
+    asked++;
+    if (down) throw new TypeError("fetch failed");
+    const t = table[Math.min(asked - 1, table.length - 1)];
+    return {ok: true, json: async () => t};
+  };
+  const follow = (key, o = {}) => new Promise((res) => {
+    const ev = {progress: [], done: null, lost: false};
+    api.followDownload(key, {every: 20, lostAfter: 300, progress: (j) => ev.progress.push(j.state), done: (j) => { ev.done = j; res(ev); }, lost: () => { ev.lost = true; res(ev); }, ...o});
+    setTimeout(() => res(ev), 3000);                                // never settled: the caller sees neither
+  });
+  const K = "diffusion_models/m.safetensors";
+  // it runs, is checked, and is done
+  asked = 0; table = [{[K]: {state: "downloading", done: 1}}, {[K]: {state: "verifying"}}, {[K]: {state: "done"}}];
+  let ev = await follow(K);
+  ok(ev.progress.join() === "downloading,verifying" && ev.done?.state === "done" && !ev.lost, "a download is followed to its end", JSON.stringify(ev));
+  const askedAtEnd = asked; await new Promise(r => setTimeout(r, 150));
+  ok(asked === askedAtEnd, "and then it is no longer asked about", `${asked - askedAtEnd} more`);
+  // it fails: the page hears of it as an end, with the error
+  asked = 0; table = [{[K]: {state: "downloading"}}, {[K]: {state: "error", error: "disk full"}}];
+  ev = await follow(K);
+  ok(ev.done?.state === "error" && ev.done.error === "disk full" && !ev.lost, "a download that fails is reported with its error", JSON.stringify(ev));
+  // ComfyUI restarted: the route answers {} for it, for ever
+  asked = 0; table = [{[K]: {state: "downloading"}}, {}];
+  ev = await follow(K);
+  ok(ev.lost && !ev.done && ev.progress.length === 1, "a download ComfyUI has forgotten is lost, not waited for for ever", JSON.stringify(ev));
+  asked = 0; table = [{}];
+  ev = await follow(K);
+  ok(ev.lost, "a download that was never there is lost too");
+  const askedLost = asked; await new Promise(r => setTimeout(r, 150));
+  ok(asked === askedLost, "and a lost download is no longer asked about", `${asked - askedLost} more`);
+  // a server away for a moment is waited out; one away for good is lost
+  asked = 0; down = false; table = [{[K]: {state: "downloading"}}];
+  ev = await follow(K, {lostAfter: 300, progress: (j) => { if (!down && asked === 2) { down = true; setTimeout(() => { down = false; table = [{[K]: {state: "done"}}]; asked = 0; }, 120); } }});
+  ok(ev.done?.state === "done" && !ev.lost, "a server that is away for a moment is waited out", JSON.stringify(ev));
+  asked = 0; down = false; table = [{[K]: {state: "downloading"}}];
+  ev = await follow(K, {progress: () => { down = true; }});
+  ok(ev.lost, "a server that stays away loses the download after a while", JSON.stringify(ev));
+  globalThis.fetch = realFetch; down = false;
 } finally {
   console.warn = warn; srv.close();
 }

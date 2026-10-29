@@ -1023,14 +1023,15 @@ async function fetchModel(name, src, btn) {
   btn.disabled = true;
   const r = await fetch("/valis/models/fetch", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(src)});
   if (!r.ok) { toast(`Download refused: ${await r.text()}`, true); btn.disabled = false; return; }
-  const key = `${src.folder}/${name}`;                  // the route keys a download by folder and name
-  const poll = setInterval(async () => {
-    const j = (await fetch("/valis/models/fetch").then(x => x.json()).catch(() => ({})))[key];
-    if (!j) return;
-    if (j.state === "downloading") btn.textContent = `${SZ(j.done)} of ${SZ(j.size || src.size)}`;
-    else if (j.state === "verifying") btn.textContent = "checking sha256";
-    else { clearInterval(poll); if (j.state === "done") { toast(`${name} downloaded and checked`); setup(); } else { btn.disabled = false; btn.textContent = `Download failed: ${j.error || j.state}`; } }
-  }, 2000);
+  if ((await r.json().catch(() => ({}))).state === "exists") { toast(`${name} is already there`); setup(); return; }   // no download to follow
+  api.followDownload(`${src.folder}/${name}`, {                    // the route keys a download by folder and name
+    progress: (j) => { btn.textContent = j.state === "verifying" ? "checking sha256" : `${SZ(j.done)} of ${SZ(j.size || src.size)}`; },
+    done: (j) => {
+      if (j.state === "done") { toast(`${name} downloaded and checked`); setup(); }
+      else { btn.disabled = false; btn.textContent = `Download failed: ${j.error || j.state}`; }
+    },
+    lost: () => { btn.disabled = false; btn.textContent = "Download again"; toast(`ComfyUI no longer has the ${name} download (it was restarted?). Download again to carry on from where it got to.`, true); },
+  });
 }
 $("#r-check").addEventListener("click", setup);
 
@@ -1066,18 +1067,20 @@ $("#r-engine-get").addEventListener("click", async () => {
   get.disabled = true;
   const r = await fetch("/valis/models/fetch", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(src)});
   if (!r.ok) { toast(`Download refused: ${await r.text()}`, true); get.disabled = false; return; }
-  const key = `${src.folder}/${R.FAST_REF}`;            // the route keys a download by folder and name
-  const poll = setInterval(async () => {
-    const j = (await fetch("/valis/models/fetch").then(x => x.json()).catch(() => ({})))[key];
-    if (!j) return;
-    if (j.state === "downloading") note.textContent = `Downloading ${GB(j.done)} of ${GB(j.size || src.size)} GB` + (j.rate ? ` at ${(j.rate / 1e6).toFixed(0)} MB/s` : "");
-    else if (j.state === "verifying") note.textContent = `Checking the file (sha256): ${GB(j.verified)} of ${GB(j.size)} GB`;
-    else {
-      clearInterval(poll); get.disabled = false;
+  if ((await r.json().catch(() => ({}))).state === "exists") { get.disabled = false; engineUI(); return; }   // already downloaded
+  api.followDownload(`${src.folder}/${R.FAST_REF}`, {              // the route keys a download by folder and name
+    progress: (j) => {
+      note.textContent = j.state === "verifying" ? `Checking the file (sha256): ${GB(j.verified)} of ${GB(j.size)} GB`
+        : `Downloading ${GB(j.done)} of ${GB(j.size || src.size)} GB` + (j.rate ? ` at ${(j.rate / 1e6).toFixed(0)} MB/s` : "");
+    },
+    done: (j) => {
+      get.disabled = false;
       if (j.state === "done") { toast("FastH3 OmniRef downloaded and verified"); engineUI(); }
       else { note.textContent = `Download ${j.state}: ${j.error || ""}`; toast(`FastH3 download ${j.state}`, true); }
-    }
-  }, 3000);
+    },
+    lost: () => { get.disabled = false; note.textContent = "ComfyUI no longer has this download (it was restarted?). Download again to carry on from where it got to."; toast("FastH3 download lost: ComfyUI was restarted?", true); },
+    every: 3000,
+  });
 });
 engineUI();
 
