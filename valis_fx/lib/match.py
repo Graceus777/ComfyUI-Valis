@@ -22,6 +22,36 @@ def _rgb(lab):
     return np.clip(cv2.cvtColor(lab.astype(np.float32), cv2.COLOR_LAB2RGB), 0, 1)
 
 
+def _hp_gain(sigma=1.2):
+    """how much of white noise's σ the grey picture minus its blur keeps: sqrt(1 - 2 g0 + sum g^2) for the blur's kernel"""
+    k = cv2.getGaussianKernel(9, sigma)
+    k2 = k @ k.T
+    return float(math.sqrt(1 - 2 * k2[4, 4] + (k2 ** 2).sum()))
+
+
+_HP = _hp_gain()
+
+
+def _grain(img, m):
+    """The grain's σ, on a 0..255 scale, as the σ of the white noise that would make it, in the region `m` (float RGB 0..1).
+    The high-pass of the grey picture (it minus its blur) where the picture itself is flat, and flat is judged on a blurred
+    copy, which has no grain left to choose by (picking the flattest pixels by the noisy picture's own Laplacian kept only
+    the pixels where the noise happened to be small: a measure of 0.39 of the real σ). The median absolute deviation
+    leaves what texture is left out of the σ."""
+    w = m > .5
+    if w.sum() < 50:
+        w = np.ones(m.shape, bool)
+    g = cv2.cvtColor(np.clip(img, 0, 1).astype(np.float32), cv2.COLOR_RGB2GRAY) * 255
+    hpf = g - cv2.GaussianBlur(g, (0, 0), 1.2)
+    sm = cv2.GaussianBlur(g, (0, 0), 3)
+    grad = np.hypot(cv2.Sobel(sm, cv2.CV_32F, 1, 0), cv2.Sobel(sm, cv2.CV_32F, 0, 1))
+    flat = w & (grad <= np.percentile(grad[w], 40))
+    if flat.sum() < 50:
+        return 0.0
+    v = hpf[flat]
+    return float(1.4826 * np.median(np.abs(v - np.median(v))) / _HP)
+
+
 def _stats(img, m):
     lab = _lab(img)
     w = m > .5
@@ -31,14 +61,12 @@ def _stats(img, m):
     L, a, b = px[:, 0], px[:, 1], px[:, 2]
     g = cv2.cvtColor((np.clip(img, 0, 1) * 255).astype(np.uint8), cv2.COLOR_RGB2GRAY).astype(np.float32)
     lap = cv2.Laplacian(g, cv2.CV_32F)
-    hpf = g - cv2.GaussianBlur(g, (0, 0), 1.2)
     gx = cv2.Sobel(cv2.GaussianBlur(g, (0, 0), 4), cv2.CV_32F, 1, 0); gy = cv2.Sobel(cv2.GaussianBlur(g, (0, 0), 4), cv2.CV_32F, 0, 1)
     # light direction: where the brightness rises across the subject (mean gradient, weighted by the mask)
     ww = w.astype(np.float32)
     lx, ly = float((gx * ww).sum() / (ww.sum() + 1e-6)), float((gy * ww).sum() / (ww.sum() + 1e-6))
-    flat = w & (np.abs(lap) < np.percentile(np.abs(lap[w]), 40))
     return {"L": float(np.median(L)), "L_std": float(L.std()), "a": float(a.mean()), "b": float(b.mean()),
-            "chroma": float(np.sqrt(a * a + b * b).mean()), "sharp": float(lap[w].var()), "grain": float(hpf[flat].std()) if flat.sum() > 50 else 0.0,
+            "chroma": float(np.sqrt(a * a + b * b).mean()), "sharp": float(lap[w].var()), "grain": _grain(img, m),
             "light": (lx, ly), "light_deg": float(math.degrees(math.atan2(ly, lx))) if abs(lx) + abs(ly) > 1e-3 else None,
             "lab_mean": px.mean(0).tolist(), "lab_std": px.std(0).tolist()}
 
@@ -160,7 +188,9 @@ def postmatch(plate, swapped, mask, color=1.0, grain=True, soften=True, wrap=.25
             res = cv2.GaussianBlur(res, (0, 0), sg)
         if grain:
             pg = sp["grain"] if pg is None else pg * .9 + sp["grain"] * .1
-            add = max(0.0, pg - ss["grain"]) / 255
+            # grains add as noise does, in quadrature (the plate's σ² less what the swap has, after the softening above took
+            # some out), not as a difference of σ
+            add = math.sqrt(max(0.0, pg * pg - _grain(res, ms) ** 2)) / 255
             if add > 0:
                 res = res + rng.standard_normal(res.shape[:2]).astype(np.float32)[..., None] * add
         mm = cv2.GaussianBlur(ms.astype(np.float32), (0, 0), 1.5)[..., None]

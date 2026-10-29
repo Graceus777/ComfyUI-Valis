@@ -229,6 +229,8 @@ Every command and flag is in [docs/cli.md](docs/cli.md).
 - `python tests/check_stage_routes.py`: the Stage export routes on a real aiohttp server with a stand-in for PyAV: encoding runs
   off the server's loop, and an export that fails, repeats its id, is aborted or goes quiet is closed and its half-written
   video deleted (needs `pip install aiohttp`; no ComfyUI, no GPU).
+- `python tests/check_match.py`: Swap Check and Swap Match read the grain there is (white grain of σ 8 reads as 8, not 3), and a swap
+  given the plate's grain ends with it (no ComfyUI, no GPU).
 - `node tests/ui/run.mjs`: the studio clicked through in a headless browser against a stand-in ComfyUI
   (`tests/ui/mock_server.mjs`), with a screenshot of every screen.
 - `node tests/ui/film_save.test.mjs`: the Film tab's saves: a reopened film keeps its shot length, your own song survives a
