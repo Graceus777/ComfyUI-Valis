@@ -46,7 +46,7 @@ function rename(p, a, b) {
   const swap = (arr) => Array.isArray(arr) ? arr.map(n => n === a ? b : n) : arr;
   for (const c of p.cast || []) { if (c.from === a) c.from = b; c.with = swap(c.with); }
   for (const su of p.setups || []) if (su.from === a) su.from = b;
-  for (const f of p.frames || []) { if (f.from === a) f.from = b; if (f.setup === a) f.setup = b; f.with = swap(f.with); }
+  for (const f of p.frames || []) { if (f.from === a) f.from = b; if (f.setup === a) f.setup = b; f.with = swap(f.with); if (f.gone) f.gone = swap(f.gone); }
   for (const s of p.shots || []) { if (s.frame === a) s.frame = b; s.with = swap(s.with); s.who = swap(s.who); }
 }
 // toggles for who is in it
@@ -116,7 +116,8 @@ export function drawBuild(el, p, ctx) {
       head(f, p.frames, "frame", {id: "frames", file: "still", seed: 8401}, i),
       h("div", {class: "bmedia"}, thumb(f.still, "not made yet", {view, onPick: (x) => { f.still = x; save(); redraw(); }})),
       h("select", {tip: "Seat people into a setup's empty plate, or change another frame (an edit of its seated frame)", onchange: (e) => {
-        const [k, v] = e.target.value.split(":"); delete f.from; delete f.setup; f[k] = v; f.still = null; save(); redraw(); }},
+        const at = e.target.value.indexOf(":"), k = e.target.value.slice(0, at), v = e.target.value.slice(at + 1);     // "setup:kitchen: night": the name is everything after the first colon
+        delete f.from; delete f.setup; f[k] = v; f.still = null; save(); redraw(); }},
         ...p.setups.map(su => h("option", {value: `setup:${su.name}`, selected: !f.from && f.setup === su.name}, `seated in the ${su.name}`)),
         ...others.map(n => h("option", {value: `from:${n}`, selected: f.from === n}, `a change of ${n}`))),
       whoChips(people(p), f.with || [], (w) => { f.with = w; f.still = null; save(); redraw(); }, f.from ? "Who arrives at this moment (their sheets join everyone already there)" : "Who is in this frame: their sheets are seated into the plate"),
